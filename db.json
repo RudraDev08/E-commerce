@@ -1,0 +1,21 @@
+{
+  "countries": [
+    { "id": 1, "name": "India", "active": true },
+    { "id": 2, "name": "Mexico", "active": false },
+    { "id": 3, "name": "USA", "active": true },
+    { "id": 4, "name": "UK", "active": false },
+    { "id": 5, "name": "Canada", "active": true }
+  ],
+    "states": [
+    { "id": 1, "countryId": 1, "name": "Maharashtra", "active": true },
+    { "id": 2, "countryId": 1, "name": "Gujarat", "active": false },
+    { "id": 3, "countryId": 2, "name": "Jalisco", "active": true },
+    { "id": 4, "countryId": 4, "name": "England", "active": true }
+  ],
+  "cities": [
+    { "id": 1, "stateId": 1, "name": "Mumbai", "pincode": "400001", "active": true },
+    { "id": 2, "stateId": 1, "name": "Pune", "pincode": "411001", "active": true },
+    { "id": 3, "stateId": 2, "name": "Ahmedabad", "pincode": "380001", "active": true },
+    { "id": 4, "stateId": 4, "name": "London", "pincode": "EC1A1BB", "active": true }
+  ]
+}

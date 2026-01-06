@@ -1,36 +1,27 @@
-import { useState } from "react";
-import Header from "./components/header/header";
-import LocationPage from "./components/pages/LocationPage";
-import { Aside } from "./components/aside/MainAside";
-import "./App.css";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import SimpleAside from "./components/aside/SimpleAside";
+import CountryPage from "./page/CountryPage";
+import StatePage from "./page/StatePage";
+import CityPage from "./page/CityPage";
+import PincodeTable from "./components/tables/PincodeTable";
 
 function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar - conditionally rendered */}
-      {sidebarOpen && <Aside />}
-      
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header with sidebar toggle */}
-        <Header />
-        
-        {/* Sidebar toggle button for mobile */}
-        <button 
-          className="lg:hidden fixed top-4 left-4 z-50 bg-indigo-600 text-white p-2 rounded-md"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-        >
-          Toggle Sidebar
-        </button>
-        
-        {/* Main content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <LocationPage />
-        </main>
+    <BrowserRouter>
+      <div style={{ display: "flex" }}>
+        <SimpleAside />
+
+        <div style={{ flex: 1, padding: "20px" }}>
+          <Routes>
+            <Route path="/country" element={<CountryPage />} />
+            <Route path="/state" element={<StatePage />} />
+            <Route path="/city" element={<CityPage />} />
+            <Route path="/pincode" element={<PincodeTable />} />
+            <Route path="/" element={<h2>Welcome Admin</h2>} />
+          </Routes>
+        </div>
       </div>
-    </div>
+    </BrowserRouter>
   );
 }
 

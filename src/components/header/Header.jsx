@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { 
-  MagnifyingGlassIcon, 
-  BellIcon, 
+import {
+  MagnifyingGlassIcon,
+  BellIcon,
   ChevronDownIcon,
   Bars3Icon,
-  XMarkIcon
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 const Header = () => {
@@ -15,7 +15,6 @@ const Header = () => {
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 justify-between">
-          
           {/* Left section - Logo and Mobile menu button */}
           <div className="flex">
             <div className="flex flex-shrink-0 items-center">
@@ -35,10 +34,10 @@ const Header = () => {
               </div>
             </div>
           </div>
-
+          
           {/* Center section - Search */}
           <div className="flex flex-1 items-center justify-center px-2 lg:ml-6 lg:justify-end">
-            <div className="w-full max-w-lg lg:max-w-xs">
+            <div className="w-full max-w-lg lg:max-w-xs ">
               <label htmlFor="search" className="sr-only">
                 Search
               </label>
@@ -59,7 +58,6 @@ const Header = () => {
 
           {/* Right section - Actions */}
           <div className="flex items-center">
-            
             {/* Notifications */}
             <div className="relative ml-3">
               <button
@@ -85,7 +83,9 @@ const Header = () => {
                   <span className="sr-only">Open user menu</span>
                   <div className="flex items-center space-x-3">
                     <div className="text-right hidden sm:block">
-                      <p className="text-sm font-medium text-gray-900">Sarah Johnson</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        Sarah Johnson
+                      </p>
                       <p className="text-xs text-gray-500">Administrator</p>
                     </div>
                     <div className="h-9 w-9 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center text-white font-medium">
