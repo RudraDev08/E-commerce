@@ -1,21 +1,135 @@
 {
   "countries": [
-    { "id": 1, "name": "India", "active": true },
-    { "id": 2, "name": "Mexico", "active": false },
-    { "id": 3, "name": "USA", "active": true },
-    { "id": 4, "name": "UK", "active": false },
-    { "id": 5, "name": "Canada", "active": true }
+    {
+      "id": "1",
+      "name": "India",
+      "active": true
+    },
+    {
+      "id": "2",
+      "name": "Mexico",
+      "active": true
+    },
+    {
+      "id": "3",
+      "name": "United States",
+      "active": true
+    },
+    {
+      "id": "4",
+      "name": "Canada",
+      "active": true
+    },
+    {
+      "id": "5",
+      "name": "United Kingdom",
+      "active": false
+    },
+    {
+      "id": "50c7",
+      "name": "Nepal",
+      "active": true
+    }
   ],
-    "states": [
-    { "id": 1, "countryId": 1, "name": "Maharashtra", "active": true },
-    { "id": 2, "countryId": 1, "name": "Gujarat", "active": false },
-    { "id": 3, "countryId": 2, "name": "Jalisco", "active": true },
-    { "id": 4, "countryId": 4, "name": "England", "active": true }
+  "states": [
+    {
+      "id": "1",
+      "countryId": 1,
+      "name": "Maharashtra",
+      "active": true
+    },
+    {
+      "id": "2",
+      "countryId": 1,
+      "name": "Gujarat",
+      "active": true
+    },
+    {
+      "id": "3",
+      "countryId": 2,
+      "name": "Jalisco",
+      "active": true
+    },
+    {
+      "id": "4",
+      "countryId": 5,
+      "name": "England",
+      "active": true
+    },
+    {
+      "id": "079e",
+      "name": "California",
+      "countryId": 3,
+      "active": true
+    },
+    {
+      "id": "8e44",
+      "name": "Washington",
+      "countryId": 3,
+      "active": true
+    },
+    {
+      "id": "e46d",
+      "name": "Toronto",
+      "countryId": 4,
+      "active": true
+    },
+    {
+      "id": "d5dc",
+      "name": "Victoria",
+      "countryId": 4,
+      "active": true
+    },
+    {
+      "id": "f759",
+      "name": "Scotland",
+      "countryId": 5,
+      "active": true
+    },
+    {
+      "id": "24b6",
+      "name": "Arun Kshetra",
+      "countryId": "50c7",
+      "active": true
+    },
+    {
+      "id": "8e29",
+      "name": "Kathmandu Kshetra",
+      "countryId": "50c7",
+      "active": true
+    }
   ],
   "cities": [
-    { "id": 1, "stateId": 1, "name": "Mumbai", "pincode": "400001", "active": true },
-    { "id": 2, "stateId": 1, "name": "Pune", "pincode": "411001", "active": true },
-    { "id": 3, "stateId": 2, "name": "Ahmedabad", "pincode": "380001", "active": true },
-    { "id": 4, "stateId": 4, "name": "London", "pincode": "EC1A1BB", "active": true }
+    {
+      "id": "2",
+      "stateId": "2",
+      "name": "Surat",
+      "pincode": "395003",
+      "active": true
+    },
+    {
+      "id": "c0c9",
+      "name": "Navsari",
+      "stateId": "3",
+      "active": true
+    },
+    {
+      "id": "f2f4",
+      "name": "Pune",
+      "stateId": "1",
+      "active": true
+    },
+    {
+      "id": "3d6b",
+      "name": "Maroli",
+      "stateId": "2",
+      "active": true
+    },
+    {
+      "id": "219b",
+      "name": "Navsari",
+      "stateId": "2",
+      "active": true
+    }
   ]
 }

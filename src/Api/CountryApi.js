@@ -1,13 +1,13 @@
-import axios from "axios";
+import axios from "./axiosInstance";
 
-const BASE = "http://localhost:5000/countries";
+export const getCountries = () =>
+  axios.get("/countries");
 
-export const getCountries = () => axios.get(BASE);
-
-export const addCountry = (data) => axios.post(BASE, data);
+export const addCountry = (data) =>
+  axios.post("/countries", data);
 
 export const updateCountry = (id, data) =>
-  axios.patch(`${BASE}/${id}`, data);
+  axios.put(`/countries/${id}`, data);
 
 export const deleteCountry = (id) =>
-  axios.delete(`${BASE}/${id}`);
+  axios.delete(`/countries/${id}`);

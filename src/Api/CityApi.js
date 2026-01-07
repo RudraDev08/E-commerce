@@ -1,8 +1,15 @@
-import axios from 'axios'
+import axios from "axios";
 
-const API_URL = "http://localhost:5000/cities";
+const API = "http://localhost:5000/cities";
 
-export const getCities = () => axios.get("http://localhost:5000/cities");
-export const addCity = (data) => axios.post("http://localhost:5000/cities", data)
-export const updateCity = (id, data) => axios.put(`http://localhost:5000/cities/${id}`, data)  
-export const deleteCity = (id) => axios.delete(`http://localhost:5000/cities/${id}`)         
+export const getCitiesByState = (stateId) =>
+  axios.get(`${API}?stateId=${stateId}`);
+
+export const addCity = (data) =>
+  axios.post(API, data);
+
+export const updateCity = (id, data) =>
+  axios.patch(`${API}/${id}`, data);
+
+export const deleteCity = (id) =>
+  axios.delete(`${API}/${id}`);
