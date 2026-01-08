@@ -1,23 +1,19 @@
-import axios from "axios";
+import axios from "./axiosInstance";
 
-const API = "http://localhost:5000/states";
+/* GET STATES by countryId */
+export const getStates = (countryId) =>
+  axios.get("/states", {
+    params: { countryId },
+  });
 
-// READ (by country)
-export const getStates = (countryId) => {
-  return axios.get(`${API}?countryId=${countryId}`);
-};
+/* ADD STATE */
+export const addState = (data) =>
+  axios.post("/states", data);
 
-// CREATE
-export const addState = (data) => {
-  return axios.post(API, data);
-};
+/* UPDATE STATE */
+export const updateState = (id, data) =>
+  axios.put(`/states/${id}`, data);
 
-// UPDATE (name / active)
-export const updateState = (id, data) => {
-  return axios.patch(`${API}/${id}`, data);
-};
-
-// DELETE
-export const deleteState = (id) => {
-  return axios.delete(`${API}/${id}`);
-};
+/* DELETE STATE */
+export const deleteState = (id) =>
+  axios.delete(`/states/${id}`);
