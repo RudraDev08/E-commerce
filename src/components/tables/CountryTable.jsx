@@ -112,7 +112,7 @@ const CountryTable = () => {
   // Toggle active status
   const toggleActive = async (country) => {
     try {
-      await updateCountry(country.id, { active: !country.active });
+      await updateCountry(country._id, { active: !country.active });
       await fetchCountries();
       showNotification(`${country.name} status updated`, "success");
     } catch {
@@ -208,7 +208,7 @@ const CountryTable = () => {
         "ID,Name,Status,Created At",
         ...countries.map(
           (country) =>
-            `${country.id},${country.name},${
+            `${country._id},${country.name},${
               country.active ? "Active" : "Inactive"
             },"${new Date(country.createdAt).toLocaleDateString()}"`
         ),
@@ -279,17 +279,17 @@ const CountryTable = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-linear-to-br p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header with Stats */}
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-xl">
+              <div className="p-3 bg-linear-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-xl">
                 <GlobeAltIconSolid className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-indigo-700 bg-clip-text text-transparent">
+                <h1 className="text-3xl font-bold bg-linear-to-r from-gray-900 to-indigo-700 bg-clip-text text-transparent">
                   Country Management
                 </h1>
                 <p className="text-gray-600 mt-1 flex items-center gap-2">
@@ -300,7 +300,7 @@ const CountryTable = () => {
             </div>
             <button
               onClick={exportCSV}
-              className="group inline-flex items-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold px-6 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5"
+              className="group inline-flex items-center gap-3 bg-linear-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold px-6 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5"
             >
               <DocumentArrowDownIcon className="h-5 w-5 group-hover:rotate-12 transition-transform" />
               Export Data
@@ -309,7 +309,7 @@ const CountryTable = () => {
 
           {/* Stats Dashboard */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-            <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
+            <div className="bg-linear-to-br from-white to-gray-50 rounded-2xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">
@@ -327,13 +327,13 @@ const CountryTable = () => {
                     </div>
                   </div>
                 </div>
-                <div className="h-12 w-12 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-xl flex items-center justify-center">
+                <div className="h-12 w-12 bg-linear-to-br from-indigo-100 to-indigo-200 rounded-xl flex items-center justify-center">
                   <GlobeAltIcon className="h-6 w-6 text-indigo-600" />
                 </div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
+            <div className="bg-linear-to-br from-white to-gray-50 rounded-2xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">
@@ -363,13 +363,13 @@ const CountryTable = () => {
                     </span>
                   </div>
                 </div>
-                <div className="h-12 w-12 bg-gradient-to-br from-green-100 to-green-200 rounded-xl flex items-center justify-center">
+                <div className="h-12 w-12 bg-linear-to-br from-green-100 to-green-200 rounded-xl flex items-center justify-center">
                   <CheckCircleIconSolid className="h-6 w-6 text-green-600" />
                 </div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
+            <div className="bg-linear-to-br from-white to-gray-50 rounded-2xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">
@@ -399,13 +399,13 @@ const CountryTable = () => {
                     </span>
                   </div>
                 </div>
-                <div className="h-12 w-12 bg-gradient-to-br from-amber-100 to-amber-200 rounded-xl flex items-center justify-center">
+                <div className="h-12 w-12 bg-linear-to-br from-amber-100 to-amber-200 rounded-xl flex items-center justify-center">
                   <ClockIcon className="h-6 w-6 text-amber-600" />
                 </div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
+            <div className="bg-linear-to-br from-white to-gray-50 rounded-2xl p-5 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">
@@ -429,7 +429,7 @@ const CountryTable = () => {
                     </div>
                   </div>
                 </div>
-                <div className="h-12 w-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center">
+                <div className="h-12 w-12 bg-linear-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center">
                   <FunnelIcon className="h-6 w-6 text-blue-600" />
                 </div>
               </div>
@@ -442,8 +442,8 @@ const CountryTable = () => {
           <div
             className={`mb-6 animate-slide-down ${
               notification.type === "error"
-                ? "bg-gradient-to-r from-red-50 to-red-100 border-red-200"
-                : "bg-gradient-to-r from-green-50 to-emerald-100 border-emerald-200"
+                ? "bg-linear-to-r from-red-50 to-red-100 border-red-200"
+                : "bg-linear-to-r from-green-50 to-emerald-100 border-emerald-200"
             } p-4 rounded-2xl border shadow-lg`}
           >
             <div className="flex items-center gap-3">
@@ -484,7 +484,7 @@ const CountryTable = () => {
         )}
 
         {/* Add Country Card */}
-        <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl p-6 mb-8 border border-gray-200 hover:shadow-2xl transition-shadow duration-300">
+        <div className="bg-linear-to-br from-white to-gray-50 rounded-2xl shadow-xl p-6 mb-8 border border-gray-200 hover:shadow-2xl transition-shadow duration-300">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">
@@ -494,7 +494,7 @@ const CountryTable = () => {
                 Enter details to add a new country
               </p>
             </div>
-            <div className="h-12 w-12 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-xl flex items-center justify-center">
+            <div className="h-12 w-12 bg-linear-to-br from-indigo-100 to-indigo-200 rounded-xl flex items-center justify-center">
               <PlusIcon className="h-6 w-6 text-indigo-600" />
             </div>
           </div>
@@ -540,7 +540,7 @@ const CountryTable = () => {
             <button
               onClick={addCountryHandler}
               disabled={!name.trim() || actionLoading}
-              className="group relative overflow-hidden bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="group relative overflow-hidden bg-linear-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="flex items-center gap-3">
                 {actionLoading ? (
@@ -560,7 +560,7 @@ const CountryTable = () => {
         </div>
 
         {/* Search and Filter Section */}
-        <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl p-6 mb-8 border border-gray-200">
+        <div className="bg-linear-to-br from-white to-gray-50 rounded-2xl shadow-xl p-6 mb-8 border border-gray-200">
           <h2 className="text-xl font-bold text-gray-900 mb-6">
             Filter & Sort Countries
           </h2>
@@ -644,9 +644,9 @@ const CountryTable = () => {
         </div>
 
         {/* Countries Table */}
-        <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-xl overflow-hidden border border-gray-200 hover:shadow-2xl transition-shadow duration-300">
+        <div className="bg-linear-to-br from-white to-gray-50 rounded-2xl shadow-xl overflow-hidden border border-gray-200 hover:shadow-2xl transition-shadow duration-300">
           {/* Table Header */}
-          <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="px-6 py-5 border-b border-gray-200 bg-linear-to-r from-gray-50 to-white">
             <div className="flex flex-col md:flex-row md:items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">
@@ -675,7 +675,7 @@ const CountryTable = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <tr className="bg-linear-to-r from-gray-50 to-gray-100">
                   <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
                     <div className="flex items-center gap-2">
                       <GlobeAltIcon className="h-4 w-4" />
@@ -697,7 +697,7 @@ const CountryTable = () => {
                   <tr>
                     <td colSpan="3" className="py-16 text-center">
                       <div className="flex flex-col items-center justify-center max-w-md mx-auto">
-                        <div className="h-24 w-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-6">
+                        <div className="h-24 w-24 bg-linear-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-6">
                           <GlobeAltIcon className="h-12 w-12 text-gray-400" />
                         </div>
                         <h3 className="text-xl font-semibold text-gray-700 mb-2">
@@ -716,7 +716,7 @@ const CountryTable = () => {
                               setSearchTerm("");
                               setFilterActive("all");
                             }}
-                            className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all"
+                            className="px-6 py-3 bg-linear-to-r from-indigo-500 to-indigo-600 text-white rounded-xl font-medium hover:from-indigo-600 hover:to-indigo-700 transition-all"
                           >
                             Clear Filters
                           </button>
@@ -727,13 +727,13 @@ const CountryTable = () => {
                 ) : (
                   paginatedCountries.map((country) => (
                     <tr
-                      key={country.id}
-                      className="group hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-blue-50/30 transition-all duration-200 border-b border-gray-100 last:border-0"
+                      key={country._id}
+                      className="group hover:bg-linear-to-r hover:from-indigo-50/30 hover:to-blue-50/30 transition-all duration-200 border-b border-gray-100 last:border-0"
                     >
                       <td className="py-5 px-6">
-                        {editId === country.id ? (
+                        {editId === country._id ? (
                           <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-lg flex items-center justify-center">
+                            <div className="h-10 w-10 bg-linear-to-br from-indigo-100 to-indigo-200 rounded-lg flex items-center justify-center">
                               <GlobeAltIcon className="h-5 w-5 text-indigo-600" />
                             </div>
                             <input
@@ -741,7 +741,7 @@ const CountryTable = () => {
                               onChange={(e) => setEditName(e.target.value)}
                               className="flex-1 px-4 py-2.5 bg-white border-2 border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                               onKeyPress={(e) =>
-                                e.key === "Enter" && saveEdit(country.id)
+                                e.key === "Enter" && saveEdit(country._id)
                               }
                               autoFocus
                             />
@@ -751,8 +751,8 @@ const CountryTable = () => {
                             <div
                               className={`h-12 w-12 rounded-xl flex items-center justify-center ${
                                 country.active
-                                  ? "bg-gradient-to-br from-green-100 to-emerald-100"
-                                  : "bg-gradient-to-br from-gray-100 to-gray-200"
+                                  ? "bg-linear-to-br from-green-100 to-emerald-100"
+                                  : "bg-linear-to-br from-gray-100 to-gray-200"
                               }`}
                             >
                               <GlobeAltIcon
@@ -769,7 +769,7 @@ const CountryTable = () => {
                                   {country.name}
                                 </span>
                                 <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
-                                  ID: {country.id}
+                                  ID: {country._id}
                                 </span>
                               </div>
                               <p className="text-sm text-gray-500 mt-1">
@@ -783,29 +783,27 @@ const CountryTable = () => {
                         )}
                       </td>
                       <td className="py-5 px-6">
-                        <td className="py-5 px-6">
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => toggleActive(country)}
-                              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => toggleActive(country)}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all
                                 ${
                                   country.active
-                                  ? "bg-green-100 text-green-800 border border-green-300 hover:bg-green-200"
-                                  : "bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
-                            }`}
-                            >
-                              {country.active ? "Active" : "Inactive"}
-                            </button>
-                          </div>
-                        </td>
+                                    ? "bg-green-100 text-green-800 border border-green-300 hover:bg-green-200"
+                                    : "bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
+                                }`}
+                          >
+                            {country.active ? "Active" : "Inactive"}
+                          </button>
+                        </div>
                       </td>
                       <td className="py-5 px-6">
                         <div className="flex items-center gap-2">
-                          {editId === country.id ? (
+                          {editId === country._id ? (
                             <>
                               <button
-                                onClick={() => saveEdit(country.id)}
-                                className="p-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg"
+                                onClick={() => saveEdit(country._id)}
+                                className="p-2.5 bg-linear-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg"
                                 title="Save changes"
                               >
                                 <CheckIcon className="h-5 w-5" />
@@ -815,7 +813,7 @@ const CountryTable = () => {
                                   setEditId(null);
                                   setEditName("");
                                 }}
-                                className="p-2.5 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all shadow-md hover:shadow-lg"
+                                className="p-2.5 bg-linear-to-r from-gray-500 to-gray-600 text-white rounded-lg hover:from-gray-600 hover:to-gray-700 transition-all shadow-md hover:shadow-lg"
                                 title="Cancel edit"
                               >
                                 <XMarkIcon className="h-5 w-5" />
@@ -825,19 +823,19 @@ const CountryTable = () => {
                             <>
                               <button
                                 onClick={() => {
-                                  setEditId(country.id);
+                                  setEditId(country._id);
                                   setEditName(country.name);
                                 }}
                                 disabled={editId !== null}
-                                className="p-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-2.5 bg-linear-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Edit country"
                               >
                                 <PencilIcon className="h-5 w-5" />
                               </button>
                               <button
-                                onClick={() => removeCountry(country.id)}
+                                onClick={() => removeCountry(country._id)}
                                 disabled={editId !== null}
-                                className="p-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg hover:from-red-600 hover:to-rose-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-2.5 bg-linear-to-r from-red-500 to-rose-600 text-white rounded-lg hover:from-red-600 hover:to-rose-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Delete country"
                               >
                                 <TrashIcon className="h-5 w-5" />

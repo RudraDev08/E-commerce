@@ -8,6 +8,10 @@ import {
   HashtagIcon,
   ArrowTrendingUpIcon,
   DocumentChartBarIcon,
+  ClockIcon,
+  ServerIcon,
+  CloudArrowUpIcon,
+  CpuChipIcon,
 } from "@heroicons/react/24/outline";
 import {
   ChartBarIcon as ChartBarIconSolid,
@@ -17,34 +21,41 @@ import {
 
 const Dashboard = () => {
   const stats = [
-    { title: "Total Countries", value: "195", icon: GlobeAltIconSolid, color: "text-blue-600", change: "+2.3%" },
-    { title: "Total States", value: "4,237", icon: MapIcon, color: "text-green-600", change: "+5.1%" },
-    { title: "Total Cities", value: "45,672", icon: BuildingOfficeIcon, color: "text-purple-600", change: "+3.8%" },
-    { title: "Total Pincodes", value: "1.2M", icon: HashtagIcon, color: "text-amber-600", change: "+1.9%" },
-    { title: "Active Users", value: "1,234", icon: UsersIconSolid, color: "text-indigo-600", change: "+12.5%" },
-    { title: "Data Accuracy", value: "98.7%", icon: ChartBarIconSolid, color: "text-emerald-600", change: "+0.8%" },
+    { title: "Total Countries", value: "195", icon: GlobeAltIconSolid, color: "text-sky-500", bgColor: "bg-sky-50", change: "+2.3%" },
+    { title: "Total States", value: "4,237", icon: MapIcon, color: "text-emerald-500", bgColor: "bg-emerald-50", change: "+5.1%" },
+    { title: "Total Cities", value: "45,672", icon: BuildingOfficeIcon, color: "text-violet-500", bgColor: "bg-violet-50", change: "+3.8%" },
+    { title: "Total Pincodes", value: "1.2M", icon: HashtagIcon, color: "text-amber-500", bgColor: "bg-amber-50", change: "+1.9%" },
+    { title: "Active Users", value: "1,234", icon: UsersIconSolid, color: "text-indigo-500", bgColor: "bg-indigo-50", change: "+12.5%" },
+    { title: "Data Accuracy", value: "98.7%", icon: ChartBarIconSolid, color: "text-teal-500", bgColor: "bg-teal-50", change: "+0.8%" },
   ];
 
   const recentActivities = [
-    { action: "New country added", item: "United States", time: "2 min ago", user: "John Doe" },
-    { action: "State updated", item: "California", time: "15 min ago", user: "Jane Smith" },
-    { action: "City data imported", item: "1,234 cities", time: "1 hour ago", user: "System" },
-    { action: "Pincode verification", item: "Batch #2024-01", time: "3 hours ago", user: "Auto-sync" },
-    { action: "User logged in", item: "Admin Panel", time: "5 hours ago", user: "Robert Johnson" },
+    { action: "New country added", item: "United States", time: "2 min ago", user: "John Doe", icon: GlobeAltIcon, color: "text-sky-500", bgColor: "bg-sky-100" },
+    { action: "State updated", item: "California", time: "15 min ago", user: "Jane Smith", icon: MapIcon, color: "text-emerald-500", bgColor: "bg-emerald-100" },
+    { action: "City data imported", item: "1,234 cities", time: "1 hour ago", user: "System", icon: BuildingOfficeIcon, color: "text-violet-500", bgColor: "bg-violet-100" },
+    { action: "Pincode verification", item: "Batch #2024-01", time: "3 hours ago", user: "Auto-sync", icon: HashtagIcon, color: "text-amber-500", bgColor: "bg-amber-100" },
+    { action: "User logged in", item: "Admin Panel", time: "5 hours ago", user: "Robert Johnson", icon: UsersIcon, color: "text-indigo-500", bgColor: "bg-indigo-100" },
+  ];
+
+  const systemStats = [
+    { title: "Data Sync", value: "98%", color: "text-emerald-500", barColor: "from-emerald-400 to-emerald-500", bgColor: "bg-emerald-50", icon: CloudArrowUpIcon, status: "Optimal" },
+    { title: "API Response", value: "142ms", color: "text-sky-500", barColor: "from-sky-400 to-sky-500", bgColor: "bg-sky-50", icon: CpuChipIcon, status: "Fast" },
+    { title: "Storage Usage", value: "72%", color: "text-amber-500", barColor: "from-amber-400 to-amber-500", bgColor: "bg-amber-50", icon: ServerIcon, status: "Moderate" },
+    { title: "Active Sessions", value: "24", color: "text-violet-500", barColor: "from-violet-400 to-violet-500", bgColor: "bg-violet-50", icon: UsersIcon, status: "Normal" },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 p-4">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <h1 className="text-2xl font-bold text-gray-800">Dashboard Overview</h1>
+          <p className="text-gray-500 mt-1">
             Welcome back! Here's what's happening with your data today.
           </p>
         </div>
         <div className="mt-4 md:mt-0">
-          <button className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg">
+          <button className="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-indigo-500 text-white rounded-xl font-medium hover:from-sky-600 hover:to-indigo-600 transition-all shadow-sm hover:shadow-md active:scale-95">
             <div className="flex items-center gap-2">
               <DocumentChartBarIcon className="h-5 w-5" />
               Generate Report
@@ -54,27 +65,20 @@ const Dashboard = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {stats.map((stat, index) => (
-          <div key={index} className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
+          <div key={index} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{stat.title}</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stat.value}</p>
-                <div className="flex items-center gap-2 mt-3">
-                  <ArrowTrendingUpIcon className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-green-600 dark:text-green-400 font-medium">{stat.change}</span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">from last week</span>
+                <p className="text-sm font-medium text-gray-500">{stat.title}</p>
+                <p className="text-2xl font-bold text-gray-800 mt-2">{stat.value}</p>
+                <div className="flex items-center gap-1.5 mt-3">
+                  <ArrowTrendingUpIcon className="h-4 w-4 text-emerald-400" />
+                  <span className="text-sm font-medium text-emerald-500">{stat.change}</span>
+                  <span className="text-xs text-gray-400">from last week</span>
                 </div>
               </div>
-              <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${
-                stat.color.includes('blue') ? 'bg-blue-100 dark:bg-blue-900/30' :
-                stat.color.includes('green') ? 'bg-green-100 dark:bg-green-900/30' :
-                stat.color.includes('purple') ? 'bg-purple-100 dark:bg-purple-900/30' :
-                stat.color.includes('amber') ? 'bg-amber-100 dark:bg-amber-900/30' :
-                stat.color.includes('indigo') ? 'bg-indigo-100 dark:bg-indigo-900/30' :
-                'bg-emerald-100 dark:bg-emerald-900/30'
-              }`}>
+              <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${stat.bgColor}`}>
                 <stat.icon className={`h-6 w-6 ${stat.color}`} />
               </div>
             </div>
@@ -85,88 +89,118 @@ const Dashboard = () => {
       {/* Recent Activity & Quick Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Recent Activity</h2>
-            <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Latest updates in the system</p>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div className="p-5 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">Recent Activity</h2>
+                <p className="text-gray-500 text-sm mt-0.5">Latest updates in the system</p>
+              </div>
+              <ClockIcon className="h-5 w-5 text-gray-400" />
+            </div>
           </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+          <div className="divide-y divide-gray-50">
             {recentActivities.map((activity, index) => (
-              <div key={index} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{activity.action}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{activity.item}</p>
+              <div key={index} className="p-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${activity.bgColor}`}>
+                    <activity.icon className={`h-5 w-5 ${activity.color}`} />
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{activity.time}</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{activity.user}</p>
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-gray-800">{activity.action}</p>
+                        <p className="text-sm text-gray-600 mt-0.5">{activity.item}</p>
+                      </div>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">{activity.time}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-gray-300"></div>
+                      <span className="text-xs text-gray-500">{activity.user}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <button className="w-full text-center text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium text-sm">
+          <div className="p-4 border-t border-gray-100">
+            <button className="w-full text-center text-sky-500 hover:text-sky-600 font-medium text-sm py-2 rounded-lg hover:bg-sky-50 transition-colors">
               View all activities →
             </button>
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">System Status</h2>
-            <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Current system performance</p>
-          </div>
-          <div className="p-6 space-y-6">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Data Sync</span>
-                <span className="text-green-600 dark:text-green-400 font-medium">98%</span>
+        {/* System Status */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          <div className="p-5 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">System Status</h2>
+                <p className="text-gray-500 text-sm mt-0.5">Current system performance</p>
               </div>
-              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-green-500 to-emerald-600 rounded-full" style={{ width: '98%' }}></div>
-              </div>
-            </div>
-            
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-700 dark:text-gray-300 font-medium">API Response Time</span>
-                <span className="text-blue-600 dark:text-blue-400 font-medium">142ms</span>
-              </div>
-              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full" style={{ width: '85%' }}></div>
-              </div>
-            </div>
-            
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Storage Usage</span>
-                <span className="text-amber-600 dark:text-amber-400 font-medium">72%</span>
-              </div>
-              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-amber-500 to-orange-600 rounded-full" style={{ width: '72%' }}></div>
-              </div>
-            </div>
-            
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Active Sessions</span>
-                <span className="text-purple-600 dark:text-purple-400 font-medium">24</span>
-              </div>
-              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-purple-500 to-pink-600 rounded-full" style={{ width: '60%' }}></div>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full">
+                <div className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                <span className="text-xs font-medium text-emerald-600">All systems normal</span>
               </div>
             </div>
           </div>
-          <div className="p-6 border-t border-gray-200 dark:border-gray-700">
+          <div className="p-5 space-y-6">
+            {systemStats.map((stat, index) => (
+              <div key={index} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${stat.bgColor}`}>
+                      <stat.icon className={`h-5 w-5 ${stat.color}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-700">{stat.title}</p>
+                      <p className="text-xs text-gray-500">{stat.status}</p>
+                    </div>
+                  </div>
+                  <span className={`text-lg font-bold ${stat.color}`}>{stat.value}</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className={`h-full bg-gradient-to-r ${stat.barColor} rounded-full`} 
+                    style={{ 
+                      width: stat.value.includes('%') 
+                        ? stat.value 
+                        : stat.title === 'API Response' ? '85%' 
+                        : stat.title === 'Active Sessions' ? '60%'
+                        : '90%'
+                    }}>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="p-5 border-t border-gray-100 bg-gray-50 rounded-b-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm text-gray-700 dark:text-gray-300">All systems operational</span>
+                <div className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                <span className="text-sm text-gray-600">Updated just now</span>
               </div>
-              <span className="text-xs text-gray-500 dark:text-gray-400">Last checked: Just now</span>
+              <button className="text-sm text-sky-500 hover:text-sky-600 font-medium">
+                Refresh Status
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Insights */}
+      <div className="bg-gradient-to-r from-sky-50 to-indigo-50 rounded-xl p-5 border border-sky-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-gray-800">Quick Insights</h3>
+            <p className="text-gray-600 text-sm mt-1">Your data is growing steadily. Consider expanding storage soon.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-white/80 flex items-center justify-center">
+              <ChartBarIcon className="h-5 w-5 text-sky-500" />
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Data Growth</p>
+              <p className="text-lg font-bold text-gray-800">+8.2% this month</p>
             </div>
           </div>
         </div>

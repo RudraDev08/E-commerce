@@ -1,24 +1,21 @@
 import express from "express";
-import https from "https";
-import fs from "fs";
-import path from "path";
+import cors from "cors";
+import dotenv from "dotenv";
+import connectDB from "./config/db.js";
+import countryRoutes from "./routes/countryRoutes.js";
+
+dotenv.config();
+connectDB();
 
 const app = express();
 
-// test route
-app.get("/test", (req, res) => {
-  res.send("✅ HTTPS SERVER IS WORKING");
-});
+app.use(cors())
 
-// SSL options
-const sslOptions = {
-  key: fs.readFileSync(path.resolve("cert/key.pem")),
-  cert: fs.readFileSync(path.resolve("cert/cert.pem")),
-};
+app.use(express.json());
 
-const PORT = 5000;
+app.use("/api/countries", countryRoutes);
 
-// HTTPS server
-https.createServer(sslOptions, app).listen(PORT, () => {
-  console.log(`🔐 HTTPS Server running at https://localhost:${PORT}`);
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
