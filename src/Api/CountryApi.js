@@ -9,3 +9,4 @@ export const updateCountry = (id, data) =>
 
 export const deleteCountry = (id) =>
   axios.delete(`/countries/${id}`);
+

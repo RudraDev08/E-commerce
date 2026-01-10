@@ -1,7 +1,19 @@
 import axios from "axios";
 
-const API = "http://localhost:5000/cities";
+const BASE = "http://localhost:5000/api/pincodes";
 
-export const getCityByPincode = (pincode) => {
-  return axios.get(`${API}?pincode=${pincode}`);
-};
+/* ADD PINCODE */
+export const addPincode = (data) =>
+  axios.post(BASE, data);
+
+/* GET PINCODES (VIEW + SEARCH + PAGINATION) */
+export const getPincodes = (page = 1, search = "") =>
+  axios.get(`${BASE}?page=${page}&search=${search}`);
+
+/* UPDATE PINCODE */
+export const updatePincode = (id, data) =>
+  axios.put(`${BASE}/${id}`, data);
+
+/* DELETE PINCODE */
+export const deletePincode = (id) =>
+  axios.delete(`${BASE}/${id}`);

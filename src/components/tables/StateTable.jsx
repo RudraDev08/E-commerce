@@ -154,7 +154,7 @@ const StateTable = () => {
 
   // EDIT
   const startEdit = (state) => {
-    setEditId(state._id || state.id);
+    setEditId(state._id || state._id);
     setEditName(state.name);
   };
 
@@ -185,7 +185,7 @@ const StateTable = () => {
     const newActiveStatus = !state.active;
     
     try {
-      await updateState(state._id || state.id, { active: newActiveStatus });
+      await updateState(state._id || state._id, { active: newActiveStatus });
       await loadStates();
       showToast(
         `${state.name} marked as ${newActiveStatus ? "active" : "inactive"}`,

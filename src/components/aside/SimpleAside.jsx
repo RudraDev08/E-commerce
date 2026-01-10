@@ -1,301 +1,192 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  HomeIcon,
-  GlobeAltIcon,
-  MapIcon,
-  BuildingOfficeIcon,
-  HashtagIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  UserCircleIcon,
-  ChartPieIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-} from "@heroicons/react/24/outline";
-import {
-  HomeIcon as HomeIconSolid,
-  GlobeAltIcon as GlobeAltIconSolid,
-  MapIcon as MapIconSolid,
-  BuildingOfficeIcon as BuildingOfficeIconSolid,
-  HashtagIcon as HashtagIconSolid,
-} from "@heroicons/react/24/solid";
+  Home,
+  Globe,
+  MapPin,
+  Building,
+  Hash,
+  ChevronLeft,
+  ChevronRight,
+  User,
+  ChevronDown,
+  ChevronUp,
+  Folder,
+  Layers,
+  Tag,
+  Navigation,
+} from "lucide-react";
 
 const ProfessionalAside = () => {
-  const [open, setOpen] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [selected, setSelected] = useState("Dashboard");
-  const [hovered, setHovered] = useState(null);
-  const [showCountryManagement, setShowCountryManagement] = useState(true);
+  const [expandedSections, setExpandedSections] = useState({
+    geographic: true,
+    category: true,
+  });
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Update selected based on current route
   useEffect(() => {
     const path = location.pathname;
-    if (path === "/") setSelected("Dashboard");
-    else if (path === "/country") setSelected("Country");
-    else if (path === "/state") setSelected("State");
-    else if (path === "/city") setSelected("City");
-    else if (path === "/pincode") setSelected("Pincode");
+    const mapping = {
+      "/": "Dashboard",
+      "/country": "Country",
+      "/state": "State",
+      "/city": "City",
+      "/pincode": "Pincode",
+      "/categories": "Categories",
+      "/subcategories": "Subcategories",
+      "/tags": "Tags",
+    };
+    setSelected(mapping[path] || "Dashboard");
   }, [location]);
 
-  const menuItems = [
-    {
-      name: "Dashboard",
-      icon: HomeIcon,
-      activeIcon: HomeIconSolid,
-      path: "/",
-    },
-  ];
+  const menuGroups = {
+    main: [{ name: "Dashboard", icon: Home, path: "/" }],
+    geographic: [
+      { name: "Country", icon: Globe, path: "/country" },
+      { name: "State", icon: MapPin, path: "/state" },
+      { name: "City", icon: Building, path: "/city" },
+      { name: "Pincode", icon: Hash, path: "/pincode" },
+    ],
+    categories: [
+      { name: "Categories", icon: Folder, path: "/categories" },
+      { name: "Subcategories", icon: Layers, path: "/subcategories" },
+      { name: "Tags", icon: Tag, path: "/tags" },
+    ],
+  };
 
-  const countryManagementItems = [
-    {
-      name: "Country",
-      icon: GlobeAltIcon,
-      activeIcon: GlobeAltIconSolid,
-      path: "/country",
-    },
-    {
-      name: "State",
-      icon: MapIcon,
-      activeIcon: MapIconSolid,
-      path: "/state",
-    },
-    {
-      name: "City",
-      icon: BuildingOfficeIcon,
-      activeIcon: BuildingOfficeIconSolid,
-      path: "/city",
-    },
-    {
-      name: "Pincode",
-      icon: HashtagIcon,
-      activeIcon: HashtagIconSolid,
-      path: "/pincode",
-    },
-  ];
+  const toggleSection = (section) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
 
-  const handleSelect = (item) => {
+  const handleNavigation = (item) => {
     setSelected(item.name);
     navigate(item.path);
   };
 
-  const getIcon = (item) => {
-    return selected === item.name ? item.activeIcon || item.icon : item.icon;
+  const renderMenuItem = (item) => {
+    const isActive = selected === item.name;
+    const Icon = item.icon;
+
+    return (
+      <li key={item.name} className="relative px-3">
+        <button
+          onClick={() => handleNavigation(item)}
+          className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group ${
+            isActive ? "bg-indigo-50/50 text-indigo-600" : "text-slate-500 hover:bg-slate-900/5 hover:text-slate-900"
+          } ${!isExpanded ? "justify-center" : ""}`}
+        >
+          {isActive && (
+            <motion.div
+              layoutId="activeIndicator"
+              className="absolute left-0 w-0.5 h-4 bg-indigo-500 rounded-full"
+            />
+          )}
+          <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+          {isExpanded && (
+            <span className="text-[13px] font-medium tracking-tight">
+              {item.name}
+            </span>
+          )}
+          {!isExpanded && (
+            <div className="fixed left-20 px-2 py-1 bg-slate-900 text-white text-[11px] rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 backdrop-blur-md bg-opacity-90">
+              {item.name}
+            </div>
+          )}
+        </button>
+      </li>
+    );
   };
 
-  return ( 
-    <div className="flex min-h-full">
-      {/* Sidebar Container */}
-      <aside
-        className={`${
-          open ? "w-64" : "w-20"
-        } relative min-h-screen bg-gray-50 border-r border-gray-200 text-gray-700 transition-all duration-300 ease-in-out flex flex-col`}
-      >
-        {/* Header Section */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-600 rounded-lg">
-                <ChartPieIcon className="h-6 w-6 text-white" />
-              </div>
-              {open && (
-                <div className="transition-all duration-300">
-                  <h1 className="text-xl font-bold text-gray-800">GeoAdmin</h1>
-                  <p className="text-sm text-gray-500">Management Panel</p>
-                </div>
-              )}
-            </div>
-          </div>
+  return (
+    <motion.aside
+      animate={{ width: isExpanded ? 260 : 80 }}
+      className="h-screen bg-white/75 backdrop-blur-md border-r border-white/20 flex flex-col shadow-[10px_0_40px_-15px_rgba(0,0,0,0.05)] relative z-50"
+    >
+      {/* Header: Lightweight & Spatial */}
+      <div className="h-16 flex items-center px-6 gap-3 mb-4">
+        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+          <Navigation size={18} />
         </div>
+        {isExpanded && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col">
+            <h1 className="text-[14px] font-semibold text-slate-900 leading-none">GeoManager</h1>
+            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mt-1">Admin Console</p>
+          </motion.div>
+        )}
+      </div>
 
-        {/* Main Content Area - Scrollable */}
-        <div className="flex-1 overflow-y-auto py-4">
-          {/* Dashboard Section */}
-          <div className="px-4 mb-6">
-            <ul className="space-y-2">
-              {menuItems.map((item) => {
-                const Icon = getIcon(item);
-                const isActive = selected === item.name;
-                const isHovered = hovered === item.name;
+      <div className="flex-1 overflow-y-auto space-y-6">
+        {/* Main Section */}
+        <ul>{menuGroups.main.map(renderMenuItem)}</ul>
 
-                return (
-                  <li key={item.name}>
-                    <button
-                      onClick={() => handleSelect(item)}
-                      onMouseEnter={() => setHovered(item.name)}
-                      onMouseLeave={() => setHovered(null)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                        isActive
-                          ? "bg-blue-50 text-blue-600 border border-blue-100"
-                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                      } ${!open ? "justify-center px-0" : ""}`}
-                    >
-                      <div
-                        className={`p-2 rounded-lg transition-all duration-200 ${
-                          isActive
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-100 text-gray-600"
-                        } ${isHovered && !isActive ? "bg-gray-200" : ""}`}
-                      >
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      {open && (
-                        <span className="font-medium text-sm">{item.name}</span>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {/* Country Management Section */}
-          <div className="px-4 mb-6">
-            {open && (
-              <div className="mb-3">
-                <button
-                  onClick={() =>
-                    setShowCountryManagement(!showCountryManagement)
-                  }
-                  className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Country Management
-                  </span>
-                  {showCountryManagement ? (
-                    <ChevronUpIcon className="h-4 w-4 text-gray-400" />
-                  ) : (
-                    <ChevronDownIcon className="h-4 w-4 text-gray-400" />
-                  )}
-                </button>
-              </div>
-            )}
-
-            {(open ? showCountryManagement : true) && (
-              <ul className="space-y-2">
-                {countryManagementItems.map((item) => {
-                  const Icon = getIcon(item);
-                  const isActive = selected === item.name;
-                  const isHovered = hovered === item.name;
-
-                  return (
-                    <li key={item.name}>
-                      <button
-                        onClick={() => handleSelect(item)}
-                        onMouseEnter={() => setHovered(item.name)}
-                        onMouseLeave={() => setHovered(null)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                          isActive
-                            ? "bg-blue-50 text-blue-600 border border-blue-100"
-                            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                        } ${!open ? "justify-center px-0" : ""}`}
-                      >
-                        <div
-                          className={`p-2 rounded-lg transition-all duration-200 ${
-                            isActive
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 text-gray-600"
-                          } ${isHovered && !isActive ? "bg-gray-200" : ""}`}
-                        >
-                          <Icon className="h-5 w-5" />
-                        </div>
-                        {open && (
-                          <span className="font-medium text-sm">
-                            {item.name}
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom Section */}
-        <div className="border-t border-gray-200 bg-white p-4">
-          {/* User Profile */}
-          <div
-            className={`flex items-center ${
-              open ? "justify-between" : "justify-center"
-            } mb-4`}
-          >
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="p-1.5 bg-blue-600 rounded-full">
-                  <UserCircleIcon className="h-8 w-8 text-white" />
-                </div>
-                <div className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 rounded-full border-2 border-white"></div>
-              </div>
-              {open && (
-                <div className="transition-opacity duration-200">
-                  <h3 className="font-semibold text-sm text-gray-800">
-                    Admin User
-                  </h3>
-                  <p className="text-xs text-gray-500">Administrator</p>
-                </div>
-              )}
-            </div>
-
-            {/* Collapse Button */}
-            <button
-              onClick={() => setOpen(!open)}
-              className={`p-2 hover:bg-gray-100 rounded-lg transition-all duration-200 ${
-                !open ? "mx-auto" : ""
-              }`}
+        {/* Geographic Section */}
+        <div className="space-y-1">
+          {isExpanded && (
+            <button 
+                onClick={() => toggleSection('geographic')}
+                className="w-full flex items-center justify-between px-6 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
             >
-              {open ? (
-                <ChevronLeftIcon className="h-5 w-5 text-gray-500" />
-              ) : (
-                <ChevronRightIcon className="h-5 w-5 text-gray-500" />
-              )}
+              <span>Geographic</span>
+              {expandedSections.geographic ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
-          </div>
+          )}
+          <AnimatePresence>
+            {expandedSections.geographic && (
+              <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1">
+                {menuGroups.geographic.map(renderMenuItem)}
+              </motion.ul>
+            )}
+          </AnimatePresence>
+        </div>
 
-          {/* Version Info */}
-          {open && (
-            <div className="mt-4 pt-3 border-t border-gray-200">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">Version 1.0.0</span>
-                <span className="text-green-600 font-medium">• Online</span>
-              </div>
+        {/* Categories Section */}
+        <div className="space-y-1">
+          {isExpanded && (
+            <button 
+                onClick={() => toggleSection('category')}
+                className="w-full flex items-center justify-between px-6 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+            >
+              <span>Classification</span>
+              {expandedSections.category ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+          )}
+          <AnimatePresence>
+            {expandedSections.category && (
+              <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1">
+                {menuGroups.categories.map(renderMenuItem)}
+              </motion.ul>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Footer: Floating Profile & Toggle */}
+      <div className="p-4 mt-auto space-y-4">
+        <div className={`flex items-center p-2 rounded-xl bg-slate-900/[0.03] border border-white/50 ${isExpanded ? "gap-3" : "justify-center"}`}>
+          <div className="relative">
+            <div className="w-8 h-8 rounded-full bg-slate-200 border border-white flex items-center justify-center text-slate-600 font-bold text-[10px]">AD</div>
+            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
+          </div>
+          {isExpanded && (
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold text-slate-800 truncate">Administrator</p>
+              <p className="text-[10px] text-slate-500 truncate">v1.2.4 • Online</p>
             </div>
           )}
         </div>
-      </aside>
 
-      {/* Hover Tooltips for Collapsed State */}
-      {!open && (
-        <div className="fixed left-20 top-0 h-full z-50">
-          {/* Dashboard */}
-          <div
-            className="absolute left-2 bg-gray-800 text-white px-3 py-2 rounded-lg shadow-lg border border-gray-700 transform transition-all duration-200 opacity-0 hover:opacity-100 pointer-events-auto"
-            style={{ top: "140px" }}
-          >
-            <span className="text-sm font-medium whitespace-nowrap">
-              Dashboard
-            </span>
-          </div>
-
-          {/* Country Management Items */}
-          {countryManagementItems.map((item, index) => (
-            <div
-              key={item.name}
-              className="absolute left-2 bg-gray-800 text-white px-3 py-2 rounded-lg shadow-lg border border-gray-700 transform transition-all duration-200 opacity-0 hover:opacity-100 pointer-events-auto"
-              style={{
-                top: `${index * 48 + 200}px`,
-              }}
-            >
-              <span className="text-sm font-medium whitespace-nowrap">
-                {item.name}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full h-8 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+        >
+          {isExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+        </button>
+      </div>
+    </motion.aside>
   );
 };
 

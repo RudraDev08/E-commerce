@@ -16,9 +16,11 @@ export const createCountry = async (req, res) => {
     const country = await Country.create(req.body);
     res.status(201).json(country);
   } catch (error) {
+    console.error("COUNTRY CREATE ERROR:", error.message); 
     res.status(400).json({ message: error.message });
   }
-}
+};
+
 
 // Update Country
 

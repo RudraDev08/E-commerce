@@ -1,239 +1,259 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import {
-  MagnifyingGlassIcon,
-  MapPinIcon,
-  BuildingOfficeIcon,
-  GlobeAltIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-} from "@heroicons/react/24/outline";
-import {
-  getCityByPincode,
-  getStateById,
-  getCountryById,
-} from "../../Api/locationApi";
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  Trash2,
+  Check,
+  X,
+  Plus,
+  Globe,
+  Map,
+  Building2,
+  Hash,
+  Download,
+  Layers,
+} from "lucide-react";
 
-const PincodeAutoSelect = () => {
-  const [pincode, setPincode] = useState("");
-  const [country, setCountry] = useState("");
-  const [state, setState] = useState("");
-  const [city, setCity] = useState("");
-  const [error, setError] = useState("");
+// API imports remain unchanged
+import { getPincodes, deletePincode, updatePincode, addPincode } from "../../api/PincodeApi";
+import { getCountries, getStates, getCities } from "../../api/locationApi";
+
+const PincodeTable = () => {
+  /* ================= STATE & LOGIC (UNCHANGED) ================= */
+  const [data, setData] = useState([]);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [isValid, setIsValid] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState("");
+  const [countries, setCountries] = useState([]);
+  const [states, setStates] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [countryId, setCountryId] = useState("");
+  const [stateId, setStateId] = useState("");
+  const [cityId, setCityId] = useState("");
+  const [pincode, setPincode] = useState("");
 
-  const handlePincode = async (value) => {
-    const trimmedValue = value.replace(/\D/g, "").slice(0, 6);
-    setPincode(trimmedValue);
-    setError("");
-    setIsValid(null);
-
-    // Reset when not 6 digits
-    if (trimmedValue.length !== 6) {
-      setCity("");
-      setState("");
-      setCountry("");
-      return;
-    }
-
+  const fetchData = async () => {
     setLoading(true);
-
     try {
-      // 1️⃣ City
-      const cityRes = await getCityByPincode(trimmedValue);
-      if (!cityRes.data || cityRes.data.length === 0) {
-        setError("Invalid pincode. Please enter a valid 6-digit pincode.");
-        setIsValid(false);
-        setLoading(false);
-        return;
-      }
-
-      const cityData = cityRes.data[0];
-      setCity(cityData.name);
-
-      // 2️⃣ State
-      const stateRes = await getStateById(cityData.stateId);
-      if (!stateRes.data) {
-        setError("State information not available");
-        setIsValid(false);
-        setLoading(false);
-        return;
-      }
-      setState(stateRes.data.name);
-
-      // 3️⃣ Country
-      const countryRes = await getCountryById(stateRes.data.countryId);
-      if (!countryRes.data) {
-        setError("Country information not available");
-        setIsValid(false);
-        setLoading(false);
-        return;
-      }
-      setCountry(countryRes.data.name);
-      setIsValid(true);
-      setError("");
-    } catch (error) {
-      setError("Failed to fetch location details. Please try again.");
-      setIsValid(false);
+      const res = await getPincodes(page, search);
+      setData(res.data.data || []);
+      setPages(res.data.pages || 1);
+    } catch (err) {
+      toast.error("Network error");
     } finally {
       setLoading(false);
     }
   };
 
-  const clearAll = () => {
-    setPincode("");
-    setCountry("");
-    setState("");
-    setCity("");
-    setError("");
-    setIsValid(null);
+  useEffect(() => { fetchData(); }, [page, search]);
+  useEffect(() => { getCountries().then(res => setCountries(res.data || [])); }, []);
+  useEffect(() => { if (countryId) getStates(countryId).then(res => setStates(res.data || [])); }, [countryId]);
+  useEffect(() => { if (stateId) getCities(stateId).then(res => setCities(res.data || [])); }, [stateId]);
+
+  const handleDelete = async (id) => {
+    if (window.confirm("Remove this entry?")) {
+      try { await deletePincode(id); fetchData(); } catch (err) { toast.error("Restriction active"); }
+    }
+  };
+
+  const saveEdit = async (id) => {
+    try { await updatePincode(id, { pincode: editValue }); setEditingId(null); fetchData(); } 
+    catch (err) { toast.error("Failed"); }
+  };
+
+  const handleAdd = async () => {
+    try { await addPincode({ pincode, cityId }); setPincode(""); fetchData(); } 
+    catch (err) { toast.error("Submission failed"); }
   };
 
   return (
-    <div className="max-w-lg mx-auto mt-10 p-8 bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-100">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-500 rounded-2xl mb-4">
-          <MapPinIcon className="h-8 w-8 text-white" />
-        </div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-          Pincode Finder
-        </h2>
-        <p className="text-gray-600">
-          Enter a 6-digit pincode to auto-fill location details
-        </p>
-      </div>
+    <div className="min-h-screen bg-[#e2e8f0] bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-slate-200 via-slate-300 to-indigo-100 text-slate-900 font-sans antialiased p-6 flex flex-col gap-6">
+      
+      <ToastContainer position="top-center" autoClose={2000} hideProgressBar toastClassName="bg-white/80 backdrop-blur-xl border border-white/40 rounded-2xl shadow-2xl" />
 
-      {/* Pincode Input */}
-      <div className="mb-8">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Enter Pincode
-        </label>
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+      {/* FLOATING TOP BAR */}
+      <nav className="w-full max-w-7xl mx-auto h-14 bg-white/70 backdrop-blur-lg border border-white/40 rounded-2xl flex items-center justify-between px-6 shadow-xl shadow-slate-900/5">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+            <Layers size={18} />
           </div>
-          <input
-            type="text"
-            value={pincode}
-            onChange={(e) => handlePincode(e.target.value)}
-            placeholder="Enter 6-digit pincode"
-            className="w-full pl-10 pr-12 py-3.5 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all text-base"
-            maxLength={6}
-          />
-          {pincode && (
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-              {loading ? (
-                <div className="h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-              ) : isValid === true ? (
-                <CheckCircleIcon className="h-6 w-6 text-green-500" />
-              ) : isValid === false ? (
-                <XCircleIcon className="h-6 w-6 text-red-500" />
-              ) : null}
-            </div>
-          )}
+          <span className="text-sm font-semibold tracking-tight text-slate-800">Spatial Console</span>
+          <span className="text-slate-300 text-xs">/</span>
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-widest">Global Pincode Registry</span>
         </div>
-        {pincode.length > 0 && pincode.length < 6 && (
-          <p className="mt-2 text-sm text-amber-600">
-            {6 - pincode.length} more digits required
-          </p>
-        )}
-      </div>
-
-      {/* Location Cards */}
-      <div className="space-y-4 mb-8">
-        {/* Country Card */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-50 rounded-lg flex items-center justify-center mr-4">
-              <GlobeAltIcon className="h-5 w-5 text-blue-600" />
-            </div>
-            <div className="flex-1">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                Country
-              </div>
-              <div className="text-lg font-semibold text-gray-800">
-                {country || "Not selected"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* State Card */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-green-100 to-green-50 rounded-lg flex items-center justify-center mr-4">
-              <MapPinIcon className="h-5 w-5 text-green-600" />
-            </div>
-            <div className="flex-1">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                State
-              </div>
-              <div className="text-lg font-semibold text-gray-800">
-                {state || "Not selected"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* City Card */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-purple-100 to-purple-50 rounded-lg flex items-center justify-center mr-4">
-              <BuildingOfficeIcon className="h-5 w-5 text-purple-600" />
-            </div>
-            <div className="flex-1">
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                City
-              </div>
-              <div className="text-lg font-semibold text-gray-800">
-                {city || "Not selected"}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-          <div className="flex items-start">
-            <XCircleIcon className="h-5 w-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Action Buttons */}
-      <div className="flex gap-3">
-        <button
-          onClick={clearAll}
-          className="flex-1 py-3 px-4 border-2 border-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors"
-        >
-          Clear All
-        </button>
-        {isValid && (
-          <button
-            onClick={() => {
-              // Handle submit action
-              console.log({ pincode, country, state, city });
-            }}
-            className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-medium rounded-xl hover:from-blue-700 hover:to-blue-600 active:scale-98 transition-all shadow-md hover:shadow-lg"
-          >
-            Use This Location
+        <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+          <button className="px-3 py-1.5 hover:bg-slate-900/5 rounded-lg transition-colors flex items-center gap-2">
+            <Download size={14} /> Export
           </button>
-        )}
-      </div>
+        </div>
+      </nav>
 
-      {/* Info Text */}
-      <div className="mt-6 pt-6 border-t border-gray-200">
-        <p className="text-sm text-gray-500 text-center">
-          This system automatically detects location based on Indian pincodes.
-          Ensure you enter a valid 6-digit pincode.
-        </p>
+      {/* MAIN SPATIAL GRID */}
+      <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* LEFT COLUMN: CONTROL PANEL */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          <section className="bg-white/80 backdrop-blur-xl border border-white/40 rounded-2xl p-5 shadow-xl shadow-slate-900/5">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+              <input 
+                className="w-full h-10 pl-10 pr-4 bg-slate-900/5 border border-transparent rounded-xl text-xs font-medium outline-none focus:bg-white focus:border-indigo-500/20 transition-all"
+                placeholder="Search by code or region..."
+                value={search}
+                onChange={e => {setSearch(e.target.value); setPage(1);}}
+              />
+            </div>
+          </section>
+
+          <section className="bg-white/75 backdrop-blur-xl border border-white/50 rounded-[24px] p-6 shadow-xl shadow-slate-900/5 flex flex-col gap-5">
+            <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Add New Location</h2>
+            
+            <div className="space-y-4">
+              {[
+                { label: "Country", value: countryId, setter: setCountryId, options: countries, icon: Globe, disabled: false },
+                { label: "State", value: stateId, setter: setStateId, options: states, icon: Map, disabled: !countryId },
+                { label: "City", value: cityId, setter: setCityId, options: cities, icon: Building2, disabled: !stateId }
+              ].map((f, i) => (
+                <div key={i} className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-400 px-1 uppercase tracking-tight">{f.label}</label>
+                  <div className="relative">
+                    <f.icon size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <select 
+                      className="w-full h-10 pl-9 pr-3 bg-slate-900/5 border border-transparent rounded-xl text-xs font-medium outline-none focus:bg-white focus:border-indigo-500/20 transition-all appearance-none"
+                      value={f.value}
+                      onChange={e => f.setter(e.target.value)}
+                      disabled={f.disabled}
+                    >
+                      <option value="">Select...</option>
+                      {f.options.map(o => <option key={o._id} value={o._id}>{o.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              ))}
+              
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-slate-400 px-1 uppercase tracking-tight">Pincode</label>
+                <div className="relative">
+                  <Hash size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    className="w-full h-10 pl-9 pr-3 bg-slate-900/5 border border-transparent rounded-xl text-xs font-medium outline-none focus:bg-white focus:border-indigo-500/20 transition-all"
+                    placeholder="000 000"
+                    value={pincode}
+                    onChange={e => setPincode(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <button 
+                onClick={handleAdd}
+                className="w-full h-11 bg-slate-900 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-600 transition-all active:scale-[0.97] mt-2"
+              >
+                <Plus size={16} /> Register Entry
+              </button>
+            </div>
+          </section>
+        </div>
+
+        {/* RIGHT COLUMN: PRIMARY DATA TABLE */}
+        <div className="lg:col-span-8 flex flex-col gap-4">
+          <section className="bg-white/80 backdrop-blur-2xl border border-white/50 rounded-[24px] shadow-2xl shadow-slate-900/5 overflow-hidden min-h-[600px] relative">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-slate-900/[0.02] border-b border-slate-900/[0.05]">
+                  <th className="px-8 py-5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest w-[20%]">Code</th>
+                  <th className="px-8 py-5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Geography (City / State / Country)</th>
+                  <th className="px-8 py-5 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest w-[120px]">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-900/[0.03]">
+                <AnimatePresence mode="popLayout">
+                  {data.map((p) => (
+                    <motion.tr 
+                      key={p._id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="group hover:bg-white/40 transition-all"
+                    >
+                      <td className="px-8 py-5">
+                        {editingId === p._id ? (
+                          <input 
+                            className="h-8 bg-white border border-indigo-200 rounded-lg px-2 w-full outline-none text-xs font-bold"
+                            value={editValue}
+                            onChange={e => setEditValue(e.target.value)}
+                            autoFocus
+                          />
+                        ) : (
+                          <span className="font-mono text-sm font-semibold text-slate-700">{p.pincode}</span>
+                        )}
+                      </td>
+                      <td className="px-8 py-5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[13px] font-semibold text-slate-800">{p.cityId?.name}</span>
+                          <span className="text-slate-300">/</span>
+                          <span className="text-[12px] font-medium text-slate-500">{p.cityId?.stateId?.name}</span>
+                          <span className="text-slate-300">/</span>
+                          {/* COUNTRY DISPLAYED HERE */}
+                          <div className="flex items-center gap-1.5 bg-indigo-50/50 px-2 py-0.5 rounded-full border border-indigo-100">
+                            <Globe size={10} className="text-indigo-400" />
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-tighter">
+                                {p.cityId?.stateId?.countryId?.name || "Global"}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all duration-150">
+                          {editingId === p._id ? (
+                            <>
+                              <button onClick={() => saveEdit(p._id)} className="p-1.5 text-indigo-600 hover:bg-white rounded-lg shadow-sm transition-all"><Check size={16}/></button>
+                              <button onClick={() => setEditingId(null)} className="p-1.5 text-slate-400 hover:bg-white rounded-lg shadow-sm transition-all"><X size={16}/></button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => {setEditingId(p._id); setEditValue(p.pincode);}} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg shadow-sm transition-all"><Edit3 size={16}/></button>
+                              <button onClick={() => handleDelete(p._id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg shadow-sm transition-all"><Trash2 size={16}/></button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
+              </tbody>
+            </table>
+            
+            {loading && (
+              <div className="absolute inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center">
+                 <div className="w-6 h-6 border-2 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin"></div>
+              </div>
+            )}
+          </section>
+
+          {/* FLOATING PAGINATION */}
+          <div className="self-center bg-white/80 backdrop-blur-xl border border-white/40 px-6 py-2 rounded-full shadow-xl shadow-slate-900/5 flex items-center gap-6">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Page {page} of {pages}</span>
+            <div className="flex gap-1">
+              <button disabled={page === 1} onClick={() => setPage(page-1)} className="p-1.5 hover:bg-slate-900/5 rounded-full disabled:opacity-20 transition-all">
+                <ChevronLeft size={16} />
+              </button>
+              <button disabled={page === pages} onClick={() => setPage(page + 1)} className="p-1.5 hover:bg-slate-900/5 rounded-full disabled:opacity-20 transition-all">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-export default PincodeAutoSelect;
+export default PincodeTable;
