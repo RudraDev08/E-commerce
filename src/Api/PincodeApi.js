@@ -7,8 +7,15 @@ export const addPincode = (data) =>
   axios.post(BASE, data);
 
 /* GET PINCODES (VIEW + SEARCH + PAGINATION) */
-export const getPincodes = (page = 1, search = "") =>
-  axios.get(`${BASE}?page=${page}&search=${search}`);
+export const getPincodes = (page = 1, search = "", cityId = "") => {
+  let url = `${BASE}?page=${page}&search=${search}`;
+
+  if (cityId) {
+    url += `&cityId=${cityId}`;
+  }
+
+  return axios.get(url);
+};
 
 /* UPDATE PINCODE */
 export const updatePincode = (id, data) =>
