@@ -9,39 +9,24 @@ import {
   Hash,
   ChevronLeft,
   ChevronRight,
-  User,
   ChevronDown,
-  ChevronUp,
   Folder,
-  Layers,
-  Tag,
   Navigation,
+  Circle
 } from "lucide-react";
+import { getCategoryTree } from "../../Api/Category/CategoryApi";
 
-const ProfessionalAside = () => {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [selected, setSelected] = useState("Dashboard");
-  const [expandedSections, setExpandedSections] = useState({
-    geographic: true,
-    category: true,
-  });
+const ProfessionalAside = ({ isExpanded, setIsExpanded }) => {
+  const [categoryTree, setCategoryTree] = useState([]);
+  const [openCategoryId, setOpenCategoryId] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    const path = location.pathname;
-    const mapping = {
-      "/": "Dashboard",
-      "/country": "Country",
-      "/state": "State",
-      "/city": "City",
-      "/pincode": "Pincode",
-      "/categories": "Categories",
-      "/subcategories": "Subcategories",
-      "/tags": "Tags",
-    };
-    setSelected(mapping[path] || "Dashboard");
-  }, [location]);
+    getCategoryTree()
+      .then(res => setCategoryTree(res.data || []))
+      .catch(err => console.error(err));
+  }, []);
 
   const menuGroups = {
     main: [{ name: "Dashboard", icon: Home, path: "/" }],
@@ -49,145 +34,215 @@ const ProfessionalAside = () => {
       { name: "Country", icon: Globe, path: "/country" },
       { name: "State", icon: MapPin, path: "/state" },
       { name: "City", icon: Building, path: "/city" },
-      { name: "Pincode", icon: Hash, path: "/pincode" },
-    ],
-    categories: [
-      { name: "Categories", icon: Folder, path: "/categories" },
-      { name: "Subcategories", icon: Layers, path: "/subcategories" },
-      { name: "Tags", icon: Tag, path: "/tags" },
-    ],
-  };
-
-  const toggleSection = (section) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  };
-
-  const handleNavigation = (item) => {
-    setSelected(item.name);
-    navigate(item.path);
-  };
-
-  const renderMenuItem = (item) => {
-    const isActive = selected === item.name;
-    const Icon = item.icon;
-
-    return (
-      <li key={item.name} className="relative px-3">
-        <button
-          onClick={() => handleNavigation(item)}
-          className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group ${
-            isActive ? "bg-indigo-50/50 text-indigo-600" : "text-slate-500 hover:bg-slate-900/5 hover:text-slate-900"
-          } ${!isExpanded ? "justify-center" : ""}`}
-        >
-          {isActive && (
-            <motion.div
-              layoutId="activeIndicator"
-              className="absolute left-0 w-0.5 h-4 bg-indigo-500 rounded-full"
-            />
-          )}
-          <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
-          {isExpanded && (
-            <span className="text-[13px] font-medium tracking-tight">
-              {item.name}
-            </span>
-          )}
-          {!isExpanded && (
-            <div className="fixed left-20 px-2 py-1 bg-slate-900 text-white text-[11px] rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 backdrop-blur-md bg-opacity-90">
-              {item.name}
-            </div>
-          )}
-        </button>
-      </li>
-    );
+      { name: "Pincode", icon: Hash, path: "/pincode" }
+    ]
   };
 
   return (
     <motion.aside
-      animate={{ width: isExpanded ? 260 : 80 }}
-      className="h-screen bg-white/75 backdrop-blur-md border-r border-white/20 flex flex-col shadow-[10px_0_40px_-15px_rgba(0,0,0,0.05)] relative z-50"
+      initial={false}
+      animate={{ width: isExpanded ? 280 : 80 }}
+      transition={{ type: "spring", stiffness: 300, damping: 32 }}
+      className="h-screen bg-white border-r border-slate-200 flex flex-col sticky top-0 z-50 shadow-[4px_0_24px_rgba(0,0,0,0.02)]"
     >
-      {/* Header: Lightweight & Spatial */}
-      <div className="h-16 flex items-center px-6 gap-3 mb-4">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-          <Navigation size={18} />
-        </div>
-        {isExpanded && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col">
-            <h1 className="text-[14px] font-semibold text-slate-900 leading-none">GeoManager</h1>
-            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mt-1">Admin Console</p>
-          </motion.div>
-        )}
-      </div>
-
-      <div className="flex-1 overflow-y-auto space-y-6">
-        {/* Main Section */}
-        <ul>{menuGroups.main.map(renderMenuItem)}</ul>
-
-        {/* Geographic Section */}
-        <div className="space-y-1">
-          {isExpanded && (
-            <button 
-                onClick={() => toggleSection('geographic')}
-                className="w-full flex items-center justify-between px-6 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
-            >
-              <span>Geographic</span>
-              {expandedSections.geographic ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-          )}
-          <AnimatePresence>
-            {expandedSections.geographic && (
-              <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1">
-                {menuGroups.geographic.map(renderMenuItem)}
-              </motion.ul>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Categories Section */}
-        <div className="space-y-1">
-          {isExpanded && (
-            <button 
-                onClick={() => toggleSection('category')}
-                className="w-full flex items-center justify-between px-6 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
-            >
-              <span>Classification</span>
-              {expandedSections.category ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-          )}
-          <AnimatePresence>
-            {expandedSections.category && (
-              <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1">
-                {menuGroups.categories.map(renderMenuItem)}
-              </motion.ul>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* Footer: Floating Profile & Toggle */}
-      <div className="p-4 mt-auto space-y-4">
-        <div className={`flex items-center p-2 rounded-xl bg-slate-900/[0.03] border border-white/50 ${isExpanded ? "gap-3" : "justify-center"}`}>
-          <div className="relative">
-            <div className="w-8 h-8 rounded-full bg-slate-200 border border-white flex items-center justify-center text-slate-600 font-bold text-[10px]">AD</div>
-            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
+      {/* BRAND SECTION */}
+      <div className="h-20 flex items-center px-5 gap-3 mb-2">
+        <div className="relative group">
+          <div className="absolute -inset-0.5 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
+          <div className="relative w-10 h-10 bg-gradient-to-tr from-indigo-600 to-indigo-500 rounded-xl flex items-center justify-center text-white shadow-xl shadow-indigo-200/50 flex-shrink-0">
+            <Navigation size={20} fill="currentColor" />
           </div>
+        </div>
+        
+        <AnimatePresence>
           {isExpanded && (
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold text-slate-800 truncate">Administrator</p>
-              <p className="text-[10px] text-slate-500 truncate">v1.2.4 • Online</p>
-            </div>
+            <motion.div 
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              className="flex flex-col whitespace-nowrap overflow-hidden"
+            >
+              <h1 className="text-sm font-bold text-slate-900 tracking-tight">Nexus Admin</h1>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Enterprise v2.0</span>
+              </div>
+            </motion.div>
           )}
+        </AnimatePresence>
+      </div>
+
+      {/* SCROLLABLE MENU */}
+      <div className="flex-1 overflow-y-auto px-3 space-y-6 custom-scrollbar scroll-smooth">
+        
+        {/* DASHBOARD GROUP */}
+        <div className="space-y-1">
+          {menuGroups.main.map(item => (
+            <MenuItem
+              key={item.name}
+              item={item}
+              isExpanded={isExpanded}
+              isActive={location.pathname === item.path}
+              onClick={() => navigate(item.path)}
+            />
+          ))}
         </div>
 
+        {/* INFRASTRUCTURE SECTION */}
+        <div className="space-y-1">
+          <SectionHeader label="Infrastructure" isExpanded={isExpanded} />
+          <div className="bg-slate-50/50 rounded-2xl p-1.5 space-y-1">
+            {menuGroups.geographic.map(item => (
+              <MenuItem
+                key={item.name}
+                item={item}
+                isExpanded={isExpanded}
+                isActive={location.pathname === item.path}
+                onClick={() => navigate(item.path)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* CATEGORIES SECTION */}
+        <div className="space-y-1 pb-4">
+          <SectionHeader label="Classification" isExpanded={isExpanded} />
+          
+          <MenuItem
+            item={{ name: "Category Management", icon: Folder, path: "/categories" }}
+            isExpanded={isExpanded}
+            isActive={location.pathname === "/categories"}
+            onClick={() => navigate("/categories")}
+          />
+
+          {/* <div className="mt-2 space-y-1">
+            {categoryTree.map(cat => (
+              <div key={cat._id} className="px-1">
+                <button
+                  onClick={() => setOpenCategoryId(openCategoryId === cat._id ? null : cat._id)}
+                  className={`w-full group flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-[12px] font-semibold transition-all duration-200 ${
+                    openCategoryId === cat._id
+                      ? "bg-indigo-50/50 text-indigo-700 shadow-sm"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`p-1 rounded-md transition-colors ${openCategoryId === cat._id ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'}`}>
+                        <Folder size={14} />
+                    </div>
+                    {isExpanded && <span>{cat.name}</span>}
+                  </div>
+                  {isExpanded && (
+                    <motion.div
+                        animate={{ rotate: openCategoryId === cat._id ? 180 : 0 }}
+                        className="opacity-50"
+                    >
+                        <ChevronDown size={14} />
+                    </motion.div>
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {isExpanded && openCategoryId === cat._id && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className="overflow-hidden"
+                    >
+                      <div className="ml-6 mt-1 mb-2 border-l-2 border-slate-100 pl-4 space-y-1">
+                        {cat.children?.map(sub => (
+                          <button
+                            key={sub._id}
+                            onClick={() => navigate(`/categories/${sub._id}`)}
+                            className={`w-full flex items-center gap-2 text-left py-2 px-2 rounded-lg text-[11px] font-medium transition-all ${
+                                location.pathname.includes(sub._id) 
+                                ? "text-indigo-600 bg-indigo-50/30" 
+                                : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
+                            }`}
+                          >
+                            <Circle size={4} fill="currentColor" className={location.pathname.includes(sub._id) ? "text-indigo-500" : "text-slate-300"} />
+                            {sub.name}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div> */}
+        </div>
+      </div>
+
+      {/* FOOTER TOGGLE */}
+      <div className="p-4 bg-white/80 backdrop-blur-sm border-t border-slate-100">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full h-8 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+          className="w-full h-10 flex items-center justify-center rounded-xl bg-slate-900 text-white hover:bg-indigo-600 transition-all duration-300 shadow-lg shadow-slate-200 active:scale-95"
         >
-          {isExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          {isExpanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </button>
       </div>
     </motion.aside>
   );
 };
+
+/* ---------- REFINED SUB COMPONENTS ---------- */
+
+const MenuItem = ({ item, isExpanded, isActive, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1 transition-all duration-200 overflow-hidden ${
+      isActive
+        ? "bg-slate-900 text-white shadow-[0_10px_20px_-5px_rgba(15,23,42,0.3)]"
+        : "text-slate-500 hover:bg-white hover:shadow-md hover:shadow-slate-200/50 hover:text-slate-900"
+    }`}
+  >
+    {/* Active Indicator Bar */}
+    {!isActive && (
+      <div className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-indigo-500 rounded-r-full -translate-x-full group-hover:translate-x-0 transition-transform duration-200" />
+    )}
+
+    <div className={`p-1.5 rounded-lg flex-shrink-0 transition-colors ${
+        isActive ? "bg-indigo-500/20 text-indigo-400" : "bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600"
+    }`}>
+      <item.icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+    </div>
+
+    <AnimatePresence>
+      {isExpanded && (
+        <motion.span 
+            initial={{ opacity: 0, x: -5 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="text-xs font-bold tracking-tight whitespace-nowrap"
+        >
+          {item.name}
+        </motion.span>
+      )}
+    </AnimatePresence>
+
+    {/* Hover highlight effect */}
+    {isActive && (
+        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent pointer-events-none" />
+    )}
+  </button>
+);
+
+const SectionHeader = ({ label, isExpanded }) => (
+  <AnimatePresence>
+    {isExpanded && (
+      <motion.p 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2 mt-4 flex items-center gap-2"
+      >
+        <span className="w-1 h-1 bg-indigo-400 rounded-full" />
+        {label}
+      </motion.p>
+    )}
+  </AnimatePresence>
+);
 
 export default ProfessionalAside;

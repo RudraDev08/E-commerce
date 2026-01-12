@@ -8,6 +8,12 @@ const categorySchema = new mongoose.Schema(
       trim: true
     },
 
+    slug: {
+      type: String,
+      required: true,
+      unique: true
+    },
+
     type: {
       type: String,
       enum: ["MAIN", "SUB"],
@@ -22,19 +28,20 @@ const categorySchema = new mongoose.Schema(
 
     status: {
       type: Boolean,
-      default: true // true = Active, false = Inactive
-    },
-
-    order: {
-      type: Number,
-      default: 0
-    },
-
-    icon: {
-      type: String
+      default: true
     }
   },
   { timestamps: true }
 );
+
+categorySchema.pre("validate", function () {
+  if (this.name && !this.slug) {
+    this.slug = this.name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+  }
+});
 
 export default mongoose.model("Category", categorySchema);

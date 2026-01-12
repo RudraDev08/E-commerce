@@ -27,10 +27,14 @@ app.use(express.urlencoded({ extended: true }));
 
 // CORS: Configured to allow your React app
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173", // Use your React URL
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  origin: "http://localhost:5173",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
+
+
+
 
 /* ================= ROUTES ================= */
 
