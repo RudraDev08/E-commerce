@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import slugify from "slugify";
 
 const categorySchema = new mongoose.Schema(
   {
@@ -7,40 +8,50 @@ const categorySchema = new mongoose.Schema(
       required: true,
       trim: true
     },
-
     slug: {
       type: String,
-      required: true,
-      unique: true
+      unique: true,
+      index: true
     },
-
-    type: {
+    description: {
       type: String,
-      enum: ["MAIN", "SUB"],
-      required: true
+      default: ""
     },
-
     parentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
       default: null
     },
-
+    level: {
+      type: Number,
+      default: 1
+    },
     status: {
-      type: Boolean,
-      default: true
+      type: String,
+      enum: ["active", "inactive"],
+      default: "active"
     }
   },
   { timestamps: true }
 );
 
-categorySchema.pre("validate", function () {
-  if (this.name && !this.slug) {
-    this.slug = this.name
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
+/* ---------------- AUTO SLUG ---------------- */
+categorySchema.pre("save", async function () {
+  if (this.isModified("name")) {
+    this.slug = slugify(this.name, {
+      lower: true,
+      strict: true
+    });
+  }
+});
+
+/* ---------------- AUTO LEVEL ---------------- */
+categorySchema.pre("save", async function () {
+  if (this.parentId) {
+    const parent = await this.constructor.findById(this.parentId);
+    this.level = parent ? parent.level + 1 : 1;
+  } else {
+    this.level = 1;
   }
 });
 

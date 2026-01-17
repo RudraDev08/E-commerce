@@ -1,43 +1,33 @@
 import axios from "axios";
 
-const api = axios.create({
-  baseURL: "http://localhost:5000/api/categories",
-  headers: {
-    "Content-Type": "application/json"
-  }
-});
+const API_URL = "http://localhost:5000/api/categories";
 
-
-// Get all categories (Admin)
-export const getCategories = async () => {
-  const res = await api.get("/");
-  return res.data; // { success, data }
-};
-
-// Create category (MAIN / SUB)
-export const createCategory = async (data) => {
-  const res = await api.post("/", data);
-  return res.data;
-};
-
-// Toggle category status
-export const toggleCategoryStatus = async (id) => {
-  const res = await api.patch(`/${id}/status`);
-  return res.data;
-};
-
-// Get category tree (for sidebar / parent dropdown)
+/* ---------------- CATEGORY TREE ---------------- */
 export const getCategoryTree = async () => {
-  const res = await api.get("/tree");
-  return res.data; // { success, data }
-  
+  const { data } = await axios.get(`${API_URL}/tree`);
+  return data;
 };
 
+/* ---------------- FLAT CATEGORY LIST ---------------- */
+export const getCategories = async () => {
+  const { data } = await axios.get(API_URL);
+  return data;
+};
+
+/* ---------------- CREATE ---------------- */
+export const createCategory = async (payload) => {
+  const { data } = await axios.post(API_URL, payload);
+  return data;
+};
+
+/* ---------------- UPDATE ---------------- */
+export const updateCategory = async (id, payload) => {
+  const { data } = await axios.put(`${API_URL}/${id}`, payload);
+  return data;
+};
+
+/* ---------------- DELETE ---------------- */
 export const deleteCategory = async (id) => {
-  return api.delete(`/${id}`);
+  const { data } = await axios.delete(`${API_URL}/${id}`);
+  return data;
 };
-
-export const updateCategory = async (id, data) => {
-  return api.put(`/${id}`, data);
-};
-

@@ -1,223 +1,173 @@
 import Category from "../../models/Category/categorySchema.js";
+import slugify from "slugify";
 
-/* ================= CREATE CATEGORY ================= */
+/* -------------------------------------------------------
+   CREATE CATEGORY
+------------------------------------------------------- */
 export const createCategory = async (req, res) => {
   try {
-    const { name, type, parentId } = req.body;
+    let {
+      name,
+      description = "",
+      parentId = null,
+      icon = "",
+      displayOrder = 0
+    } = req.body;
 
-    if (!name || !type) {
-      return res.status(400).json({
-        success: false,
-        message: "Name and type are required"
-      });
+    if (!name) {
+      return res.status(400).json({ message: "Category name is required" });
     }
 
-    // ===== MAIN CATEGORY =====
-    if (type === "MAIN") {
-      const category = await Category.create({
-        name,
-        type
-      });
-
-      return res.status(201).json({
-        success: true,
-        data: category
-      });
+    // 🔥 FIX: Ensure parentId is strictly null or a valid ObjectId string
+    if (!parentId || parentId === "" || parentId === "null" || parentId === "undefined") {
+      parentId = null;
     }
 
-    // ===== SUB CATEGORY =====
-    if (type === "SUB") {
-      if (!parentId) {
-        return res.status(400).json({
-          success: false,
-          message: "Parent category id is required"
-        });
-      }
+    const slug = slugify(name, { lower: true, strict: true });
 
-      const parent = await Category.findOne({
-        _id: parentId,
-        type: "MAIN"
-      });
+    // Check uniqueness before trying to save
+    const existing = await Category.findOne({ slug });
+    if (existing) {
+      return res.status(400).json({ message: "A category with this name already exists" });
+    }
 
+    let level = 0; 
+    let isLeaf = true;
+
+    if (parentId) {
+      const parent = await Category.findById(parentId);
       if (!parent) {
-        return res.status(404).json({
-          success: false,
-          message: "Parent category not found"
-        });
+        return res.status(404).json({ message: "Parent category not found" });
       }
 
-      const subCategory = await Category.create({
-        name,
-        type,
-        parentId
-      });
+      level = parent.level + 1;
 
-      return res.status(201).json({
-        success: true,
-        data: subCategory
-      });
+      // Update parent status if it was previously a leaf
+      if (parent.isLeaf) {
+        await Category.findByIdAndUpdate(parentId, { isLeaf: false });
+      }
     }
 
-    return res.status(400).json({
-      success: false,
-      message: "Invalid category type"
+    const category = await Category.create({
+      name,
+      slug,
+      description,
+      parentId,
+      level,
+      isLeaf,
+      icon,
+      displayOrder
     });
 
-  } catch (error) {
-    console.error("CREATE CATEGORY ERROR:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(201).json(category);
+  } catch (err) {
+    console.error("CREATE ERROR:", err);
+    // Specifically handle Duplicate Key Error (E11000)
+    if (err.code === 11000) {
+        return res.status(400).json({ message: "Slug must be unique" });
+    }
+    res.status(500).json({ message: err.message });
   }
 };
 
-/* ================= GET ALL CATEGORIES (ADMIN) ================= */
-export const getAllCategories = async (req, res) => {
-  try {
-    const categories = await Category.find().sort({ createdAt: -1 });
-
-    res.json({
-      success: true,
-      data: categories
-    });
-  } catch (error) {
-    console.error("GET ALL CATEGORIES ERROR:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
+/* -------------------------------------------------------
+   GET CATEGORY TREE
+------------------------------------------------------- */
+const buildTree = (categories, parentId = null) => {
+  return categories
+    .filter(cat => {
+      // Robust null/undefined/string comparison
+      const catParentId = cat.parentId ? cat.parentId.toString() : null;
+      const targetParentId = parentId ? parentId.toString() : null;
+      return catParentId === targetParentId;
+    })
+    .map(cat => ({
+      ...cat._doc,
+      children: buildTree(categories, cat._id)
+    }));
 };
 
-/* ================= GET CATEGORY TREE ================= */
 export const getCategoryTree = async (req, res) => {
   try {
-    const mainCategories = await Category.find({
-      type: "MAIN"
-    }).lean();
+    // Fetch all active categories to build the tree in one go
+    const categories = await Category.find({ status: "active" })
+      .sort({ displayOrder: 1 });
 
-    const subCategories = await Category.find({
-      type: "SUB"
-    }).lean();
-
-    const tree = mainCategories.map(main => ({
-      ...main,
-      children: subCategories.filter(
-        sub => String(sub.parentId) === String(main._id)
-      )
-    }));
-
-    res.json({
-      success: true,
-      data: tree
-    });
-  } catch (error) {
-    console.error("GET CATEGORY TREE ERROR:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    const tree = buildTree(categories);
+    res.json(tree);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
 
-/* ================= TOGGLE CATEGORY STATUS ================= */
-export const toggleCategoryStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const category = await Category.findById(id);
-
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: "Category not found"
-      });
-    }
-
-    category.status = !category.status;
-    await category.save();
-
-    // 🔥 If MAIN category disabled → disable all SUB
-    if (category.type === "MAIN" && category.status === false) {
-      await Category.updateMany(
-        { parentId: category._id },
-        { status: false }
-      );
-    }
-
-    res.json({
-      success: true,
-      data: category
-    });
-  } catch (error) {
-    console.error("TOGGLE STATUS ERROR:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
-
-/* ================= DELETE CATEGORY ================= */
-export const deleteCategory = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const category = await Category.findById(id);
-
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: "Category not found"
-      });
-    }
-
-    // Prevent deleting MAIN category with children
-    if (category.type === "MAIN") {
-      const hasChildren = await Category.exists({ parentId: id });
-
-      if (hasChildren) {
-        return res.status(400).json({
-          success: false,
-          message: "Cannot delete category with sub-categories"
-        });
-      }
-    }
-
-    await category.deleteOne();
-
-    res.json({
-      success: true,
-      message: "Category deleted successfully"
-    });
-  } catch (error) {
-    console.error("DELETE CATEGORY ERROR:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
-
+/* -------------------------------------------------------
+   UPDATE CATEGORY
+------------------------------------------------------- */
 export const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, description, icon, displayOrder, status } = req.body;
+
+    // Use findByIdAndUpdate for cleaner partial updates
+    const updateData = {};
+    if (name) {
+        updateData.name = name;
+        updateData.slug = slugify(name, { lower: true, strict: true });
+    }
+    if (description !== undefined) updateData.description = description;
+    if (icon !== undefined) updateData.icon = icon;
+    if (displayOrder !== undefined) updateData.displayOrder = displayOrder;
+    if (status !== undefined) updateData.status = status;
 
     const category = await Category.findByIdAndUpdate(
-      id,
-      { name },
-      { new: true }
+        id, 
+        { $set: updateData }, 
+        { new: true, runValidators: true }
     );
 
     if (!category) {
       return res.status(404).json({ message: "Category not found" });
     }
 
-    res.json({ success: true, data: category });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.json(category);
+  } catch (err) {
+    console.error("UPDATE ERROR:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
+/* -------------------------------------------------------
+   DELETE CATEGORY
+------------------------------------------------------- */
+export const deleteCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const category = await Category.findById(id);
+
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    const hasChildren = await Category.findOne({ parentId: id });
+    if (hasChildren) {
+      return res.status(400).json({ 
+        message: "Please delete all sub-categories first." 
+      });
+    }
+
+    const savedParentId = category.parentId;
+    await Category.findByIdAndDelete(id);
+
+    // After deletion, check if the parent should become a leaf again
+    if (savedParentId) {
+      const remainingChildren = await Category.countDocuments({ parentId: savedParentId });
+      if (remainingChildren === 0) {
+        await Category.findByIdAndUpdate(savedParentId, { isLeaf: true });
+      }
+    }
+
+    res.json({ message: "Success" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
