@@ -11,7 +11,7 @@ import locationRoutes from "./routes/locationRoutes.js";
 import pincodeRoutes from "./routes/pincodeRoutes.js";
 
 // Category Routes
-import categoryRoutes from "./routes/Category/categoryRoutes.js"
+import CategoryRoutes from "./routes/Category/CategoryRoutes.js"
 
 // Load Environment Variables
 dotenv.config();
@@ -44,7 +44,8 @@ app.use("/api/cities", cityRoutes);
 app.use("/api/location", locationRoutes);
 app.use("/api/pincodes", pincodeRoutes)
 
-app.use("/api/categories", categoryRoutes)
+app.use("/api/categories", CategoryRoutes)
+
 
 // Health Check Route
 app.get("/health", (req, res) => {

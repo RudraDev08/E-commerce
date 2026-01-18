@@ -1,182 +1,192 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  PlusIcon, 
-  XMarkIcon, 
-  ArrowPathIcon, 
-  TagIcon, 
-  ChartPieIcon, 
-  Squares2X2Icon 
-} from "@heroicons/react/24/outline";
+import { useState } from 'react';
+import { Plus, Search, Filter } from 'lucide-react';
+import { Button } from '../../components/common/Button';
+import { Modal } from '../../components/common/Modal';
+import { CategoryForm } from '../../components/Category/CategoryForm';
+import { CategoryTable } from '../../components/Category/CategoryTable';
+import { CategoryTree } from '../../components/Category/CategoryTree';
+import { DeleteCategoryModal } from '../../components/Category/DeleteCategoryModal';
+import { useCategories } from '../../hooks/useCategories';
 
-// ✅ CORRECTED IMPORTS: Only one import per component
-import CategoryForm from "../../components/Category/CategoryForm";
-import CategoryTable from "../../components/Category/CategoryTable";
-import { getCategoryTree } from "../../Api/Category/CategoryApi";
+export const CategoryPage = () => {
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showTreeView, setShowTreeView] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
-export default function CategoryPage() {
-  const [categories, setCategories] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editingCategory, setEditingCategory] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const {
+    categories,
+    pagination,
+    loading,
+    filters,
+    setFilters,
+    createCategory,
+    updateCategory,
+    deleteCategory
+  } = useCategories();
 
-  /* ---------------- LOAD DATA ---------------- */
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await getCategoryTree();
-      setCategories(res.data || []);
-    } catch (err) {
-      console.error("Failed to load category tree", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  /* ---------------- ANALYTICS ---------------- */
-  const stats = useMemo(() => {
-    let total = 0;
-    const count = (arr) => arr.forEach(c => { 
-      total++; 
-      if(c.children) count(c.children); 
-    });
-    count(categories);
-    return { 
-      total, 
-      active: categories.filter(c => c.status === 'active').length 
-    };
-  }, [categories]);
-
-  /* ---------------- HANDLERS ---------------- */
-  const handleEdit = (cat) => {
-    setEditingCategory(cat);
-    setShowForm(true);
+  const handleCreateClick = () => {
+    setSelectedCategory(null);
+    setShowFormModal(true);
   };
 
-  const closeForm = () => {
-    setShowForm(false);
-    setEditingCategory(null);
+  const handleEditClick = (category) => {
+    setSelectedCategory(category);
+    setShowFormModal(true);
+  };
+
+  const handleDeleteClick = (category) => {
+    setSelectedCategory(category);
+    setShowDeleteModal(true);
+  };
+
+  const handleFormSubmit = async (formData) => {
+    setFormLoading(true);
+    try {
+      if (selectedCategory) {
+        await updateCategory(selectedCategory._id, formData);
+      } else {
+        await createCategory(formData);
+      }
+      setShowFormModal(false);
+      setSelectedCategory(null);
+    } catch (error) {
+      console.error('Form submission error:', error);
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    setDeleteLoading(true);
+    try {
+      await deleteCategory(selectedCategory._id);
+      setShowDeleteModal(false);
+      setSelectedCategory(null);
+    } catch (error) {
+      console.error('Delete error:', error);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleSearch = (e) => {
+    setFilters(prev => ({ ...prev, search: e.target.value, page: 1 }));
+  };
+
+  const handleStatusFilter = (e) => {
+    setFilters(prev => ({ ...prev, status: e.target.value, page: 1 }));
+  };
+
+  const handlePageChange = (page) => {
+    setFilters(prev => ({ ...prev, page }));
   };
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen space-y-8">
-      
-      {/* 1. HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-            <Squares2X2Icon className="h-7 w-7 text-indigo-600" />
-            Category Architecture
-          </h1>
-          <p className="text-sm text-slate-500 font-medium mt-1">
-            Global product hierarchy & taxonomy management
-          </p>
-        </div>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Category Management</h1>
+              <p className="text-gray-500 mt-1">Manage your product categories</p>
+            </div>
+            <div className="flex space-x-3 mt-4 md:mt-0">
+              <Button
+                variant={showTreeView ? 'primary' : 'outline'}
+                onClick={() => setShowTreeView(!showTreeView)}
+              >
+                {showTreeView ? 'Table View' : 'Tree View'}
+              </Button>
+              <Button onClick={handleCreateClick}>
+                <Plus size={20} className="mr-2" />
+                New Category
+              </Button>
+            </div>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={loadData} 
-            className="p-2.5 text-slate-500 hover:text-indigo-600 bg-white border border-slate-200 rounded-xl transition-all"
-          >
-            <ArrowPathIcon className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-          <button 
-            onClick={() => setShowForm(true)}
-            className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
-          >
-            <PlusIcon className="h-5 w-5 stroke-[3px]" /> New Category
-          </button>
-        </div>
-      </div>
-
-      {/* 2. STATS CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatsCard 
-          label="Global Nodes" 
-          value={stats.total} 
-          icon={TagIcon} 
-          color="indigo" 
-        />
-        <StatsCard 
-          label="Active Root Nodes" 
-          value={stats.active} 
-          icon={ChartPieIcon} 
-          color="emerald" 
-        />
-        <div className="bg-indigo-600 rounded-2xl p-5 text-white flex flex-col justify-center shadow-lg shadow-indigo-100">
-          <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-wider">System Status</p>
-          <p className="text-lg font-bold">Catalogue Synchronized</p>
-        </div>
-      </div>
-
-      {/* 3. TABLE SECTION */}
-      <CategoryTable 
-        categories={categories} 
-        onEdit={handleEdit} 
-        refresh={loadData} 
-      />
-
-      {/* 4. CENTERED MODAL */}
-      <AnimatePresence>
-        {showForm && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={closeForm}
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            
-            {/* Modal Box */}
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-xl bg-white rounded-[2rem] shadow-2xl z-[110] overflow-hidden"
-            >
-              <div className="p-8">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-black text-slate-900">
-                    {editingCategory ? "Update Category Node" : "Build New Node"}
-                  </h2>
-                  <button 
-                    onClick={closeForm} 
-                    className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-all"
-                  >
-                    <XMarkIcon className="h-5 w-5 text-slate-500" />
-                  </button>
-                </div>
-
-                <CategoryForm 
-                  initialData={editingCategory} 
-                  categories={categories} 
-                  onClose={closeForm} 
-                  refresh={loadData} 
+          {/* Filters */}
+          {!showTreeView && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+              <div className="md:col-span-2 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="Search categories..."
+                  value={filters.search}
+                  onChange={handleSearch}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-            </motion.div>
-          </div>
+
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <select
+                  value={filters.status}
+                  onChange={handleStatusFilter}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                >
+                  <option value="">All Status</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Content */}
+        {showTreeView ? (
+          <CategoryTree />
+        ) : (
+          <CategoryTable
+            categories={categories}
+            pagination={pagination}
+            loading={loading}
+            onEdit={handleEditClick}
+            onDelete={handleDeleteClick}
+            onPageChange={handlePageChange}
+          />
         )}
-      </AnimatePresence>
+
+        {/* Form Modal */}
+        <Modal
+          isOpen={showFormModal}
+          onClose={() => {
+            setShowFormModal(false);
+            setSelectedCategory(null);
+          }}
+          title={selectedCategory ? 'Edit Category' : 'Create New Category'}
+          size="lg"
+        >
+          <CategoryForm
+            category={selectedCategory}
+            onSubmit={handleFormSubmit}
+            onCancel={() => {
+              setShowFormModal(false);
+              setSelectedCategory(null);
+            }}
+            loading={formLoading}
+          />
+        </Modal>
+
+        {/* Delete Confirmation Modal */}
+        <DeleteCategoryModal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setSelectedCategory(null);
+          }}
+          category={selectedCategory}
+          onConfirm={handleDeleteConfirm}
+          loading={deleteLoading}
+        />
+      </div>
     </div>
   );
-}
+};
 
-/* Atomic Stats Card Component */
-const StatsCard = ({ label, value, icon: Icon, color }) => (
-  <div className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm">
-    <div className={`p-3 rounded-xl bg-${color}-50 text-${color}-600`}>
-      <Icon className="h-6 w-6" />
-    </div>
-    <div>
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</p>
-      <p className="text-2xl font-black text-slate-900 leading-none mt-1">{value}</p>
-    </div>
-  </div>
-);
+export default CategoryPage;

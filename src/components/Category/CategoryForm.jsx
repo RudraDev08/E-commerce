@@ -1,157 +1,225 @@
-import { useState, useEffect, useMemo } from "react";
-import { createCategory, updateCategory } from "../../Api/Category/CategoryApi";
-import { TagIcon, LinkIcon, Bars3BottomLeftIcon } from "@heroicons/react/24/outline";
+import { useState, useEffect } from 'react';
+import { Upload, X } from 'lucide-react';
+import { Button } from '../common/Button';
+import { CategorySelect } from './CategorySelect';
 
-export default function CategoryForm({ initialData, categories, onClose, refresh }) {
+export const CategoryForm = ({ category = null, onSubmit, onCancel, loading }) => {
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    parentId: "",
-    status: "active",
-    displayOrder: 0,
+    name: '',
+    description: '',
+    parentId: null,
+    status: 'Active',
+    priority: 0,
+    showInNavbar: true,
+    showOnHomepage: false
   });
-  const [loading, setLoading] = useState(false);
+  
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
-    if (initialData) {
+    if (category) {
       setFormData({
-        name: initialData.name || "",
-        description: initialData.description || "",
-        parentId: initialData.parentId || "",
-        status: initialData.status || "active",
-        displayOrder: initialData.displayOrder || 0,
+        name: category.name || '',
+        description: category.description || '',
+        parentId: category.parentId?._id || null,
+        status: category.status || 'Active',
+        priority: category.priority || 0,
+        showInNavbar: category.showInNavbar ?? true,
+        showOnHomepage: category.showOnHomepage ?? false
       });
-    }
-  }, [initialData]);
-
-  // Helper to flatten tree for the dropdown with indentation
-  const flattenedOptions = useMemo(() => {
-    const options = [];
-    const recurse = (list, depth = 0) => {
-      list.forEach((cat) => {
-        // Prevent setting itself as its own parent during edit
-        if (initialData && cat._id === initialData._id) return;
-        
-        options.push({
-          id: cat._id,
-          name: `${"  ".repeat(depth)}${depth > 0 ? "↳ " : ""}${cat.name}`,
-        });
-        if (cat.children) recurse(cat.children, depth + 1);
-      });
-    };
-    recurse(categories);
-    return options;
-  }, [categories, initialData]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const payload = { 
-        ...formData, 
-        parentId: formData.parentId === "" ? null : formData.parentId 
-      };
-
-      if (initialData) {
-        await updateCategory(initialData._id, payload);
-      } else {
-        await createCategory(payload);
+      
+      if (category.image) {
+        setImagePreview(`http://localhost:5000/${category.image}`);
       }
-      refresh();
-      onClose();
-    } catch (err) {
-      alert("Error saving category");
-    } finally {
-      setLoading(false);
+    }
+  }, [category]);
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
     }
   };
 
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    const formDataToSend = new FormData();
+    Object.keys(formData).forEach(key => {
+      if (formData[key] !== null && formData[key] !== '') {
+        formDataToSend.append(key, formData[key]);
+      }
+    });
+    
+    if (imageFile) {
+      formDataToSend.append('image', imageFile);
+    }
+    
+    onSubmit(formDataToSend);
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Category Name</label>
-          <div className="relative mt-1">
-            <TagIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500" />
-            <input
-              required
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-medium"
-              placeholder="e.g. Smartwatches"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Category Name */}
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Category Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            required
+            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Enter category name"
+          />
         </div>
 
-        <div className="col-span-2">
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Parent Category</label>
-          <div className="relative mt-1">
-            <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <select
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 outline-none appearance-none cursor-pointer font-medium"
-              value={formData.parentId}
-              onChange={(e) => setFormData({ ...formData, parentId: e.target.value })}
-            >
-              <option value="">Root / No Parent</option>
-              {flattenedOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>{opt.name}</option>
-              ))}
-            </select>
-          </div>
+        {/* Parent Category */}
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Parent Category
+          </label>
+          <CategorySelect
+            value={formData.parentId}
+            onChange={(value) => setFormData(prev => ({ ...prev, parentId: value }))}
+            excludeId={category?._id}
+          />
         </div>
 
-        <div className="col-span-2">
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Internal Description</label>
-          <div className="relative mt-1">
-            <Bars3BottomLeftIcon className="absolute left-4 top-4 h-4 w-4 text-slate-400" />
-            <textarea
-              className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 outline-none h-24 resize-none font-medium"
-              placeholder="Describe the purpose of this node..."
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            />
-          </div>
+        {/* Description */}
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Description
+          </label>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            rows="3"
+            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Enter category description"
+          />
         </div>
 
+        {/* Image Upload */}
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Category Image
+          </label>
+          
+          {imagePreview ? (
+            <div className="relative inline-block">
+              <img 
+                src={imagePreview} 
+                alt="Preview" 
+                className="w-32 h-32 object-cover rounded-lg border"
+              />
+              <button
+                type="button"
+                onClick={removeImage}
+                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+              <Upload size={32} className="text-gray-400 mb-2" />
+              <span className="text-sm text-gray-500">Click to upload image</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
+              />
+            </label>
+          )}
+        </div>
+
+        {/* Status */}
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Status</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Status
+          </label>
           <select
-            className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-indigo-600"
+            name="status"
             value={formData.status}
-            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+            onChange={handleChange}
+            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            <option value="active">Active</option>
-            <option value="inactive">Disabled</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
           </select>
         </div>
 
+        {/* Priority */}
         <div>
-          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">Display Priority</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Priority
+          </label>
           <input
             type="number"
-            className="w-full mt-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-medium"
-            value={formData.displayOrder}
-            onChange={(e) => setFormData({ ...formData, displayOrder: e.target.value })}
+            name="priority"
+            value={formData.priority}
+            onChange={handleChange}
+            min="0"
+            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+        </div>
+
+        {/* Visibility Options */}
+        <div className="md:col-span-2 space-y-3">
+          <label className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              name="showInNavbar"
+              checked={formData.showInNavbar}
+              onChange={handleChange}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Show in Navbar</span>
+          </label>
+
+          <label className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              name="showOnHomepage"
+              checked={formData.showOnHomepage}
+              onChange={handleChange}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Show on Homepage</span>
+          </label>
         </div>
       </div>
 
-      <div className="flex gap-3 pt-4">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex-1 py-4 rounded-2xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-all"
-        >
-          Discard
-        </button>
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex-[2] py-4 rounded-2xl font-bold text-white bg-slate-900 hover:bg-indigo-600 shadow-xl shadow-slate-200 disabled:opacity-50 transition-all"
-        >
-          {loading ? "Processing..." : initialData ? "Update Category" : "Build Category"}
-        </button>
+      {/* Form Actions */}
+      <div className="flex justify-end space-x-3 pt-4 border-t">
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={loading}>
+          {category ? 'Update Category' : 'Create Category'}
+        </Button>
       </div>
     </form>
   );
-}
+};

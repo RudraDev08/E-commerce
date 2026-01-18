@@ -1,167 +1,180 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  PencilSquareIcon, 
-  TrashIcon, 
-  ChevronRightIcon,
-  CircleStackIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  PhotoIcon
-} from "@heroicons/react/24/outline";
-import { deleteCategory, updateCategory } from "../../Api/Category/CategoryApi";
+import { Edit2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Button } from '../common/Button';
+import { TableLoader } from '../common/Loader';
 
-const CategoryRow = ({ cat, level = 0, refresh }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const hasChildren = cat.children && cat.children.length > 0;
-
-  const handleToggleStatus = async () => {
-    const newStatus = cat.status === "active" ? "inactive" : "active";
-    try {
-      await updateCategory(cat._id, { status: newStatus });
-      refresh();
-    } catch (err) {
-      console.error("Status update failed", err);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (window.confirm(`Are you sure you want to delete ${cat.name}?`)) {
-      await deleteCategory(cat._id);
-      refresh();
-    }
-  };
-
-  return (
-    <>
-      <tr className="hover:bg-slate-50/80 transition-colors group">
-        <td className="px-4 py-4">
-          <div className="flex items-center gap-3" style={{ paddingLeft: `${level * 24}px` }}>
-            {hasChildren ? (
-              <button 
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="p-1 hover:bg-slate-200 rounded transition-colors"
-              >
-                <motion.div animate={{ rotate: isExpanded ? 90 : 0 }}>
-                  <ChevronRightIcon className="h-3.5 w-3.5 text-slate-600" />
-                </motion.div>
-              </button>
-            ) : (
-              <div className="w-5" /> 
-            )}
-            
-            <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200 shrink-0">
-              {cat.image ? (
-                <img src={cat.image} alt={cat.name} className="h-full w-full object-cover" />
-              ) : (
-                <PhotoIcon className="h-5 w-5 text-slate-400" />
-              )}
-            </div>
-            
-            <div>
-              <div className="font-bold text-slate-900 leading-tight">{cat.name}</div>
-              <div className="text-[10px] text-slate-400 font-mono mt-0.5 uppercase tracking-tighter">
-                {cat.slug}
-              </div>
-            </div>
-          </div>
-        </td>
-
-        <td className="px-4 py-4 text-slate-500 max-w-xs truncate italic text-xs">
-          {cat.description || "No description provided"}
-        </td>
-
-        <td className="px-4 py-4 text-center">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[11px] border border-indigo-100">
-            <CircleStackIcon className="h-3 w-3" />
-            {cat.productCount || 0}
-          </div>
-        </td>
-
-        <td className="px-4 py-4 text-center">
-          <button 
-            onClick={handleToggleStatus}
-            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${
-              cat.status === 'active' 
-                ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-                : 'bg-rose-50 text-rose-600 border border-rose-100'
-            }`}
-          >
-            {cat.status === 'active' ? <CheckCircleIcon className="h-3 w-3" /> : <XCircleIcon className="h-3 w-3" />}
-            {cat.status}
-          </button>
-        </td>
-
-        <td className="px-4 py-4 text-right">
-          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all shadow-sm">
-              <PencilSquareIcon className="h-4 w-4" />
-            </button>
-            <button 
-              onClick={handleDelete}
-              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all shadow-sm"
-            >
-              <TrashIcon className="h-4 w-4" />
-            </button>
-          </div>
-        </td>
-      </tr>
-
-      {/* Recursive Children Rows */}
-      {isExpanded && hasChildren && cat.children.map(child => (
-        <CategoryRow key={child._id} cat={child} level={level + 1} refresh={refresh} />
-      ))}
-    </>
-  );
-};
-
-export default function CategoryTable({ categories, loading, refresh }) {
+export const CategoryTable = ({ 
+  categories, 
+  pagination, 
+  loading, 
+  onEdit, 
+  onDelete,
+  onPageChange 
+}) => {
   if (loading) {
-    return (
-      <div className="w-full bg-white rounded-xl border border-slate-200 p-20 flex flex-col items-center justify-center gap-4">
-        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-slate-500 font-semibold animate-pulse italic">Synchronizing Catalogue...</p>
-      </div>
-    );
+    return <TableLoader />;
   }
 
-  if (!categories || categories.length === 0) {
+  if (categories.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-dashed border-slate-300 p-16 text-center">
-        <div className="mx-auto w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-          <CircleStackIcon className="h-8 w-8 text-slate-300" />
-        </div>
-        <h3 className="text-lg font-bold text-slate-900">Catalogue is Empty</h3>
-        <p className="text-slate-500 text-sm mt-1">Start by adding your first primary category.</p>
+      <div className="text-center py-12">
+        <p className="text-gray-500 text-lg">No categories found</p>
+        <p className="text-gray-400 text-sm mt-2">Create your first category to get started</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden">
+    <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="bg-slate-50/50 text-slate-400 font-black text-[10px] uppercase tracking-[0.15em] border-b border-slate-100">
-              <th className="px-6 py-4 text-left">Hierarchy & Identity</th>
-              <th className="px-4 py-4 text-left">Description</th>
-              <th className="px-4 py-4 text-center">Volume</th>
-              <th className="px-4 py-4 text-center">Visibility</th>
-              <th className="px-6 py-4 text-right">Actions</th>
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Image
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Parent
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Priority
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Visibility
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
-            {categories.map(cat => (
-              <CategoryRow key={cat._id} cat={cat} refresh={refresh} />
+          <tbody className="bg-white divide-y divide-gray-200">
+            {categories.map((category) => (
+              <tr key={category._id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-4">
+                  {category.image ? (
+                    <img
+                      src={`http://localhost:5000/${category.image}`}
+                      alt={category.name}
+                      className="w-12 h-12 object-cover rounded"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center">
+                      <span className="text-gray-400 text-xs">No image</span>
+                    </div>
+                  )}
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-sm font-medium text-gray-900">{category.name}</div>
+                  <div className="text-sm text-gray-500">{category.slug}</div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  {category.parentId?.name || '-'}
+                </td>
+                <td className="px-6 py-4">
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                    category.status === 'Active' 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {category.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-900">
+                  {category.priority}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  <div className="flex flex-col space-y-1">
+                    {category.showInNavbar && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
+                        Navbar
+                      </span>
+                    )}
+                    {category.showOnHomepage && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800">
+                        Homepage
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={() => onEdit(category)}
+                      className="text-blue-600 hover:text-blue-800 transition-colors"
+                      title="Edit"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(category)}
+                      className="text-red-600 hover:text-red-800 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
-      
-      <div className="px-6 py-4 bg-slate-50/30 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-        <span>Showing Root Categories: {categories.length}</span>
-        <span className="text-indigo-600">Secure Enterprise Module</span>
-      </div>
+
+      {/* Pagination */}
+      {pagination && pagination.pages > 1 && (
+        <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t">
+          <div className="text-sm text-gray-700">
+            Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{' '}
+            <span className="font-medium">
+              {Math.min(pagination.page * pagination.limit, pagination.total)}
+            </span> of{' '}
+            <span className="font-medium">{pagination.total}</span> results
+          </div>
+          
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(pagination.page - 1)}
+              disabled={pagination.page === 1}
+            >
+              <ChevronLeft size={16} className="mr-1" />
+              Previous
+            </Button>
+            
+            <div className="flex items-center space-x-1">
+              {[...Array(pagination.pages)].map((_, i) => (
+                <button
+                  key={i + 1}
+                  onClick={() => onPageChange(i + 1)}
+                  className={`px-3 py-1 text-sm rounded ${
+                    pagination.page === i + 1
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(pagination.page + 1)}
+              disabled={pagination.page === pagination.pages}
+            >
+              Next
+              <ChevronRight size={16} className="ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};

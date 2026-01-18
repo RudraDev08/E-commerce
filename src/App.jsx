@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useState, useEffect } from "react";
-import ProfessionalAside from "./components/aside/SimpleAside"; // Updated name
+import { Toaster } from 'react-hot-toast';
+import ProfessionalAside from "./components/aside/SimpleAside";
 import AdminHeader from "./components/header/Header";
 import Dashboard from "./page/Dashboard";
 import CountryPage from "./page/CountryPage";
@@ -8,11 +9,10 @@ import StatePage from "./page/StatePage";
 import CityPage from "./page/CityPage";
 import PincodeTable from "./components/tables/PincodeTable";
 import CategoryPage from "./page/Category/CategoryPage";
-import { ChartBarIcon } from "@heroicons/react/24/outline";
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true); // This is our 'isExpanded' state
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 800);
@@ -30,7 +30,7 @@ function App() {
   return (
     <BrowserRouter>
       <div className="flex min-h-screen bg-[#F8FAFC]">
-        {/* SIDEBAR - We pass 'sidebarOpen' to 'isExpanded' prop */}
+        {/* SIDEBAR */}
         <ProfessionalAside 
           isExpanded={sidebarOpen} 
           setIsExpanded={setSidebarOpen} 
@@ -54,11 +54,38 @@ function App() {
                 <Route path="/city" element={<CityPage />} />
                 <Route path="/pincode" element={<PincodeTable />} />
                 <Route path="/categories" element={<CategoryPage />} />
+                <Route path="/categories/:id" element={<CategoryPage />} />
               </Routes>
             </div>
           </main>
         </div>
       </div>
+
+      {/* TOAST NOTIFICATIONS */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#4ade80',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
     </BrowserRouter>
   );
 }

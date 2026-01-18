@@ -1,33 +1,57 @@
-import axios from "axios";
+import axios from 'axios';
 
-const API_URL = "http://localhost:5000/api/categories";
+const API_BASE_URL = 'http://localhost:5000/api';
 
-/* ---------------- CATEGORY TREE ---------------- */
-export const getCategoryTree = async () => {
-  const { data } = await axios.get(`${API_URL}/tree`);
-  return data;
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+export const categoryApi = {
+  // Get all categories with filters
+  getAll: (params = {}) => {
+    return api.get('/categories', { params });
+  },
+
+  // Get category tree
+  getTree: () => {
+    return api.get('/categories/tree');
+  },
+
+  // Get active parent categories
+  getParents: () => {
+    return api.get('/categories/parents');
+  },
+
+  // Get single category by ID
+  getById: (id) => {
+    return api.get(`/categories/${id}`);
+  },
+
+  // Create new category
+  create: (formData) => {
+    return api.post('/categories', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+
+  // Update category
+  update: (id, formData) => {
+    return api.put(`/categories/${id}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+
+  // Delete category
+  delete: (id) => {
+    return api.delete(`/categories/${id}`);
+  }
 };
 
-/* ---------------- FLAT CATEGORY LIST ---------------- */
-export const getCategories = async () => {
-  const { data } = await axios.get(API_URL);
-  return data;
-};
-
-/* ---------------- CREATE ---------------- */
-export const createCategory = async (payload) => {
-  const { data } = await axios.post(API_URL, payload);
-  return data;
-};
-
-/* ---------------- UPDATE ---------------- */
-export const updateCategory = async (id, payload) => {
-  const { data } = await axios.put(`${API_URL}/${id}`, payload);
-  return data;
-};
-
-/* ---------------- DELETE ---------------- */
-export const deleteCategory = async (id) => {
-  const { data } = await axios.delete(`${API_URL}/${id}`);
-  return data;
-};
+export default categoryApi;

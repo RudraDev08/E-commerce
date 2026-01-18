@@ -1,42 +1,29 @@
-import express from "express";
-import {
-  createCategory,
-  getCategoryTree,
-  updateCategory,
-  deleteCategory,
-  // If you need the flat list for your dropdowns, ensure this is exported in controller
-  // getAllCategories 
-} from "../../controllers/Category/categoryController.js";
+import express from 'express';
+import categoryController from '../../controllers/Category/CategoryController.js';
+import { uploadCategoryImage } from '../../middlewares/upload.middleware.js';
+// import { validateCategory, validateId, validateQuery } from '../../middlewares/validate.middleware.js';
 
 const router = express.Router();
 
-/* -------------------------------------------------------
-   CORE ENDPOINTS
-------------------------------------------------------- */
+// Get category tree (hierarchical structure)
+router.get('/tree', categoryController.getTree);
 
-// @route   POST /api/categories
-// @desc    Create a new category node (handles parentId logic)
-router.post("/", createCategory);
+// Get active parent categories for dropdown
+router.get('/parents', categoryController.getParents);
 
-// @route   GET /api/categories/tree
-// @desc    Get hierarchical tree structure (Recursive)
-// NOTE: Put specific routes like "/tree" BEFORE "/:id" to avoid route conflict
-router.get("/tree", getCategoryTree);
+// Get all categories with filters and pagination
+router.get('/', categoryController.getAll);
 
-// @route   PUT /api/categories/:id
-// @desc    Update full category details or partial fields
-router.put("/:id", updateCategory);
+// Get single category by ID
+router.get('/:id', categoryController.getById);
 
-// @route   DELETE /api/categories/:id
-// @desc    Remove a category (Checks for children first)
-router.delete("/:id", deleteCategory);
+// Create new category
+router.post('/', uploadCategoryImage,  categoryController.create);
 
-/* -------------------------------------------------------
-   OPTIONAL / HELPER ENDPOINTS
-------------------------------------------------------- */
+// Update category
+router.put('/:id',  uploadCategoryImage,  categoryController.update);
 
-// If your frontend "Toggle Status" button uses a separate PATCH request:
-// router.patch("/:id/status", updateCategory); 
-// Note: Since our updateCategory handles { status }, a PUT is usually enough.
+// Soft delete category
+router.delete('/:id', categoryController.delete);
 
 export default router;
