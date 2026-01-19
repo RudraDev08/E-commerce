@@ -1,29 +1,32 @@
-import express from 'express';
-import categoryController from '../../controllers/Category/CategoryController.js';
-import { uploadCategoryImage } from '../../middlewares/upload.middleware.js';
-// import { validateCategory, validateId, validateQuery } from '../../middlewares/validate.middleware.js';
+import express from "express";
+import multer from "multer";
+import * as controller from "../../controllers/Category/CategoryController.js";
 
 const router = express.Router();
 
-// Get category tree (hierarchical structure)
-router.get('/tree', categoryController.getTree);
+const upload = multer();
 
-// Get active parent categories for dropdown
-router.get('/parents', categoryController.getParents);
+// CREATE CATEGORY
+router.post(
+  "/",
+  upload.none(),          
+  controller.createCategory
+);
 
-// Get all categories with filters and pagination
-router.get('/', categoryController.getAll);
+// LIST (pagination, search, filter)
+router.get("/", controller.getCategories);
 
-// Get single category by ID
-router.get('/:id', categoryController.getById);
+// TREE VIEW
+router.get("/tree", controller.getCategoryTree);
 
-// Create new category
-router.post('/', uploadCategoryImage,  categoryController.create);
+// UPDATE CATEGORY
+router.put(
+  "/:id",
+  upload.none(),          
+  controller.updateCategory
+);
 
-// Update category
-router.put('/:id',  uploadCategoryImage,  categoryController.update);
-
-// Soft delete category
-router.delete('/:id', categoryController.delete);
+// DELETE (soft delete)
+router.delete("/:id", controller.deleteCategory);
 
 export default router;

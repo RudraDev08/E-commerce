@@ -90,3 +90,5 @@ export const CategoryTree = () => {
     </div>
   );
 };
+
+export default CategoryTree;

@@ -81,3 +81,5 @@ export const CategorySelect = ({
     </select>
   );
 };
+
+export default CategorySelect;

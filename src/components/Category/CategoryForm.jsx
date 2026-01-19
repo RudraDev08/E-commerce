@@ -223,3 +223,5 @@ export const CategoryForm = ({ category = null, onSubmit, onCancel, loading }) =
     </form>
   );
 };
+
+export default CategoryForm;

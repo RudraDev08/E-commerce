@@ -6,24 +6,40 @@ const brandSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+    },
+
+    slug: {
+      type: String,
+      required: true,
       unique: true,
+      lowercase: true,
     },
 
     logo: {
-      type: String, // image URL / filename
+      type: String, // image URL or filename
       default: "",
     },
 
-    categoryId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Category",
-      required: true,
+    description: {
+      type: String,
+      default: "",
     },
 
-    subCategoryId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Category",
-      required: true,
+    categories: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Category",
+      },
+    ],
+
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+
+    showOnHomepage: {
+      type: Boolean,
+      default: true,
     },
 
     status: {

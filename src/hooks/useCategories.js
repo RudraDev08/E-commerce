@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import categoryApi from '../Api/Category/categoryApi';
 import toast from 'react-hot-toast';
 
@@ -6,6 +6,7 @@ export const useCategories = (initialFilters = {}) => {
   const [categories, setCategories] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(false);
+
   const [filters, setFilters] = useState({
     page: 1,
     limit: 10,
@@ -14,60 +15,75 @@ export const useCategories = (initialFilters = {}) => {
     ...initialFilters
   });
 
-  const fetchCategories = async () => {
+  /* ================= FETCH ================= */
+  const fetchCategories = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await categoryApi.getAll(filters);
-      setCategories(data.data);
-      setPagination(data.pagination);
+      const res = await categoryApi.getAll(filters);
+      setCategories(res.data);
+      setPagination(res.pagination);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to fetch categories');
+      toast.error(error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
+  /* ================= CREATE ================= */
   const createCategory = async (formData) => {
     try {
-      const { data } = await categoryApi.create(formData);
-      toast.success(data.message);
+      const res = await categoryApi.create(formData);
+      toast.success(res.message || 'Category created');
       await fetchCategories();
-      return data.data;
+      return res.data;
     } catch (error) {
-      const message = error.response?.data?.message || 'Failed to create category';
-      toast.error(message);
+      toast.error(error);
       throw error;
     }
   };
 
+  /* ================= UPDATE ================= */
   const updateCategory = async (id, formData) => {
     try {
-      const { data } = await categoryApi.update(id, formData);
-      toast.success(data.message);
+      const res = await categoryApi.update(id, formData);
+      toast.success(res.message || 'Category updated');
       await fetchCategories();
-      return data.data;
+      return res.data;
     } catch (error) {
-      const message = error.response?.data?.message || 'Failed to update category';
-      toast.error(message);
+      toast.error(error);
       throw error;
     }
   };
 
+  /* ================= STATUS ================= */
+  const updateStatus = async (id, status) => {
+    try {
+      const res = await categoryApi.updateStatus(id, status);
+      toast.success(res.message || 'Status updated');
+      await fetchCategories();
+      return res.data;
+    } catch (error) {
+      toast.error(error);
+      throw error;
+    }
+  };
+
+  /* ================= DELETE ================= */
   const deleteCategory = async (id) => {
     try {
-      const { data } = await categoryApi.delete(id);
-      toast.success(data.message);
+      const res = await categoryApi.delete(id);
+      toast.success(res.message || 'Category deleted');
       await fetchCategories();
     } catch (error) {
-      const message = error.response?.data?.message || 'Failed to delete category';
-      toast.error(message);
+      toast.error(error);
       throw error;
     }
   };
 
+  /* ================= EFFECT ================= */
   useEffect(() => {
     fetchCategories();
-  }, [filters.page, filters.limit, filters.search, filters.status]);
+  }, [fetchCategories]);
 
   return {
     categories,
@@ -77,6 +93,7 @@ export const useCategories = (initialFilters = {}) => {
     setFilters,
     createCategory,
     updateCategory,
+    updateStatus,
     deleteCategory,
     refetch: fetchCategories
   };
