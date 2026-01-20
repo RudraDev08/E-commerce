@@ -67,7 +67,7 @@ export const getProducts = async (req, res) => {
 export const createProduct = async (req, res) => {
   try {
     // Log the body to see exactly what arrived from React
-    console.log("📥 Received Payload:", req.body);
+    // console.log("📥 Received Payload:", req.body);
 
     const product = await Product.create(req.body);
 
@@ -167,23 +167,23 @@ export const deleteProduct = async (req, res) => {
 // Bulk delete products
 export const bulkDeleteProducts = async (req, res) => {
   try {
-    const { productIds } = req.body;
-    
-    await Product.deleteMany({ _id: { $in: productIds } });
-    
-    res.json({
+    const { ids } = req.body; // Frontend sends { ids: [...] }
+
+    if (!ids || ids.length === 0) {
+      return res.status(400).json({ success: false, message: "No assets selected for purge" });
+    }
+
+    // Uses MongoDB $in operator to delete multiple items at once
+    await Product.deleteMany({ _id: { $in: ids } });
+
+    res.status(200).json({
       success: true,
-      message: 'Products deleted successfully'
+      message: "Registry cleared successfully"
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: 'Failed to delete products',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
-
 // Get categories and brands for filters
 export const getFilterOptions = async (req, res) => {
   try {
