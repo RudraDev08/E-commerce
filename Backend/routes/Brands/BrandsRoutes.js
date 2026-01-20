@@ -12,9 +12,9 @@ import upload from "../../middlewares/upload.middleware.js";
 const router = express.Router();
 
 router.post("/", upload.single("logo"), createBrand);
+router.put("/:id", upload.single("logo"), updateBrand);
 router.get("/", getAllBrands);
 router.get("/:id", getBrandById);
-router.put("/:id", upload.single("logo"), updateBrand);
 router.delete("/:id", deleteBrand);
 
 export default router;

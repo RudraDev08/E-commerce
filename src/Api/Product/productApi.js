@@ -1,7 +1,24 @@
-import axios from "axios";
+const URL = "http://localhost:5000/api/products";
 
-const API = "http://localhost:5000/api/products";
+export const getProducts = async () =>
+  (await fetch(URL)).json();
 
-export const getProducts = () => axios.get(API);
-export const addProduct = (data) => axios.post(API, data);
-export const deleteProduct = (id) => axios.delete(`${API}/${id}`);
+/* CREATE */
+export const addProduct = async (data) =>
+  fetch(URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+
+/* UPDATE */
+export const updateProduct = async (id, data) =>
+  fetch(`${URL}/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+
+/* DELETE */
+export const deleteProduct = async (id) =>
+  fetch(`${URL}/${id}`, { method: "DELETE" });

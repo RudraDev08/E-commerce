@@ -10,8 +10,9 @@ const cleanValue = (val) => {
 /* ================= CREATE ================= */
 export const createBrand = async (req, res) => {
   try {
-    console.log("BODY:", req.body);   // ✅ should now be correct
-    console.log("FILE:", req.file);   // ✅ file present
+    console.log("BODY:", req.body);   
+    console.log("FILE:", req.file);  
+    console.log("CONTENT-TYPE:", req.headers["content-type"]);
 
     const { name, description, isFeatured, status, showOnHomepage } = req.body;
 

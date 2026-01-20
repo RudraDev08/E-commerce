@@ -1,19 +1,35 @@
-import express from "express";
-import upload from "../../middlewares/upload.middleware.js";
+import express from 'express';
 import {
-  createProduct,
   getProducts,
-  getProductById,
+  getFilterOptions,
+  createProduct,
   updateProduct,
+  bulkUpdateProducts,
   deleteProduct,
-} from "../../controllers/Product/ProductController.js";
+  bulkDeleteProducts
+} from '../../controllers/Product/ProductController.js';
 
 const router = express.Router();
 
-router.post("/", upload.single("image"), createProduct);
-router.get("/", getProducts);
-router.get("/:id", getProductById);
-router.put("/:id", upload.single("image"), updateProduct);
-router.delete("/:id", deleteProduct);
+// Get all products with filters
+router.get('/', getProducts);
+
+// Get filter options (categories, brands)
+router.get('/filter-options', getFilterOptions);
+
+// Create product
+router.post('/', createProduct);
+
+// Update product
+router.put('/:id', updateProduct);
+
+// Bulk update products
+router.put('/bulk/update', bulkUpdateProducts);
+
+// Delete product
+router.delete('/:id', deleteProduct);
+
+// Bulk delete products
+router.delete('/bulk/delete', bulkDeleteProducts);
 
 export default router;

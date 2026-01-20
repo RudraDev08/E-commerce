@@ -6,6 +6,12 @@ const API = axios.create({
 
 export const getBrands = () => API.get("/brands");
 export const getBrandById = (id) => API.get(`/brands/${id}`);
-export const createBrand = (data) => API.post("/brands", data);
+// export const createBrand = (data) => API.post("/brands", data);
+export const createBrand = (formData) =>
+  axios.post("http://localhost:5000/api/brands", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
 export const updateBrand = (id, data) => API.put(`/brands/${id}`, data);
 export const deleteBrand = (id) => API.delete(`/brands/${id}`);

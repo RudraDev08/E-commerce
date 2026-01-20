@@ -1,28 +1,78 @@
-// import express from 'express';
-// import cors from 'cors';
-// import categoryRoutes from './routes/Category/CategoryRoutes.js';
-// import { errorHandler, notFound } from './middlewares/error.middleware.js';
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 
-// const app = express();
+// Routes
+import countryRoutes from "./routes/countryRoutes.js";
+import stateRoutes from "./routes/stateRoutes.js";
+import cityRoutes from "./routes/cityRoutes.js";
+import locationRoutes from "./routes/locationRoutes.js";
+import pincodeRoutes from "./routes/pincodeRoutes.js";
+import categoryRoutes from "./routes/Category/CategoryRoutes.js";
+import brandRoutes from "./routes/Brands/BrandsRoutes.js";
+import productRoutes from "./routes/Product/ProductRoutes.js";
 
-// // Middlewares
-// app.use(cors());
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
+const app = express();
 
-// // Static files for uploads
-// app.use('/uploads', express.static('uploads'));
+/* ================= CORE MIDDLEWARE ================= */
 
-// // Routes
-// app.use('/api/categories', categoryRoutes);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// // Health check
-// app.get('/health', (req, res) => {
-//   res.json({ status: 'OK', timestamp: new Date().toISOString() });
-// });
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
-// // Error handling
-// app.use(notFound);
-// app.use(errorHandler);
+/* ================= STATIC FILES ================= */
 
-// export default app;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+/* ================= ROUTES ================= */
+
+app.use("/api/countries", countryRoutes);
+app.use("/api/states", stateRoutes);
+app.use("/api/cities", cityRoutes);
+app.use("/api/location", locationRoutes);
+app.use("/api/pincodes", pincodeRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/brands", brandRoutes);
+app.use("/api/products", productRoutes);
+
+/* ================= HEALTH ================= */
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "UP",
+    message: "Server is healthy 🚀",
+  });
+});
+
+/* ================= 404 ================= */
+
+app.use((req, res, next) => {
+  res.status(404);
+  next(new Error(`Not Found - ${req.originalUrl}`));
+});
+
+/* ================= ERROR HANDLER ================= */
+
+app.use((err, req, res, next) => {
+  const statusCode = res.statusCode !== 200 ? res.statusCode : 500;
+
+  res.status(statusCode).json({
+    success: false,
+    message: err.message,
+    stack: process.env.NODE_ENV === "production" ? undefined : err.stack,
+  });
+});
+
+export default app;

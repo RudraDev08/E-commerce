@@ -1,199 +1,296 @@
-import { useState } from "react";
-import { addProduct } from "../../Api/Product/productApi";
+import React, { useState } from "react";
+import toast from "react-hot-toast";
 
-const AddProduct = () => {
-  const [form, setForm] = useState({});
+const AddProductModal = ({ isOpen, onClose, onProductAdded }) => {
+  const [formData, setFormData] = useState({
+    name: "",
+    category: "",
+    brand: "",
+    price: "",
+    stock: "",
+    image: "",
+    status: "active",
+    // Added these to match your Brand/Category logic if needed
+    isFeatured: false,
+    showOnHomepage: true,
+  });
 
-  const submit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData();
-    Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-    await addProduct(fd);
-    alert("Product Added");
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [imagePreview, setImagePreview] = useState("");
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
+    if (name === "image") setImagePreview(value);
   };
 
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.name.trim()) newErrors.name = "Identity name required";
+    if (!formData.category.trim())
+      newErrors.category = "Classification required";
+    if (!formData.brand.trim()) newErrors.brand = "Source brand required";
+    if (!formData.price || parseFloat(formData.price) <= 0)
+      newErrors.price = "Invalid valuation";
+    if (!formData.stock || parseInt(formData.stock) < 0)
+      newErrors.stock = "Invalid inventory count";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch("http://localhost:5000/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          // Ensure these are explicitly numbers
+          price: Number(formData.price),
+          stock: Number(formData.stock),
+          // Ensure brand and category are trimmed
+          brand: formData.brand.trim(),
+          category: formData.category.trim()
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success("Asset authorized and vaulted");
+        // ✅ CALL THIS FIRST
+        onProductAdded(); 
+        // ✅ THEN CLOSE
+        onClose();
+        // ✅ RESET FORM
+        handleClose(); 
+      } else {
+        throw new Error(data.message || "Vault rejected the entry");
+      }
+    } catch (error) {
+      toast.error(error.message);
+      setErrors({ submit: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    setFormData({
+      name: "",
+      category: "",
+      brand: "",
+      price: "",
+      stock: "",
+      image: "",
+      status: "active",
+      isFeatured: false,
+      showOnHomepage: true,
+    });
+    setErrors({});
+    setImagePreview("");
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
   return (
-    // UI ONLY CHANGE: Improved container with professional styling
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100/50 flex items-center justify-center p-4 md:p-8 font-sans antialiased">
-      <div className="w-full max-w-4xl mx-auto">
-        {/* Header Section */}
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-3">
-            Add New Product
-          </h1>
-          <p className="text-slate-600 text-lg font-medium max-w-2xl mx-auto leading-relaxed">
-            Register a new product to your inventory. Fill in all required details for proper catalog management.
-          </p>
+    <div
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[110] p-4 animate-in fade-in duration-300"
+      onClick={handleClose}
+    >
+      <div
+        className={`bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-[0_30px_100px_rgba(0,0,0,0.2)] border border-slate-100 transform transition-all duration-500 ${isOpen ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-10 py-8 border-b border-slate-50 sticky top-0 bg-white/80 backdrop-blur-md z-10 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">
+              Register Asset
+            </h2>
+            <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">
+              System Inventory v2.0
+            </p>
+          </div>
+          <button
+            onClick={handleClose}
+            className="p-3 hover:bg-slate-50 rounded-2xl text-slate-400 transition-all"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
         </div>
 
-        {/* Form Container */}
-        <form onSubmit={submit} className="bg-white rounded-2xl border border-slate-200/80 shadow-2xl shadow-slate-200/30 p-8 md:p-10">
-          <div className="space-y-8">
-            {/* Basic Information Section */}
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-2 h-8 bg-gradient-to-b from-emerald-500 to-emerald-400 rounded-full"></div>
-                <h2 className="text-xl font-bold text-slate-900">Product Information</h2>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Name Input - UI ONLY CHANGE: Enhanced styling */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider">
-                    Product Name <span className="text-rose-500">*</span>
-                  </label>
-                  <input 
-                    placeholder="Enter product name"
-                    onChange={(e)=>setForm({...form,name:e.target.value})}
-                    className="w-full px-4 py-3.5 bg-white border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:outline-none transition-all duration-300 text-slate-900 font-medium placeholder:text-slate-400 hover:border-slate-300"
-                    aria-label="Product name"
-                    required
-                  />
-                </div>
-
-                {/* Price Input - UI ONLY CHANGE: Enhanced styling */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider">
-                    Price <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 font-bold">$</span>
-                    <input 
-                      placeholder="0.00"
-                      type="number" 
-                      step="0.01"
-                      min="0"
-                      onChange={(e)=>setForm({...form,price:e.target.value})}
-                      className="w-full pl-10 pr-4 py-3.5 bg-white border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:outline-none transition-all duration-300 text-slate-900 font-medium placeholder:text-slate-400 hover:border-slate-300"
-                      aria-label="Product price"
-                      required
+        <form onSubmit={handleSubmit} className="p-10 space-y-8">
+          {/* Visual Preview */}
+          <div className="space-y-4">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+              Asset Visualization
+            </label>
+            <div className="w-full h-48 rounded-[2rem] bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden shadow-inner">
+              {imagePreview ? (
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-full h-full object-contain p-6"
+                  onError={(e) =>
+                    (e.target.src =
+                      "https://placehold.co/600x400?text=Invalid+Resource")
+                  }
+                />
+              ) : (
+                <div className="text-center opacity-20">
+                  <svg
+                    className="w-12 h-12 mx-auto mb-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeWidth={1.5}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
-                  </div>
-                </div>
-
-                {/* Brand ID Input - UI ONLY CHANGE: Enhanced styling */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider">
-                    Brand ID <span className="text-rose-500">*</span>
-                  </label>
-                  <input 
-                    placeholder="Enter brand identifier"
-                    onChange={(e)=>setForm({...form,brandId:e.target.value})}
-                    className="w-full px-4 py-3.5 bg-white border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:outline-none transition-all duration-300 text-slate-900 font-medium placeholder:text-slate-400 hover:border-slate-300"
-                    aria-label="Brand ID"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Image Upload Section */}
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-2 h-8 bg-gradient-to-b from-blue-500 to-blue-400 rounded-full"></div>
-                <h2 className="text-xl font-bold text-slate-900">Product Image</h2>
-              </div>
-
-              {/* File Upload Area - UI ONLY CHANGE: Premium file input styling */}
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">
-                  Upload Product Image <span className="text-rose-500">*</span>
-                </label>
-                
-                <div className="relative group">
-                  <div className="border-3 border-dashed border-slate-300 rounded-2xl bg-gradient-to-br from-white to-slate-50/50 p-10 text-center transition-all duration-300 group-hover:border-emerald-400 group-hover:bg-emerald-50/20 group-hover:shadow-lg group-hover:shadow-emerald-100/50">
-                    {/* Upload Icon */}
-                    <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-50 to-white border-2 border-slate-200 flex items-center justify-center group-hover:border-blue-300 group-hover:shadow-lg group-hover:shadow-blue-100 transition-all duration-300">
-                      <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                    
-                    {/* Upload Text */}
-                    <div className="mb-4">
-                      <h3 className="text-lg font-bold text-slate-900 mb-2">Drop your product image here</h3>
-                      <p className="text-slate-500 font-medium">Supports JPG, PNG, WebP • Max 5MB</p>
-                    </div>
-                    
-                    {/* Custom File Input - UI ONLY CHANGE: Enhanced button */}
-                    <div className="relative inline-block">
-                      <input 
-                        type="file"
-                        onChange={(e)=>setForm({...form,image:e.target.files[0]})}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                        id="file-upload"
-                        aria-label="Upload product image"
-                        accept="image/*"
-                        required
-                      />
-                      <div className="px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-200/50 transition-all duration-300 group-hover:shadow-blue-300/50 group-hover:-translate-y-0.5">
-                        <svg className="w-5 h-5 inline mr-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                        </svg>
-                        Browse Files
-                      </div>
-                    </div>
-                    
-                    {/* Helper Text */}
-                    <p className="text-sm text-slate-400 mt-4 font-medium">
-                      Or drag and drop your file anywhere in this area
-                    </p>
-                  </div>
-                </div>
-
-                {/* File Requirements */}
-                <div className="mt-4 p-4 bg-slate-50/80 rounded-xl border border-slate-200/80">
-                  <p className="text-sm font-medium text-slate-700">
-                    <span className="font-bold">Note:</span> Upload a high-quality product image (recommended: 800x800px, PNG or JPG format)
+                  </svg>
+                  <p className="text-[10px] font-black uppercase tracking-widest">
+                    Null Resource
                   </p>
                 </div>
-              </div>
-            </div>
-
-            {/* Submit Section */}
-            <div className="pt-6 border-t border-slate-200/80">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-                <div className="flex-1">
-                  <p className="text-slate-600 font-medium">
-                    <span className="text-rose-500 font-bold">*</span> Required fields
-                  </p>
-                </div>
-                
-                <div className="flex gap-4">
-                  {/* Cancel Button - UI ONLY CHANGE: Added for better UX (logic unchanged) */}
-                  <button
-                    type="button"
-                    onClick={() => window.history.back()}
-                    className="px-8 py-3.5 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 hover:border-slate-400 hover:shadow-lg hover:shadow-slate-200/50 transition-all duration-300"
-                  >
-                    Cancel
-                  </button>
-                  
-                  {/* Submit Button - UI ONLY CHANGE: Enhanced styling */}
-                  <button
-                    type="submit"
-                    className="px-10 py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold rounded-xl hover:shadow-xl hover:shadow-emerald-200/50 hover:-translate-y-0.5 transition-all duration-300 active:scale-[0.97] shadow-lg shadow-emerald-200/40"
-                  >
-                    <svg className="w-5 h-5 inline mr-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Product to Catalog
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
           </div>
-        </form>
 
-        {/* Footer Note */}
-        <div className="mt-8 text-center">
-          <p className="text-slate-500 text-sm font-medium">
-            Your product will be added to the inventory and available for management immediately.
-          </p>
-        </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Identity Name
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+                placeholder="Enter product name..."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Classification
+              </label>
+              <select
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900 transition-all appearance-none"
+              >
+                <option value="">Select Category</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Clothing">Clothing</option>
+                <option value="Home & Kitchen">Home & Kitchen</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Source Brand
+              </label>
+              <input
+                type="text"
+                name="brand"
+                value={formData.brand}
+                onChange={handleChange}
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+                placeholder="e.g. Samsung"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Unit Valuation ($)
+              </label>
+              <input
+                type="number"
+                name="price"
+                value={formData.price}
+                onChange={handleChange}
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+                placeholder="0.00"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Inventory Count
+              </label>
+              <input
+                type="number"
+                name="stock"
+                value={formData.stock}
+                onChange={handleChange}
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+                placeholder="0"
+              />
+            </div>
+
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Resource URL
+              </label>
+              <input
+                type="text"
+                name="image"
+                value={formData.image}
+                onChange={handleChange}
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl font-medium text-slate-500 italic outline-none focus:ring-2 focus:ring-slate-900 transition-all"
+                placeholder="https://..."
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-4 pt-6">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="flex-1 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-slate-900 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-[2] py-5 bg-slate-900 text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.3em] shadow-2xl shadow-slate-200 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {loading ? "Processing..." : "Authorize Entry"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 };
 
-export default AddProduct;
+export default AddProductModal;

@@ -12,8 +12,8 @@ import CategoryPage from "./page/Category/CategoryPage";
 import BrandList from "./components/Brands/BrandList";
 import AddBrand from "./components/Brands/AddBrand";
 import EditBrand from "./components/Brands/EditBrand";
-import ProductList from "./components/Product/ProductList";
-import AddProduct from "./components/Product/AddProduct";
+import Product from "./components/Product/Products";
+// import './components/styles/minimal.css';
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -66,8 +66,7 @@ function App() {
                 <Route path="/brands/add" element={<AddBrand />} />
                 <Route path="/brands/edit/:id" element={<EditBrand />} />
                 {/* PRODUCT ROUTES */}
-                <Route path="/products" element={<ProductList />} />
-                <Route path="/products/add" element={<AddProduct />} />
+                <Route path="/products" element={<Product />} />
               </Routes>
             </div>
           </main>

@@ -1,27 +1,55 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
+import slugify from 'slugify';
 
-const productSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true },
-
-    brandId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Brand",
-      required: true,
-    },
-
-    price: { type: Number, required: true },
-    stock: { type: Number, default: 0 },
-
-    description: { type: String, default: "" },
-
-    image: { type: String, default: "" },
-
-    status: { type: Boolean, default: true },
-    isFeatured: { type: Boolean, default: false },
+const productSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, "Product identity is required"],
+    trim: true
   },
-  { timestamps: true }
-);
+  slug: {
+    type: String,
+    unique: true
+  },
+  description: {
+    type: String,
+    default: ""
+  },
+  price: {
+    type: Number,
+    required: [true, "Valuation (price) is required"],
+    min: [0, "Price cannot be negative"]
+  },
+  category: {
+    type: String, // Or mongoose.Schema.ObjectId if you have a Category model
+    required: [true, "Classification (category) is required"]
+  },
+  brand: {
+    type: String,
+    required: [true, "Source brand is required"]
+  },
+  stock: {
+    type: Number,
+    required: [true, "Inventory count is required"],
+    default: 0
+  },
+  image: {
+    type: String,
+    default: ""
+  },
+  status: {
+    type: String,
+    enum: ['active', 'inactive'],
+    default: 'active'
+  }
+}, { timestamps: true });
 
-export default mongoose.model("Product", productSchema);
+// ✅ Generate Slug automatically before saving to DB
+productSchema.pre('save', async function() {
+  if (this.isModified('name')) {
+    // Ensure slugify is imported at the top of this file!
+    this.slug = slugify(this.name, { lower: true, strict: true });
+  }
+});
+
+export default mongoose.model('Product', productSchema);
