@@ -1,155 +1,53 @@
+// src/controllers/category.controller.js
 import Category from "../../models/Category/CategorySchema.js";
-import { buildTree } from "../../utils/buildTree.js";
+import { slugify } from "../../utils/slugify.js";
 
-/* ---------------- CREATE CATEGORY ---------------- */
-export const createCategory = async (req, res, next) => {
-  try {
-    console.log("REQ BODY:", req.body);
+export const createCategory = async (req, res) => {
+  const slug = slugify(req.body.name);
+  const exists = await Category.findOne({ slug });
+  if (exists) return res.status(400).json({ message: "Category exists" });
 
-    const { name, description, parentId, status } = req.body || {};
+  const category = await Category.create({
+    ...req.body,
+    slug,
+    icon: req.files?.icon?.[0]?.path,
+    thumbnail: req.files?.thumbnail?.[0]?.path,
+    banner: req.files?.banner?.[0]?.path
+  });
 
-    // ✅ MANUAL VALIDATION
-    if (!name || !name.trim()) {
-      return res.status(400).json({
-        message: "Category name is required"
-      });
-    }
-
-    const category = await Category.create({
-      name: name.trim(),
-      description,
-      parentId: parentId || null,
-      status: status === "inactive" ? "inactive" : "active"
-    });
-
-    res.status(201).json({ data: category });
-  } catch (err) {
-    console.error("CREATE CATEGORY ERROR:", err);
-    next(err);
-  }
+  res.status(201).json(category);
 };
 
-/* ---------------- GET CATEGORIES (LIST) ---------------- */
-export const getCategories = async (req, res, next) => {
-  try {
-    const {
-      page = 1,
-      limit = 10,
-      search = "",
-      status
-    } = req.query;
+export const getCategories = async (req, res) => {
+  const { page = 1, limit = 10, search = "" } = req.query;
 
-    const query = { isDeleted: false };
+  const query = {
+    isDeleted: false,
+    name: { $regex: search, $options: "i" }
+  };
 
-    // ✅ SAFE STATUS FILTER
-    if (status === "active" || status === "inactive") {
-      query.status = status;
-    }
+  const categories = await Category.find(query)
+    .limit(limit * 1)
+    .skip((page - 1) * limit)
+    .sort({ priority: 1 });
 
-    // ✅ SAFE SEARCH
-    if (search && search.trim()) {
-      query.name = { $regex: search.trim(), $options: "i" };
-    }
+  const total = await Category.countDocuments(query);
 
-    const skip = (page - 1) * limit;
-
-    const [data, total] = await Promise.all([
-      Category.find(query)
-        .skip(skip)
-        .limit(Number(limit))
-        .sort({ createdAt: -1 })
-        .lean(),
-
-      Category.countDocuments(query)
-    ]);
-
-    res.json({
-      data,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (err) {
-    console.error("GET CATEGORIES ERROR:", err);
-    next(err);
-  }
+  res.json({ data: categories, total });
 };
 
-/* ---------------- GET CATEGORY TREE ---------------- */
-export const getCategoryTree = async (req, res, next) => {
-  try {
-    const categories = await Category.find({
-      isDeleted: false
-    }).lean();
+export const getCategoryTree = async (_, res) => {
+  const categories = await Category.find({ isDeleted: false }).lean();
 
-    const tree = buildTree(categories);
+  const buildTree = (parent = null) =>
+    categories
+      .filter(c => String(c.parent) === String(parent))
+      .map(c => ({ ...c, children: buildTree(c._id) }));
 
-    res.json({ data: tree });
-  } catch (err) {
-    console.error("GET CATEGORY TREE ERROR:", err);
-    next(err);
-  }
+  res.json(buildTree());
 };
 
-/* ---------------- UPDATE CATEGORY ---------------- */
-export const updateCategory = async (req, res, next) => {
-  try {
-    const { name, description, parentId, status } = req.body || {};
-
-    // ✅ VALIDATE NAME IF PROVIDED
-    if (name !== undefined && !name.trim()) {
-      return res.status(400).json({
-        message: "Category name cannot be empty"
-      });
-    }
-
-    const updated = await Category.findByIdAndUpdate(
-      req.params.id,
-      {
-        ...(name && { name: name.trim() }),
-        ...(description !== undefined && { description }),
-        ...(parentId !== undefined && { parentId }),
-        ...(status === "active" || status === "inactive"
-          ? { status }
-          : {})
-      },
-      { new: true }
-    );
-
-    if (!updated) {
-      return res.status(404).json({
-        message: "Category not found"
-      });
-    }
-
-    res.json({ data: updated });
-  } catch (err) {
-    console.error("UPDATE CATEGORY ERROR:", err);
-    next(err);
-  }
-};
-
-/* ---------------- DELETE CATEGORY (SOFT DELETE) ---------------- */
-export const deleteCategory = async (req, res, next) => {
-  try {
-    const deleted = await Category.findByIdAndUpdate(
-      req.params.id,
-      { isDeleted: true },
-      { new: true }
-    );
-
-    if (!deleted) {
-      return res.status(404).json({
-        message: "Category not found"
-      });
-    }
-
-    res.json({ message: "Category deleted successfully" });
-  } catch (err) {
-    console.error("DELETE CATEGORY ERROR:", err);
-    next(err);
-  }
+export const softDelete = async (req, res) => {
+  await Category.findByIdAndUpdate(req.params.id, { isDeleted: true });
+  res.json({ message: "Category deleted" });
 };

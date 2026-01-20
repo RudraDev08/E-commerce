@@ -14,6 +14,7 @@ import locationRoutes from "./routes/locationRoutes.js";
 import pincodeRoutes from "./routes/pincodeRoutes.js";
 import categoryRoutes from "./routes/Category/CategoryRoutes.js";
 import brandRoutes from "./routes/Brands/BrandsRoutes.js"
+import productRoutes from "./routes/Product/ProductRoutes.js"
 
 // Load env
 dotenv.config();
@@ -22,6 +23,8 @@ dotenv.config();
 connectDB();
 
 const app = express();
+
+app.use("/api/brands", brandRoutes),
 
 /* ================= CORE MIDDLEWARE ================= */
 
@@ -54,7 +57,8 @@ app.use("/api/cities", cityRoutes);
 app.use("/api/location", locationRoutes);
 app.use("/api/pincodes", pincodeRoutes);
 app.use("/api/categories", categoryRoutes);
-app.use("/api/brands", brandRoutes)
+
+app.use("/api/products", productRoutes),
 
 // Health check
 app.get("/health", (req, res) => {

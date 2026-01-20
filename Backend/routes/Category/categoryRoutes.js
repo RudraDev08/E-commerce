@@ -1,32 +1,23 @@
+// src/routes/category.routes.js
 import express from "express";
-import multer from "multer";
-import * as controller from "../../controllers/Category/CategoryController.js";
+import {
+  createCategory,
+  getCategories,
+  getCategoryTree,
+  softDelete
+} from "../../controllers/Category/CategoryController.js";
+import { upload } from "../../config/multer.js";
 
 const router = express.Router();
 
-const upload = multer();
-
-// CREATE CATEGORY
 router.post(
   "/",
-  upload.none(),          
-  controller.createCategory
+  upload.fields([{ name: "icon" }, { name: "thumbnail" }, { name: "banner" }]),
+  createCategory
 );
 
-// LIST (pagination, search, filter)
-router.get("/", controller.getCategories);
-
-// TREE VIEW
-router.get("/tree", controller.getCategoryTree);
-
-// UPDATE CATEGORY
-router.put(
-  "/:id",
-  upload.none(),          
-  controller.updateCategory
-);
-
-// DELETE (soft delete)
-router.delete("/:id", controller.deleteCategory);
+router.get("/", getCategories);
+router.get("/tree", getCategoryTree);
+router.delete("/:id", softDelete);
 
 export default router;

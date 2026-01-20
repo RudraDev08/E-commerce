@@ -25,12 +25,12 @@ const brandSchema = new mongoose.Schema(
       default: "",
     },
 
-    categories: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Category",
-      },
-    ],
+    // categories: [
+    //   {
+    //     type: mongoose.Schema.Types.ObjectId,
+    //     ref: "Category",
+    //   },
+    // ],
 
     isFeatured: {
       type: Boolean,

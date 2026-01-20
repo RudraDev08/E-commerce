@@ -10,36 +10,29 @@ const cleanValue = (val) => {
 /* ================= CREATE ================= */
 export const createBrand = async (req, res) => {
   try {
-    const name = cleanValue(req.body.name);
-    const description = cleanValue(req.body.description);
-    const status = req.body.status === "true";
-    const isFeatured = req.body.isFeatured === "true";
+    console.log("BODY:", req.body);   // ✅ should now be correct
+    console.log("FILE:", req.file);   // ✅ file present
+
+    const { name, description, isFeatured, status, showOnHomepage } = req.body;
 
     if (!name) {
-      return res.status(400).json({ message: "Brand name is required" });
+      return res.status(400).json({ message: "Brand name required" });
     }
-
-    const slug = slugify(name, { lower: true, strict: true });
 
     const brand = await Brand.create({
       name,
-      slug,
+      slug: slugify(name, { lower: true }),
       description,
-      status,
-      isFeatured,
+      isFeatured: isFeatured === "true",
+      status: status === "true",
+      showOnHomepage: showOnHomepage === "true",
       logo: req.file?.filename || "",
     });
 
-    res.status(201).json({
-      success: true,
-      data: brand,
-    });
-  } catch (error) {
-    console.error("CREATE BRAND ERROR:", error);
-    res.status(500).json({
-      message: "Brand creation failed",
-      error: error.message,
-    });
+    res.status(201).json({ success: true, data: brand });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
   }
 };
 

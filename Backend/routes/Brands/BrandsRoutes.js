@@ -6,6 +6,7 @@ import {
   updateBrand,
   deleteBrand,
 } from "../../controllers/Brands/BrandsController.js";
+
 import upload from "../../middlewares/upload.middleware.js";
 
 const router = express.Router();

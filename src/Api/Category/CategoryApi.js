@@ -1,16 +1,24 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-const BASE = `${API_URL}/api/categories`;
+const API_URL = "http://localhost:5000/api/categories";
 
 const categoryApi = {
-  getAll: (params) => axios.get(BASE, { params }),
-  getTree: () => axios.get(`${BASE}/tree`),
-  getById: (id) => axios.get(`${BASE}/${id}`),
-  create: (data) => axios.post(BASE, data),
-  update: (id, data) => axios.put(`${BASE}/${id}`, data),
-  remove: (id) => axios.delete(`${BASE}/${id}`)
+  // 🌳 Tree
+  getTree: () => axios.get(`${API_URL}/tree`),
+
+  // 📄 List with pagination/search
+  getAll: (params) => axios.get(API_URL, { params }),
+
+  // ➕ Create
+  createCategory: (data) => axios.post(API_URL, data),
+
+  // ✏️ Update
+  updateCategory: (id, data) =>
+    axios.put(`${API_URL}/${id}`, data),
+
+  // 🗑️ Soft delete
+  deleteCategory: (id) =>
+    axios.delete(`${API_URL}/${id}`)
 };
 
 export default categoryApi;
