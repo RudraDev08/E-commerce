@@ -15,6 +15,7 @@ import EditBrand from "./components/Brands/EditBrand";
 import Product from "./components/Product/Products";
 import InventoryMaster from "./page/inventory/InventoryMaster";
 
+
 function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);

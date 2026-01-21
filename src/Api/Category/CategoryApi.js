@@ -3,8 +3,6 @@ import axios from "axios";
 const API_URL = "http://localhost:5000/api/categories";
 
 const categoryApi = {
-  // 🌳 Tree
-  getTree: () => axios.get(`${API_URL}/tree`),
 
   // 📄 List with pagination/search
   getAll: (params) => axios.get(API_URL, { params }),
