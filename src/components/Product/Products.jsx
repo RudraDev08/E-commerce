@@ -91,7 +91,7 @@ const Products = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 p-4 md:p-6 lg:p-8">
       {/* Header */}
       <div className="mb-8 bg-white rounded-2xl p-6 shadow-lg border border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Inventory Management</h1>
+        <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Product Management</h1>
         <button 
           onClick={() => setIsModalOpen(true)}
           className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition-all flex items-center gap-2 uppercase text-xs tracking-widest"

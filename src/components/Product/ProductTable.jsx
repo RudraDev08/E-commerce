@@ -10,7 +10,7 @@ const ProductTable = ({ products, selectedProducts, onSelect, onSelectAll, onEdi
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50/50 border-b border-slate-200">
-              {/* Checkbox Header */}
+              {/* Checkbox Header */}   
               <th className="w-12 px-6 py-4">
                 <div className="flex items-center justify-center">
                   <div className={`

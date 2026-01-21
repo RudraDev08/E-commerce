@@ -12,6 +12,7 @@ import pincodeRoutes from "./routes/pincodeRoutes.js";
 import categoryRoutes from "./routes/Category/CategoryRoutes.js";
 import brandRoutes from "./routes/Brands/BrandsRoutes.js";
 import productRoutes from "./routes/Product/ProductRoutes.js";
+import inventoryRoutes from "./routes/inventory/inventoryRoutes.js";
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/api/pincodes", pincodeRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/brands", brandRoutes);
 app.use("/api/products", productRoutes);
+app.use("/api/inventory", inventoryRoutes);
 
 /* ================= HEALTH ================= */
 

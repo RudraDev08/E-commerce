@@ -66,8 +66,6 @@ export const getProducts = async (req, res) => {
 // Create product
 export const createProduct = async (req, res) => {
   try {
-    // Log the body to see exactly what arrived from React
-    // console.log("📥 Received Payload:", req.body);
 
     const product = await Product.create(req.body);
 
@@ -76,10 +74,7 @@ export const createProduct = async (req, res) => {
       data: product
     });
   } catch (error) {
-    // 🚨 Log the actual error to your terminal so you can read it!
-    console.error("❌ BACKEND CRASH:", error);
 
-    // Send a helpful message back to React
     res.status(500).json({
       success: false,
       message: error.message || "Internal Server Error"
@@ -167,13 +162,12 @@ export const deleteProduct = async (req, res) => {
 // Bulk delete products
 export const bulkDeleteProducts = async (req, res) => {
   try {
-    const { ids } = req.body; // Frontend sends { ids: [...] }
+    const { ids } = req.body; 
 
     if (!ids || ids.length === 0) {
       return res.status(400).json({ success: false, message: "No assets selected for purge" });
     }
 
-    // Uses MongoDB $in operator to delete multiple items at once
     await Product.deleteMany({ _id: { $in: ids } });
 
     res.status(200).json({
