@@ -7,6 +7,7 @@ import {
   Building,
   Hash,
   Layers,
+  Ruler,
   Tag,
   Package,
   Map,
@@ -64,6 +65,7 @@ const ProfessionalAside = ({ isExpanded, setIsExpanded }) => {
 
         <Section label="Products" isExpanded={isExpanded} />
         <Item icon={Package} label="Products" to="/products" isExpanded={isExpanded} />
+        <Item icon={Ruler} label="Sizes" to="/sizes" isExpanded={isExpanded} />
         
         <Section label="Inventory Master" isExpanded={isExpanded} />
 

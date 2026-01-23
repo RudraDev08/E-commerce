@@ -1,78 +1,50 @@
-export default function VariantTable({ variants = [], onChange }) {
-  // Safety guard
-  if (!Array.isArray(variants) || variants.length === 0) {
-    return (
-      <p className="mt-4 text-sm text-gray-500">
-        No variants generated yet
-      </p>
-    );
-  }
+import { deleteVariant, toggleVariant } from "../../Api/catalogApi";
 
-  const handleChange = (index, field, value) => {
-    const updated = [...variants];
-    updated[index] = {
-      ...updated[index],
-      [field]: Number(value),
-    };
-    onChange(updated);
-  };
-
+const VariantTable = ({ variants, reload }) => {
   return (
-    <div className="mt-6 overflow-x-auto">
-      <table className="w-full border border-gray-200 rounded-lg">
-        <thead className="bg-gray-100 text-sm">
+    <div className="bg-white rounded shadow overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-100 text-left">
           <tr>
-            <th className="p-3 text-left">Attributes</th>
-            <th className="p-3 text-center w-32">Price</th>
-            <th className="p-3 text-center w-32">Stock</th>
+            <th className="p-3">Product</th>
+            <th className="p-3">Attributes</th>
+            <th className="p-3">Price</th>
+            <th className="p-3">Stock</th>
+            <th className="p-3">Status</th>
+            <th className="p-3">Action</th>
           </tr>
         </thead>
-
         <tbody>
-          {variants.map((variant, index) => (
-            <tr key={index} className="border-t">
-              {/* ATTRIBUTES */}
+          {variants.map(v => (
+            <tr key={v._id} className="border-t">
+              <td className="p-3">{v.productId?.name}</td>
               <td className="p-3">
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(variant).map(([key, val]) => {
-                    if (key === "price" || key === "stock") return null;
-
-                    return (
-                      <span
-                        key={key}
-                        className="px-2 py-1 text-xs rounded bg-slate-100 text-slate-700"
-                      >
-                        <b className="uppercase">{key}</b>: {val}
-                      </span>
-                    );
-                  })}
-                </div>
+                {Object.entries(v.attributes).map(([k, val]) => (
+                  <span key={k} className="mr-2">
+                    {k}:{val}
+                  </span>
+                ))}
               </td>
-
-              {/* PRICE */}
-              <td className="p-3 text-center">
-                <input
-                  type="number"
-                  className="w-24 border rounded px-2 py-1 text-sm"
-                  placeholder="Price"
-                  value={variant.price || ""}
-                  onChange={e =>
-                    handleChange(index, "price", e.target.value)
-                  }
-                />
+              <td className="p-3">₹{v.price}</td>
+              <td className="p-3">{v.stock}</td>
+              <td className="p-3">
+                <span className={v.status ? "text-green-600" : "text-red-600"}>
+                  {v.status ? "Active" : "Inactive"}
+                </span>
               </td>
-
-              {/* STOCK */}
-              <td className="p-3 text-center">
-                <input
-                  type="number"
-                  className="w-24 border rounded px-2 py-1 text-sm"
-                  placeholder="Stock"
-                  value={variant.stock || ""}
-                  onChange={e =>
-                    handleChange(index, "stock", e.target.value)
-                  }
-                />
+              <td className="p-3 space-x-2">
+                <button
+                  onClick={() => toggleVariant(v._id).then(reload)}
+                  className="text-blue-600"
+                >
+                  Toggle
+                </button>
+                <button
+                  onClick={() => deleteVariant(v._id).then(reload)}
+                  className="text-red-600"
+                >
+                  Delete
+                </button>
               </td>
             </tr>
           ))}
@@ -80,4 +52,6 @@ export default function VariantTable({ variants = [], onChange }) {
       </table>
     </div>
   );
-}
+};
+
+export default VariantTable;

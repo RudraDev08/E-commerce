@@ -15,6 +15,7 @@ import EditBrand from "./components/Brands/EditBrand";
 import Product from "./components/Product/Products";
 import InventoryMaster from "./page/inventory/InventoryMaster";
 import VariantTable from "./page/VariantBuilder"
+import SizePage from "./page/size/SizePage"
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -76,6 +77,8 @@ function App() {
 
                 {/* inventory */}
                 <Route path="/inventory" element={<InventoryMaster />} />
+
+                <Route path="/sizes" element={<SizePage />} />
               </Routes>
             </div>
           </main>

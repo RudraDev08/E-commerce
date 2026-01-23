@@ -16,6 +16,7 @@ import inventoryRoutes from "./routes/inventory/inventoryRoutes.js";
 import productTypeRoutes from "./routes/productType/productTypeRoutes.js";
 import attributeRoutes from "./routes/attribute/attributeRoutes.js";
 import variantRoutes from "./routes/variant/variantRoutes.js";
+import sizeRoutes from "./routes/Size/sizeRoutes.js";
 
 const app = express();
 
@@ -54,7 +55,7 @@ app.use("/api/inventory", inventoryRoutes);
 app.use("/api/product-types", productTypeRoutes);
 app.use("/api/attributes", attributeRoutes);
 app.use("/api/variants", variantRoutes);
-
+app.use("/api/sizes", sizeRoutes);
 /* ================= HEALTH ================= */
 
 app.get("/health", (req, res) => {

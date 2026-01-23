@@ -1,24 +1,23 @@
 import mongoose from "mongoose";
 
-const attributeSchema = new mongoose.Schema(
+const attributeValueSchema = new mongoose.Schema(
   {
-    name: {
+    attributeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Attribute",
+      required: true,
+    },
+    value: {
       type: String,
       required: true,
       trim: true,
     },
-    slug: {
-      type: String,
-      required: true,
-      lowercase: true,
-      unique: true,
-    },
     status: {
       type: Boolean,
-      default: true, // active / inactive
+      default: true,
     },
   },
   { timestamps: true }
 );
 
-export default mongoose.model("Attribute", attributeSchema);
+export default mongoose.model("AttributeValue", attributeValueSchema);
