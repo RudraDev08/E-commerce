@@ -21,8 +21,13 @@ const productSchema = new mongoose.Schema({
     min: [0, "Price cannot be negative"]
   },
   category: {
-    type: String, // Or mongoose.Schema.ObjectId if you have a Category model
+    type: String,
     required: [true, "Classification (category) is required"]
+  },
+  productType: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ProductType",
+    required: [true, "Product type is required for variant mapping"]
   },
   brand: {
     type: String,

@@ -14,7 +14,7 @@ import AddBrand from "./components/Brands/AddBrand";
 import EditBrand from "./components/Brands/EditBrand";
 import Product from "./components/Product/Products";
 import InventoryMaster from "./page/inventory/InventoryMaster";
-
+import VariantTable from "./page/VariantBuilder"
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -51,7 +51,7 @@ function App() {
           />
 
           {/* CONTENT */}
-          <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
+          <main className="">
             <div className="max-w-7xl mx-auto">
               <Routes>
                 <Route path="/" element={<Dashboard />} />
@@ -71,6 +71,8 @@ function App() {
                 {/* PRODUCT ROUTES */}
 
                 <Route path="/products" element={<Product />} />
+
+                <Route path="/variants" element={<VariantTable />} />
 
                 {/* inventory */}
                 <Route path="/inventory" element={<InventoryMaster />} />

@@ -64,7 +64,30 @@ const ProfessionalAside = ({ isExpanded, setIsExpanded }) => {
 
         <Section label="Products" isExpanded={isExpanded} />
         <Item icon={Package} label="Products" to="/products" isExpanded={isExpanded} />
-        <Item icon={Map} label="Inventory" to="/inventory" isExpanded={isExpanded} />
+        
+        <Section label="Inventory Master" isExpanded={isExpanded} />
+
+        {/* <Item
+          icon={Package}
+          label="Products"
+          to="/products"
+          isExpanded={isExpanded}
+        /> */}
+
+        <Item
+          icon={Layers}
+          label="Variants"
+          to="/variants"
+          isExpanded={isExpanded}
+        />
+
+        <Item
+          icon={Map}
+          label="Inventory"
+          to="/inventory"
+          isExpanded={isExpanded}
+        />
+
       </div>
 
       {/* FOOTER & TOGGLE */}
@@ -101,8 +124,8 @@ const Item = ({ icon: Icon, label, to, isExpanded }) => {
       title={!isExpanded ? label : ""}
       className={`
         relative w-full group flex items-center gap-3 px-3 h-11 rounded-xl text-sm font-medium transition-all duration-200
-        ${isActive 
-          ? "text-indigo-600" 
+        ${isActive
+          ? "text-indigo-600"
           : "text-slate-500 hover:text-slate-900 hover:bg-white"
         }
       `}
@@ -135,9 +158,9 @@ const Item = ({ icon: Icon, label, to, isExpanded }) => {
 
       {/* Active Dot */}
       {isActive && (
-        <motion.div 
+        <motion.div
           layoutId="activeDot"
-          className="absolute right-3 w-1.5 h-1.5 rounded-full bg-indigo-600 z-10" 
+          className="absolute right-3 w-1.5 h-1.5 rounded-full bg-indigo-600 z-10"
         />
       )}
     </button>
