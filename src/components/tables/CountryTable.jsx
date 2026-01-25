@@ -124,7 +124,7 @@ const CountryTable = () => {
   };
 
   const handleSort = (column) => {
-    if (sortBy === column) { setSortDirection(sortDirection === "asc" ? "desc" : "asc"); } 
+    if (sortBy === column) { setSortDirection(sortDirection === "asc" ? "desc" : "asc"); }
     else { setSortBy(column); setSortDirection("asc"); }
   };
 
@@ -177,8 +177,9 @@ const CountryTable = () => {
   );
 
   return (
-    <div className="min-h-screen bg-linear-to-br p-3 md:p-4 lg:p-5">
-      <div className="max-w-7xl mx-auto px-3 md:px-4">
+    <div className="min-h-screen px-8 py-6">{/* UI LAYOUT FIX: Changed from p-3 md:p-4 lg:p-5 to px-8 py-6 for consistency */}
+      {/* UI LAYOUT FIX: Removed max-w-7xl mx-auto container */}
+      <div>
         {/* Header Section */}
         <div className="mb-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -240,7 +241,7 @@ const CountryTable = () => {
 
         {/* Two Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          
+
           {/* Left Column: Add Country Section */}
           <div className="bg-linear-to-br from-white to-gray-50 rounded-xl shadow-lg p-4 border border-gray-200 hover:shadow-xl transition-shadow duration-200">
             <div className="flex items-center justify-between mb-4">
@@ -254,23 +255,25 @@ const CountryTable = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* UI ENHANCEMENT: Pure Tailwind form inputs */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">Country Name</label>
+                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Country Name</label>
                 <div className="relative">
-                  <GlobeAltIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={handleKeyPress} placeholder="e.g., United States" className="w-full pl-9 pr-3 py-2 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-sm" disabled={actionLoading} />
+                  <GlobeAltIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={handleKeyPress} placeholder="e.g., United States" className="w-full pl-11 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 placeholder-slate-400 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 hover:border-slate-300 disabled:bg-slate-50 disabled:border-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed" disabled={actionLoading} />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">Initial Status</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value === "true")} className="w-full px-3 py-2 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none appearance-none transition-all text-sm" disabled={actionLoading}>
+                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Initial Status</label>
+                <select value={status} onChange={(e) => setStatus(e.target.value === "true")} className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 hover:border-slate-300 appearance-none cursor-pointer disabled:bg-slate-50 disabled:border-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236366f1'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center", backgroundSize: "1.25rem", paddingRight: "2.5rem" }} disabled={actionLoading}>
                   <option value="true">Active</option>
                   <option value="false">Inactive</option>
                 </select>
               </div>
             </div>
+            {/* UI ENHANCEMENT: Pure Tailwind button */}
             <div className="mt-4 flex justify-end">
-              <button onClick={addCountryHandler} disabled={!name.trim() || actionLoading} className="w-full sm:w-auto bg-linear-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-semibold px-6 py-2 rounded-lg shadow-sm transition-all text-sm">
+              <button onClick={addCountryHandler} disabled={!name.trim() || actionLoading} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 focus:ring-indigo-500/50 shadow-md shadow-indigo-300/25 hover:shadow-lg hover:shadow-indigo-300/35">
                 {actionLoading ? "Adding..." : "Add Country"}
               </button>
             </div>
@@ -279,19 +282,20 @@ const CountryTable = () => {
           {/* Right Column: Filter & Sort Section */}
           <div className="bg-linear-to-br from-white to-gray-50 rounded-xl shadow-lg p-4 border border-gray-200 flex flex-col justify-between">
             <h2 className="text-lg font-bold text-gray-900 mb-3">Filter & Sort</h2>
-            
+
             <div className="space-y-3">
+              {/* UI ENHANCEMENT: Pure Tailwind filter inputs */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">Search</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Search</label>
                   <div className="relative">
-                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input placeholder="Country name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm" />
+                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input placeholder="Country name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-11 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 placeholder-slate-400 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 hover:border-slate-300" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">Status</label>
-                  <select value={filterActive} onChange={(e) => setFilterActive(e.target.value)} className="w-full px-3 py-2 bg-white border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none appearance-none transition-all text-sm">
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Status</label>
+                  <select value={filterActive} onChange={(e) => setFilterActive(e.target.value)} className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 hover:border-slate-300 appearance-none cursor-pointer" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236366f1'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center", backgroundSize: "1.25rem", paddingRight: "2.5rem" }}>
                     <option value="all">All Countries</option>
                     <option value="active">Active Only</option>
                     <option value="inactive">Inactive Only</option>
@@ -299,15 +303,16 @@ const CountryTable = () => {
                 </div>
               </div>
 
+              {/* UI ENHANCEMENT: Pure Tailwind sort buttons */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wider">Sort List By</label>
-                <div className="flex gap-1.5">
-                  <button onClick={() => handleSort("name")} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white border-2 border-gray-300 rounded-lg hover:border-indigo-500 transition-all text-xs font-medium">
-                    <ArrowsUpDownIcon className="h-3.5 w-3.5 text-gray-400" /> Name
+                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wider">Sort List By</label>
+                <div className="flex gap-2">
+                  <button onClick={() => handleSort("name")} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white border-2 border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all text-xs font-semibold text-slate-700 active:scale-95">
+                    <ArrowsUpDownIcon className="h-3.5 w-3.5 text-slate-400" /> Name
                     {sortBy === "name" && (sortDirection === "asc" ? <ChevronUpIcon className="h-3.5 w-3.5 text-indigo-600" /> : <ChevronDownIcon className="h-3.5 w-3.5 text-indigo-600" />)}
                   </button>
-                  <button onClick={() => handleSort("status")} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white border-2 border-gray-300 rounded-lg hover:border-indigo-500 transition-all text-xs font-medium">
-                    <CheckCircleIconSolid className="h-3.5 w-3.5 text-gray-400" /> Status
+                  <button onClick={() => handleSort("status")} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white border-2 border-slate-200 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition-all text-xs font-semibold text-slate-700 active:scale-95">
+                    <CheckCircleIconSolid className="h-3.5 w-3.5 text-slate-400" /> Status
                     {sortBy === "status" && (sortDirection === "asc" ? <ChevronUpIcon className="h-3.5 w-3.5 text-indigo-600" /> : <ChevronDownIcon className="h-3.5 w-3.5 text-indigo-600" />)}
                   </button>
                 </div>
@@ -316,49 +321,53 @@ const CountryTable = () => {
           </div>
         </div>
 
-        {/* Countries Table */}
-        <div className="bg-linear-to-br from-white to-gray-50 rounded-xl shadow-lg overflow-hidden border border-gray-200">
-          <div className="px-4 py-3 border-b border-gray-200 bg-linear-to-r from-gray-50 to-white flex justify-between items-center">
-            <h2 className="text-xl font-bold text-gray-900">Countries List</h2>
-            <div className="text-xs text-gray-600">Page <span className="font-bold text-gray-900">{currentPage}</span> of <span className="font-bold text-gray-900">{totalPages}</span></div>
+        {/* UI ENHANCEMENT: Pure Tailwind table */}
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
+          <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50/50 to-transparent flex justify-between items-center">
+            <h2 className="text-xl font-bold text-slate-900">Countries List</h2>
+            <div className="text-xs text-slate-600">Page <span className="font-bold text-indigo-600">{currentPage}</span> of <span className="font-bold text-slate-700">{totalPages}</span></div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-linear-to-r from-gray-50 to-gray-100">
-                  <th className="py-3 px-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Country Details</th>
-                  <th className="py-3 px-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                  <th className="py-3 px-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+            <table className="w-full border-collapse">
+              <thead className="bg-gradient-to-r from-slate-50 via-slate-100 to-slate-50 sticky top-0 z-10" style={{ boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)" }}>
+                <tr>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-700 uppercase tracking-wider" style={{ borderBottom: "2px solid #e2e8f0" }}>Country Details</th>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-700 uppercase tracking-wider" style={{ borderBottom: "2px solid #e2e8f0" }}>Status</th>
+                  <th className="py-4 px-6 text-left text-xs font-bold text-slate-700 uppercase tracking-wider" style={{ borderBottom: "2px solid #e2e8f0" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
+                {/* UI ENHANCEMENT: Pure Tailwind table rows */}
                 {loading ? <TableSkeleton /> : paginatedCountries.map((country) => (
-                  <tr key={country._id} className="group hover:bg-indigo-50/30 transition-all duration-150 border-b border-gray-100 last:border-0">
-                    <td className="py-3 px-4">
+                  <tr key={country._id} className="border-b border-slate-100 transition-all duration-200 hover:bg-gradient-to-r hover:from-indigo-50/30 hover:via-blue-50/20 hover:to-transparent last:border-0" style={{ boxShadow: "inset 0 0 0 1px rgba(99, 102, 241, 0)", transition: "box-shadow 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.boxShadow = "inset 0 0 0 1px rgba(99, 102, 241, 0.1)"} onMouseLeave={(e) => e.currentTarget.style.boxShadow = "inset 0 0 0 1px rgba(99, 102, 241, 0)"}>
+                    <td className="py-4 px-6 text-sm text-slate-700">
+                      {/* UI ENHANCEMENT: Pure Tailwind table cell content */}
                       {editId === country._id ? (
                         <div className="flex items-center gap-2">
-                          <input value={editName} onChange={(e) => setEditName(e.target.value)} onKeyPress={(e) => e.key === "Enter" && saveEdit(country._id)} className="flex-1 px-3 py-1.5 bg-white border-2 border-indigo-300 rounded outline-none text-sm" autoFocus />
+                          <input value={editName} onChange={(e) => setEditName(e.target.value)} onKeyPress={(e) => e.key === "Enter" && saveEdit(country._id)} className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-sm font-medium text-slate-700 placeholder-slate-400 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 hover:border-slate-300" autoFocus />
                         </div>
                       ) : (
                         <div className="flex items-center gap-3">
-                          <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${country.active ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"}`}><GlobeAltIcon className="h-4 w-4" /></div>
-                          <div><p className="font-semibold text-gray-900 text-sm">{country.name}</p><p className="text-xs text-gray-400">ID: {country._id}</p></div>
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ring-2 ring-white shadow-sm ${country.active ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-500"}`}><GlobeAltIcon className="h-5 w-5" /></div>
+                          <div><p className="font-semibold text-slate-900 text-sm">{country.name}</p><p className="text-xs text-slate-400">ID: {country._id}</p></div>
                         </div>
                       )}
                     </td>
-                    <td className="py-3 px-4">
-                      <button onClick={() => toggleActive(country)} className={`px-3 py-1 rounded-full text-xs font-medium border ${country.active ? "bg-green-100 text-green-800 border-green-200" : "bg-gray-100 text-gray-700 border-gray-200"}`}>
+                    {/* UI ENHANCEMENT: Pure Tailwind badge */}
+                    <td className="py-4 px-6 text-sm text-slate-700">
+                      <button onClick={() => toggleActive(country)} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all duration-200 ${country.active ? "bg-emerald-100 border-emerald-200 text-emerald-700" : "bg-slate-100 border-slate-200 text-slate-700"}`}>
                         {country.active ? "Active" : "Inactive"}
                       </button>
                     </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1.5">
+                    {/* UI ENHANCEMENT: Pure Tailwind action buttons */}
+                    <td className="py-4 px-6 text-sm text-slate-700">
+                      <div className="flex items-center gap-2">
                         {editId === country._id ? (
-                          <><button onClick={() => saveEdit(country._id)} className="p-1.5 bg-green-500 text-white rounded"><CheckIcon className="h-3.5 w-3.5" /></button>
-                          <button onClick={() => { setEditId(null); setEditName(""); }} className="p-1.5 bg-gray-500 text-white rounded"><XMarkIcon className="h-3.5 w-3.5" /></button></>
+                          <><button onClick={() => saveEdit(country._id)} className="p-2.5 rounded-xl transition-all duration-200 hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 active:scale-95 bg-emerald-500 text-white shadow-md shadow-emerald-300/25"><CheckIcon className="h-4 w-4" /></button>
+                            <button onClick={() => { setEditId(null); setEditName(""); }} className="p-2.5 rounded-xl transition-all duration-200 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-500/20 active:scale-95 bg-slate-500 text-white shadow-md shadow-slate-300/25"><XMarkIcon className="h-4 w-4" /></button></>
                         ) : (
-                          <><button onClick={() => { setEditId(country._id); setEditName(country.name); }} className="p-1.5 bg-blue-500 text-white rounded shadow-sm"><PencilIcon className="h-3.5 w-3.5" /></button>
-                          <button onClick={() => removeCountry(country._id)} className="p-1.5 bg-red-500 text-white rounded shadow-sm"><TrashIcon className="h-3.5 w-3.5" /></button></>
+                          <><button onClick={() => { setEditId(country._id); setEditName(country.name); }} className="p-2.5 rounded-xl transition-all duration-200 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 active:scale-95 bg-indigo-600 text-white shadow-md shadow-indigo-300/25"><PencilIcon className="h-4 w-4" /></button>
+                            <button onClick={() => removeCountry(country._id)} className="p-2.5 rounded-xl transition-all duration-200 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/20 active:scale-95 bg-red-500 text-white shadow-md shadow-red-300/25"><TrashIcon className="h-4 w-4" /></button></>
                         )}
                       </div>
                     </td>
@@ -367,13 +376,13 @@ const CountryTable = () => {
               </tbody>
             </table>
           </div>
-          {/* Pagination Controls */}
+          {/* UI ENHANCEMENT: Pure Tailwind pagination */}
           {filteredCountries.length > 0 && (
-            <div className="px-4 py-3 border-t border-gray-200 bg-gray-50/50 flex justify-between items-center">
-              <div className="text-xs text-gray-600">Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredCountries.length)} of {filteredCountries.length} countries</div>
-              <div className="flex gap-1">
-                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-1.5 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50"><ArrowLeftIcon className="h-3.5 w-3.5" /></button>
-                <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-1.5 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50"><ArrowRightIcon className="h-3.5 w-3.5" /></button>
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <div className="text-sm text-slate-600 font-medium">Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredCountries.length)} of {filteredCountries.length} countries</div>
+              <div className="flex items-center gap-2">
+                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-2.5 rounded-xl border-2 border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white transition-all duration-200 active:scale-95"><ArrowLeftIcon className="h-4 w-4" /></button>
+                <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-2.5 rounded-xl border-2 border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white transition-all duration-200 active:scale-95"><ArrowRightIcon className="h-4 w-4" /></button>
               </div>
             </div>
           )}

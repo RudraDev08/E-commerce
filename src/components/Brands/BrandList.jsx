@@ -340,7 +340,7 @@ const BrandList = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] p-8 lg:p-12 font-sans selection:bg-emerald-100">
-      
+
       {/* --- PREMIUM DELETE MODAL --- */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -353,13 +353,13 @@ const BrandList = () => {
             <h3 className="text-xl font-bold text-slate-900 mb-2">Confirm Removal</h3>
             <p className="text-slate-500 mb-8 leading-relaxed">This will permanently delete the brand identity. This action is irreversible.</p>
             <div className="flex gap-3">
-              <button 
+              <button
                 onClick={() => setIsDeleteModalOpen(false)}
                 className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={confirmDelete}
                 className="flex-1 px-4 py-3 rounded-xl text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 shadow-lg shadow-rose-200 transition-all active:scale-95"
               >
@@ -370,8 +370,8 @@ const BrandList = () => {
         </div>
       )}
 
-      {/* --- HEADER --- */}
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
+      {/* --- HEADER - UI LAYOUT FIX --- */}
+      <div className="px-8 flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">
             Brands <span className="text-slate-400 font-light">/ Catalog</span>
@@ -389,8 +389,8 @@ const BrandList = () => {
         </button>
       </div>
 
-      {/* --- TABLE CONTAINER --- */}
-      <div className="max-w-7xl mx-auto">
+      {/* --- TABLE CONTAINER - UI LAYOUT FIX --- */}
+      <div className="px-8">
         <div className="bg-white rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 overflow-hidden">
           <table className="w-full">
             <thead>
@@ -434,13 +434,13 @@ const BrandList = () => {
                   </td>
                   <td className="px-10 py-6">
                     <div className="flex items-center justify-end gap-1">
-                      <button 
+                      <button
                         onClick={() => navigate(`/brands/edit/${b._id}`)}
                         className="p-2.5 text-slate-400 hover:text-slate-900 hover:bg-white hover:shadow-sm rounded-lg transition-all"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                       </button>
-                      <button 
+                      <button
                         onClick={() => openDeleteModal(b._id)}
                         className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
                       >
@@ -452,7 +452,7 @@ const BrandList = () => {
               ))}
             </tbody>
           </table>
-          
+
           {/* --- EMPTY STATE --- */}
           {brands.length === 0 && (
             <div className="py-24 flex flex-col items-center justify-center">
@@ -464,7 +464,7 @@ const BrandList = () => {
             </div>
           )}
         </div>
-        
+
         {/* --- FOOTER INFO --- */}
         <div className="mt-8 flex justify-between items-center px-4">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">

@@ -43,25 +43,25 @@ const PincodeTable = () => {
   }, [page, search, cityId]);
 
   // 2. Fixed Effects - Correct dependencies to prevent infinite loops
-  useEffect(() => { 
-    fetchData(); 
+  useEffect(() => {
+    fetchData();
   }, [fetchData]);
 
-  useEffect(() => { 
-    getCountries().then(res => setCountries(res.data || [])).catch(() => {}); 
+  useEffect(() => {
+    getCountries().then(res => setCountries(res.data || [])).catch(() => { });
   }, []);
 
-  useEffect(() => { 
+  useEffect(() => {
     if (countryId) {
-      getStates(countryId).then(res => setStates(res.data || [])).catch(() => {});
+      getStates(countryId).then(res => setStates(res.data || [])).catch(() => { });
       setStateId(""); // Reset children when parent changes
       setCityId("");
     }
   }, [countryId]);
 
-  useEffect(() => { 
+  useEffect(() => {
     if (stateId) {
-      getCities(stateId).then(res => setCities(res.data || [])).catch(() => {});
+      getCities(stateId).then(res => setCities(res.data || [])).catch(() => { });
       setCityId("");
     }
   }, [stateId]);
@@ -69,37 +69,37 @@ const PincodeTable = () => {
   const handleDelete = async (id) => {
     if (!id) return;
     if (window.confirm("Remove this entry?")) {
-      try { 
-        await deletePincode(id); 
+      try {
+        await deletePincode(id);
         toast.success("Deleted successfully");
-        fetchData(); 
-      } catch (err) { 
-        toast.error(err.response?.data?.message || "Delete failed"); 
+        fetchData();
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Delete failed");
       }
     }
   };
 
   const saveEdit = async (id) => {
     if (!editValue.trim()) return toast.error("Value cannot be empty");
-    try { 
-      await updatePincode(id, { pincode: editValue.trim() }); 
-      setEditingId(null); 
-      fetchData(); 
+    try {
+      await updatePincode(id, { pincode: editValue.trim() });
+      setEditingId(null);
+      fetchData();
       toast.success("Updated");
-    } catch (err) { 
-      toast.error(err.response?.data?.message || "Update failed"); 
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Update failed");
     }
   };
 
   const handleAdd = async () => {
     if (!pincode.trim() || !cityId) return toast.warning("Pincode and City required");
-    try { 
-      await addPincode({ pincode: pincode.trim(), cityId }); 
-      setPincode(""); 
-      fetchData(); 
+    try {
+      await addPincode({ pincode: pincode.trim(), cityId });
+      setPincode("");
+      fetchData();
       toast.success("Added successfully");
-    } catch (err) { 
-      toast.error(err.response?.data?.message || "Submission failed"); 
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Submission failed");
     }
   };
 
@@ -107,9 +107,10 @@ const PincodeTable = () => {
   const filteredData = data;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 px-8 py-6">{/* UI LAYOUT FIX: Changed from p-4 md:p-8 to px-8 py-6 for consistency */}
       <ToastContainer />
-      <div className="max-w-7xl mx-auto">
+      {/* UI LAYOUT FIX: Removed max-w-7xl mx-auto container */}
+      <div>
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
@@ -148,7 +149,7 @@ const PincodeTable = () => {
               Select Country
             </h2>
             <div className="relative">
-              <select 
+              <select
                 className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none appearance-none"
                 value={countryId}
                 onChange={e => setCountryId(e.target.value)}
@@ -166,7 +167,7 @@ const PincodeTable = () => {
               Select State
             </h2>
             <div className="relative">
-              <select 
+              <select
                 className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none appearance-none disabled:opacity-50"
                 value={stateId}
                 onChange={e => setStateId(e.target.value)}
@@ -185,7 +186,7 @@ const PincodeTable = () => {
               Select City
             </h2>
             <div className="relative">
-              <select 
+              <select
                 className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none appearance-none disabled:opacity-50"
                 value={cityId}
                 onChange={e => setCityId(e.target.value)}
@@ -205,7 +206,7 @@ const PincodeTable = () => {
             </h2>
             <div className="space-y-4">
               <div className="relative">
-                <input 
+                <input
                   className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                   placeholder="Enter pincode"
                   value={pincode}
@@ -213,7 +214,7 @@ const PincodeTable = () => {
                 />
                 <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               </div>
-              <button 
+              <button
                 onClick={handleAdd}
                 disabled={!cityId || !pincode.trim()}
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
@@ -238,7 +239,7 @@ const PincodeTable = () => {
                 type="text"
                 placeholder="Search..."
                 value={search}
-                onChange={(e) => {setSearch(e.target.value); setPage(1);}}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none w-full sm:w-48"
               />
             </div>
@@ -246,11 +247,11 @@ const PincodeTable = () => {
 
           <div className="overflow-x-auto">
             {!cityId ? (
-               <div className="py-16 text-center text-gray-400">Please select a city to view pincodes</div>
+              <div className="py-16 text-center text-gray-400">Please select a city to view pincodes</div>
             ) : loading ? (
-               <div className="py-12 flex justify-center"><div className="animate-spin h-8 w-8 border-4 border-purple-500 border-t-transparent rounded-full" /></div>
+              <div className="py-12 flex justify-center"><div className="animate-spin h-8 w-8 border-4 border-purple-500 border-t-transparent rounded-full" /></div>
             ) : filteredData.length === 0 ? (
-               <div className="py-12 text-center text-gray-400">No Pincodes Found</div>
+              <div className="py-12 text-center text-gray-400">No Pincodes Found</div>
             ) : (
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -283,13 +284,13 @@ const PincodeTable = () => {
                         <td className="py-4 px-6 flex gap-2">
                           {editingId === p._id ? (
                             <>
-                              <button onClick={() => saveEdit(p._id)} className="p-2 bg-green-100 text-green-600 rounded"><Check size={16}/></button>
-                              <button onClick={() => setEditingId(null)} className="p-2 bg-gray-100 text-gray-600 rounded"><X size={16}/></button>
+                              <button onClick={() => saveEdit(p._id)} className="p-2 bg-green-100 text-green-600 rounded"><Check size={16} /></button>
+                              <button onClick={() => setEditingId(null)} className="p-2 bg-gray-100 text-gray-600 rounded"><X size={16} /></button>
                             </>
                           ) : (
                             <>
-                              <button onClick={() => {setEditingId(p._id); setEditValue(p.pincode);}} className="p-2 bg-purple-100 text-purple-600 rounded"><Edit3 size={16}/></button>
-                              <button onClick={() => handleDelete(p._id)} className="p-2 bg-red-100 text-red-600 rounded"><Trash2 size={16}/></button>
+                              <button onClick={() => { setEditingId(p._id); setEditValue(p.pincode); }} className="p-2 bg-purple-100 text-purple-600 rounded"><Edit3 size={16} /></button>
+                              <button onClick={() => handleDelete(p._id)} className="p-2 bg-red-100 text-red-600 rounded"><Trash2 size={16} /></button>
                             </>
                           )}
                         </td>
@@ -305,8 +306,8 @@ const PincodeTable = () => {
             <div className="px-6 py-4 border-t flex justify-between items-center bg-gray-50">
               <span className="text-sm text-gray-500">Page {page} of {pages}</span>
               <div className="flex gap-2">
-                <button disabled={page === 1} onClick={() => setPage(page-1)} className="p-2 disabled:opacity-30"><ChevronLeft size={20}/></button>
-                <button disabled={page === pages} onClick={() => setPage(page+1)} className="p-2 disabled:opacity-30"><ChevronRight size={20}/></button>
+                <button disabled={page === 1} onClick={() => setPage(page - 1)} className="p-2 disabled:opacity-30"><ChevronLeft size={20} /></button>
+                <button disabled={page === pages} onClick={() => setPage(page + 1)} className="p-2 disabled:opacity-30"><ChevronRight size={20} /></button>
               </div>
             </div>
           )}

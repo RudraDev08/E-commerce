@@ -54,7 +54,7 @@ const StateTable = () => {
       theme: "light",
     };
 
-    switch(type) {
+    switch (type) {
       case "success":
         toast.success(message, options);
         break;
@@ -100,13 +100,13 @@ const StateTable = () => {
 
   const loadStates = async () => {
     if (!countryId) return;
-    
+
     setLoading(true);
     try {
       const res = await getStates(countryId);
       const statesData = res.data || [];
       setStates(statesData);
-      
+
       if (statesData.length > 0) {
         showToast(`Loaded ${statesData.length} states`, "success");
       }
@@ -137,14 +137,14 @@ const StateTable = () => {
         countryId,
         active: true,
       });
-      
+
       setName("");
       await loadStates();
       showToast("State added successfully", "success");
-      
+
     } catch (err) {
       showToast(
-        err.response?.data?.message || "Failed to add state", 
+        err.response?.data?.message || "Failed to add state",
         "error"
       );
     } finally {
@@ -183,7 +183,7 @@ const StateTable = () => {
   // TOGGLE ACTIVE
   const toggleActive = async (state) => {
     const newActiveStatus = !state.active;
-    
+
     try {
       await updateState(state._id || state._id, { active: newActiveStatus });
       await loadStates();
@@ -199,7 +199,7 @@ const StateTable = () => {
   // DELETE
   const remove = async (id) => {
     const state = states.find(s => (s._id === id) || (s.id === id));
-    
+
     // Use a custom confirmation dialog with toast notification
     const confirmed = await new Promise((resolve) => {
       const toastId = toast.warning(
@@ -283,11 +283,12 @@ const StateTable = () => {
   const inactiveStates = states.filter(s => !s.active).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
+    <div className="min-h-screen px-8 py-6">{/* UI LAYOUT FIX: Changed from p-4 md:p-8 to px-8 py-6 for consistency */}
       {/* Toast Container */}
       <ToastContainer />
 
-      <div className="max-w-7xl mx-auto">
+      {/* UI LAYOUT FIX: Removed max-w-7xl mx-auto container */}
+      <div>
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
@@ -353,11 +354,10 @@ const StateTable = () => {
 
         {/* Notification */}
         {notification.show && (
-          <div className={`mb-6 p-4 rounded-xl border ${
-            notification.type === "error" 
-              ? "bg-red-50 border-red-200 text-red-700" 
+          <div className={`mb-6 p-4 rounded-xl border ${notification.type === "error"
+              ? "bg-red-50 border-red-200 text-red-700"
               : "bg-green-50 border-green-200 text-green-700"
-          }`}>
+            }`}>
             <div className="flex items-center gap-2">
               {notification.type === "error" ? (
                 <ExclamationTriangleIcon className="h-5 w-5" />
@@ -403,7 +403,7 @@ const StateTable = () => {
                   <PlusIcon className="h-5 w-5 text-blue-600" />
                   Add New State
                 </h2>
-                
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -482,7 +482,7 @@ const StateTable = () => {
                       {loading ? 'Loading...' : `${filteredStates.length} states found`}
                     </p>
                   </div>
-                  
+
                   {countryId && (
                     <div className="flex flex-col sm:flex-row gap-3">
                       {/* Search */}
@@ -554,7 +554,7 @@ const StateTable = () => {
                   <table className="w-full">
                     <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                       <tr>
-                        <th 
+                        <th
                           className="py-4 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors duration-200"
                           onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
                         >
@@ -579,8 +579,8 @@ const StateTable = () => {
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                       {filteredStates.map((state) => (
-                        <tr 
-                          key={state._id} 
+                        <tr
+                          key={state._id}
                           className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group"
                         >
                           <td className="py-4 px-6">
@@ -607,19 +607,17 @@ const StateTable = () => {
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => toggleActive(state)}
-                                className={`h-6 w-11 rounded-full transition-all duration-300 flex items-center p-1 ${
-                                  state.active 
-                                    ? 'bg-gradient-to-r from-green-400 to-green-500 justify-end hover:from-green-500 hover:to-green-600' 
+                                className={`h-6 w-11 rounded-full transition-all duration-300 flex items-center p-1 ${state.active
+                                    ? 'bg-gradient-to-r from-green-400 to-green-500 justify-end hover:from-green-500 hover:to-green-600'
                                     : 'bg-gradient-to-r from-gray-300 to-gray-400 justify-start hover:from-gray-400 hover:to-gray-500'
-                                }`}
+                                  }`}
                               >
                                 <div className="h-4 w-4 bg-white rounded-full shadow-sm hover:shadow transition-shadow" />
                               </button>
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
-                                state.active 
-                                  ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 hover:from-green-200 hover:to-green-300' 
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${state.active
+                                  ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 hover:from-green-200 hover:to-green-300'
                                   : 'bg-gradient-to-r from-red-100 to-red-200 text-red-800 hover:from-red-200 hover:to-red-300'
-                              }`}>
+                                }`}>
                                 {state.active ? 'Active' : 'Inactive'}
                               </span>
                             </div>

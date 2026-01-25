@@ -101,22 +101,22 @@ const InventoryMaster = () => {
   };
 
   const filteredInventories = inventories.filter(item => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.productId.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesStatus = !statusFilter || item.status === statusFilter;
     const matchesLowStock = !lowStockFilter || item.currentStock <= item.reorderLevel;
-    
+
     return matchesSearch && matchesStatus && matchesLowStock;
   });
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Header - UI LAYOUT FIX */}
       <div className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Inventory Master</h1>
@@ -135,14 +135,13 @@ const InventoryMaster = () => {
         </div>
       </div>
 
-      {/* Notification */}
+      {/* Notification - UI LAYOUT FIX */}
       {notification && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-          <div className={`p-4 rounded-lg ${
-            notification.type === 'error' 
-              ? 'bg-red-50 border border-red-200 text-red-700' 
+        <div className="px-8 pt-4">
+          <div className={`p-4 rounded-lg ${notification.type === 'error'
+              ? 'bg-red-50 border border-red-200 text-red-700'
               : 'bg-green-50 border border-green-200 text-green-700'
-          }`}>
+            }`}>
             <div className="flex items-center gap-2">
               {notification.type === 'error' ? (
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -159,9 +158,9 @@ const InventoryMaster = () => {
         </div>
       )}
 
-      {/* Stats Cards */}
+      {/* Stats Cards - UI LAYOUT FIX */}
       {stats && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="px-8 py-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">
@@ -222,8 +221,8 @@ const InventoryMaster = () => {
         </div>
       )}
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Main Content - UI LAYOUT FIX */}
+      <div className="px-8 py-6">
         <div className="bg-white rounded-lg shadow">
           {showForm ? (
             <div className="p-6">

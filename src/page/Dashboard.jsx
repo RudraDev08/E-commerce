@@ -19,6 +19,7 @@ import {
   GlobeAltIcon as GlobeAltIconSolid,
 } from "@heroicons/react/24/solid";
 
+// UI ENHANCEMENT: Premium dashboard with enhanced visual hierarchy
 const Dashboard = () => {
   const stats = [
     { title: "Total Countries", value: "195", icon: GlobeAltIconSolid, color: "text-sky-500", bgColor: "bg-sky-50", change: "+2.3%" },
@@ -45,141 +46,139 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="space-y-8 p-4">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 py-4 sm:py-6">{/* RESPONSIVE UI ENHANCEMENT: Adaptive padding for all screen sizes */}
+      {/* UI ENHANCEMENT: Premium header section with Tailwind */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Dashboard Overview</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Dashboard Overview</h1>
+          <p className="text-slate-600 mt-2 text-sm">
             Welcome back! Here's what's happening with your data today.
           </p>
         </div>
         <div className="mt-4 md:mt-0">
-          <button className="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-indigo-500 text-white rounded-xl font-medium hover:from-sky-600 hover:to-indigo-600 transition-all shadow-sm hover:shadow-md active:scale-95">
-            <div className="flex items-center gap-2">
-              <DocumentChartBarIcon className="h-5 w-5" />
-              Generate Report
-            </div>
+          <button className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 active:scale-95 bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 focus:ring-indigo-500/50 shadow-md shadow-indigo-300/25 hover:shadow-lg hover:shadow-indigo-300/35">
+            <DocumentChartBarIcon className="h-5 w-5" />
+            Generate Report
           </button>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      {/* UI ENHANCEMENT: Premium stats grid with hover effects using Tailwind */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {stats.map((stat, index) => (
-          <div key={index} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5">
+          <div key={index} className="bg-white rounded-2xl p-5 border border-slate-200 transition-all duration-300 shadow-sm hover:shadow-lg hover:-translate-y-1 hover:border-indigo-200/50">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500">{stat.title}</p>
-                <p className="text-2xl font-bold text-gray-800 mt-2">{stat.value}</p>
-                <div className="flex items-center gap-1.5 mt-3">
-                  <ArrowTrendingUpIcon className="h-4 w-4 text-emerald-400" />
-                  <span className="text-sm font-medium text-emerald-500">{stat.change}</span>
-                  <span className="text-xs text-gray-400">from last week</span>
+                <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">{stat.title}</p>
+                <p className="text-3xl font-bold text-slate-900 mt-2">{stat.value}</p>
+                <div className="flex items-center gap-2 mt-3">
+                  <ArrowTrendingUpIcon className="h-4 w-4 text-emerald-500" />
+                  <span className="text-sm font-semibold text-emerald-600">{stat.change}</span>
+                  <span className="text-xs text-slate-400">from last week</span>
                 </div>
               </div>
-              <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${stat.bgColor}`}>
-                <stat.icon className={`h-6 w-6 ${stat.color}`} />
+              <div className={`h-14 w-14 rounded-xl flex items-center justify-center ${stat.bgColor} ring-2 ring-white shadow-lg`}>
+                <stat.icon className={`h-7 w-7 ${stat.color}`} />
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Recent Activity & Quick Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <div className="p-5 border-b border-gray-100">
+      {/* UI ENHANCEMENT: Premium two-column layout with Tailwind */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* UI ENHANCEMENT: Premium Recent Activity Card with Tailwind */}
+        <div className="bg-white rounded-2xl border border-slate-200 transition-all duration-300 shadow-sm">
+          <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50/50 to-transparent">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-gray-800">Recent Activity</h2>
-                <p className="text-gray-500 text-sm mt-0.5">Latest updates in the system</p>
+                <h2 className="text-lg font-bold text-slate-900">Recent Activity</h2>
+                <p className="text-slate-500 text-sm mt-0.5">Latest updates in the system</p>
               </div>
-              <ClockIcon className="h-5 w-5 text-gray-400" />
+              <ClockIcon className="h-5 w-5 text-slate-400" />
             </div>
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-slate-100">
             {recentActivities.map((activity, index) => (
-              <div key={index} className="p-4 hover:bg-gray-50 transition-colors">
+              <div key={index} className="p-5 hover:bg-slate-50/50 transition-colors">
                 <div className="flex items-start gap-3">
-                  <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${activity.bgColor}`}>
+                  <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${activity.bgColor} ring-2 ring-white shadow-sm`}>
                     <activity.icon className={`h-5 w-5 ${activity.color}`} />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-medium text-gray-800">{activity.action}</p>
-                        <p className="text-sm text-gray-600 mt-0.5">{activity.item}</p>
+                        <p className="font-semibold text-slate-900 text-sm">{activity.action}</p>
+                        <p className="text-sm text-slate-600 mt-0.5">{activity.item}</p>
                       </div>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">{activity.time}</span>
+                      <span className="text-xs text-slate-400 whitespace-nowrap ml-2">{activity.time}</span>
                     </div>
                     <div className="flex items-center gap-1.5 mt-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-gray-300"></div>
-                      <span className="text-xs text-gray-500">{activity.user}</span>
+                      <div className="h-1.5 w-1.5 rounded-full bg-slate-300"></div>
+                      <span className="text-xs text-slate-500">{activity.user}</span>
                     </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          <div className="p-4 border-t border-gray-100">
-            <button className="w-full text-center text-sky-500 hover:text-sky-600 font-medium text-sm py-2 rounded-lg hover:bg-sky-50 transition-colors">
+          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+            <button className="w-full text-center text-indigo-600 hover:text-indigo-700 font-semibold text-sm py-2 rounded-xl hover:bg-indigo-50 transition-colors">
               View all activities →
             </button>
           </div>
         </div>
 
-        {/* System Status */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <div className="p-5 border-b border-gray-100">
+        {/* UI ENHANCEMENT: Premium System Status Card with Tailwind */}
+        <div className="bg-white rounded-2xl border border-slate-200 transition-all duration-300 shadow-sm">
+          <div className="px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50/50 to-transparent">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-gray-800">System Status</h2>
-                <p className="text-gray-500 text-sm mt-0.5">Current system performance</p>
+                <h2 className="text-lg font-bold text-slate-900">System Status</h2>
+                <p className="text-slate-500 text-sm mt-0.5">Current system performance</p>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full">
-                <div className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span className="text-xs font-medium text-emerald-600">All systems normal</span>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full ring-2 ring-emerald-100">
+                <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                <span className="text-xs font-semibold text-emerald-700">All systems normal</span>
               </div>
             </div>
           </div>
-          <div className="p-5 space-y-6">
+          <div className="px-6 py-5 space-y-6">
             {systemStats.map((stat, index) => (
               <div key={index} className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${stat.bgColor}`}>
+                    <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${stat.bgColor} ring-2 ring-white shadow-sm`}>
                       <stat.icon className={`h-5 w-5 ${stat.color}`} />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-700">{stat.title}</p>
-                      <p className="text-xs text-gray-500">{stat.status}</p>
+                      <p className="font-semibold text-slate-800 text-sm">{stat.title}</p>
+                      <p className="text-xs text-slate-500">{stat.status}</p>
                     </div>
                   </div>
                   <span className={`text-lg font-bold ${stat.color}`}>{stat.value}</span>
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full bg-gradient-to-r ${stat.barColor} rounded-full`} 
-                    style={{ 
-                      width: stat.value.includes('%') 
-                        ? stat.value 
-                        : stat.title === 'API Response' ? '85%' 
-                        : stat.title === 'Active Sessions' ? '60%'
-                        : '90%'
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className={`h-full bg-gradient-to-r ${stat.barColor} rounded-full transition-all duration-500 ease-out`}
+                    style={{
+                      width: stat.value.includes('%')
+                        ? stat.value
+                        : stat.title === 'API Response' ? '85%'
+                          : stat.title === 'Active Sessions' ? '60%'
+                            : '90%'
                     }}>
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          <div className="p-5 border-t border-gray-100 bg-gray-50 rounded-b-xl">
+          <div className="premium-card-footer">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="h-2 w-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span className="text-sm text-gray-600">Updated just now</span>
+                <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-slate-600">Updated just now</span>
               </div>
-              <button className="text-sm text-sky-500 hover:text-sky-600 font-medium">
+              <button className="text-sm text-indigo-600 hover:text-indigo-700 font-semibold">
                 Refresh Status
               </button>
             </div>
@@ -187,20 +186,22 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Quick Insights */}
-      <div className="bg-gradient-to-r from-sky-50 to-indigo-50 rounded-xl p-5 border border-sky-100">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-gray-800">Quick Insights</h3>
-            <p className="text-gray-600 text-sm mt-1">Your data is growing steadily. Consider expanding storage soon.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-white/80 flex items-center justify-center">
-              <ChartBarIcon className="h-5 w-5 text-sky-500" />
+      {/* UI ENHANCEMENT: Premium Quick Insights Card with Tailwind */}
+      <div className="bg-white rounded-2xl border border-indigo-200/50 transition-all duration-300 shadow-sm bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+        <div className="px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Quick Insights</h3>
+              <p className="text-slate-700 text-sm mt-1">Your data is growing steadily. Consider expanding storage soon.</p>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-600">Data Growth</p>
-              <p className="text-lg font-bold text-gray-800">+8.2% this month</p>
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                <ChartBarIcon className="h-6 w-6 text-indigo-600" />
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-slate-600 font-medium">Data Growth</p>
+                <p className="text-xl font-bold text-slate-900">+8.2% this month</p>
+              </div>
             </div>
           </div>
         </div>

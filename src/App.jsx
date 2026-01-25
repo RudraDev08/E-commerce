@@ -16,14 +16,36 @@ import Product from "./components/Product/Products";
 import InventoryMaster from "./page/inventory/InventoryMaster";
 import VariantTable from "./page/VariantBuilder"
 import SizePage from "./page/size/SizePage"
+import CategorySelectorDemo from "./page/CategorySelectorDemo";
+import CategoryManagement from "./page/category/CategoryManagement";
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // BUG FIX: Safety check for window object (SSR/build compatibility)
+  const [sidebarOpen, setSidebarOpen] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 800);
     return () => clearTimeout(timer);
+  }, []);
+
+  // RESPONSIVE UI ENHANCEMENT: Handle window resize to auto-collapse on mobile
+  useEffect(() => {
+    // BUG FIX: Safety check for window object
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   if (isLoading) {
@@ -43,7 +65,7 @@ function App() {
           setIsExpanded={setSidebarOpen}
         />
 
-        {/* MAIN AREA */}
+        {/* MAIN AREA - UI LAYOUT FIX: Removed unnecessary margins */}
         <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
           {/* HEADER */}
           <AdminHeader
@@ -51,36 +73,37 @@ function App() {
             onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
           />
 
-          {/* CONTENT */}
-          <main className="">
-            <div className="max-w-7xl mx-auto">
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/country" element={<CountryPage />} />
-                <Route path="/state" element={<StatePage />} />
-                <Route path="/city" element={<CityPage />} />
-                <Route path="/pincode" element={<PincodeTable />} />
-                <Route path="/categories" element={<CategoryPage />} />
-                <Route path="/categories/:id" element={<CategoryPage />} />
+          {/* CONTENT - UI LAYOUT FIX: Removed max-w-7xl mx-auto to eliminate gap */}
+          <main className="flex-1">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/country" element={<CountryPage />} />
+              <Route path="/state" element={<StatePage />} />
+              <Route path="/city" element={<CityPage />} />
+              <Route path="/pincode" element={<PincodeTable />} />
+              <Route path="/categories" element={<CategoryManagement />} />
+              <Route path="/categories/:id" element={<CategoryManagement />} />
 
-                {/* BRAND ROUTES */}
+              {/* BRAND ROUTES */}
 
-                <Route path="/brands" element={<BrandList />} />
-                <Route path="/brands/add" element={<AddBrand />} />
-                <Route path="/brands/edit/:id" element={<EditBrand />} />
+              <Route path="/brands" element={<BrandList />} />
+              <Route path="/brands/add" element={<AddBrand />} />
+              <Route path="/brands/edit/:id" element={<EditBrand />} />
 
-                {/* PRODUCT ROUTES */}
+              {/* PRODUCT ROUTES */}
 
-                <Route path="/products" element={<Product />} />
+              <Route path="/products" element={<Product />} />
 
-                <Route path="/variants" element={<VariantTable />} />
+              <Route path="/variants" element={<VariantTable />} />
 
-                {/* inventory */}
-                <Route path="/inventory" element={<InventoryMaster />} />
+              {/* inventory */}
+              <Route path="/inventory" element={<InventoryMaster />} />
 
-                <Route path="/sizes" element={<SizePage />} />
-              </Routes>
-            </div>
+              <Route path="/sizes" element={<SizePage />} />
+
+              {/* CATEGORY SELECTOR DEMO */}
+              <Route path="/category-selector-demo" element={<CategorySelectorDemo />} />
+            </Routes>
           </main>
         </div>
       </div>
