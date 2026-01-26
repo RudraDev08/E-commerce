@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Navigation,
   Settings,
+  Palette
 } from "lucide-react";
 
 const ProfessionalAside = ({ isExpanded, setIsExpanded }) => {
@@ -106,10 +107,11 @@ const ProfessionalAside = ({ isExpanded, setIsExpanded }) => {
 
           <Section label="Products" isExpanded={isExpanded} />
           <Item icon={Package} label="Products" to="/products" isExpanded={isExpanded} onNavigate={handleNavigation} />
-          <Item icon={Ruler} label="Sizes" to="/sizes" isExpanded={isExpanded} onNavigate={handleNavigation} />
+          <Item icon={Ruler} label="Size Management" to="/size-management" isExpanded={isExpanded} onNavigate={handleNavigation} />
+          <Item icon={Palette} label="Color Management" to="/color-management" isExpanded={isExpanded} onNavigate={handleNavigation} />
+          <Item icon={Layers} label="Variant Mapping" to="/variant-mapping" isExpanded={isExpanded} onNavigate={handleNavigation} />
 
           <Section label="Inventory" isExpanded={isExpanded} />
-          <Item icon={Layers} label="Variants" to="/variants" isExpanded={isExpanded} onNavigate={handleNavigation} />
           <Item icon={Map} label="Inventory" to="/inventory" isExpanded={isExpanded} onNavigate={handleNavigation} />
         </div>
 

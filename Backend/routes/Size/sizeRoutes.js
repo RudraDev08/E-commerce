@@ -1,18 +1,31 @@
-import express from "express";
+import express from 'express';
 import {
-  createProductSize,
-  getProductSizes,
-  updateProductSize,
-  deleteProductSize,
-  toggleStatus
-} from "../../controllers/Size/sizeController.js";
+    createSize,
+    getSizes,
+    getSize,
+    updateSize,
+    deleteSize,
+    toggleStatus,
+    bulkCreateSizes,
+    restoreSize
+} from '../../controllers/size.controller.js';
 
 const router = express.Router();
 
-router.get("/", getProductSizes);
-router.post("/", createProductSize);
-router.put("/:id", updateProductSize);
-router.delete("/:id", deleteProductSize);
-router.patch("/toggle/:id", toggleStatus);
+// Create routes
+router.post('/', createSize);
+router.post('/bulk', bulkCreateSizes);
+
+// Read routes
+router.get('/', getSizes);
+router.get('/:id', getSize);
+
+// Update routes
+router.put('/:id', updateSize);
+router.patch('/:id/toggle-status', toggleStatus);
+router.patch('/:id/restore', restoreSize);
+
+// Delete routes
+router.delete('/:id', deleteSize);
 
 export default router;

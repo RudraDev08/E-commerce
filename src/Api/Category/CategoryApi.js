@@ -17,15 +17,11 @@ const categoryApi = {
 
   // Create new category (with file upload)
   createCategory: (formData) =>
-    axios.post(API_URL, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    }),
+    axios.post(API_URL, formData),
 
   // Update category (with file upload)
   updateCategory: (id, formData) =>
-    axios.put(`${API_URL}/${id}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    }),
+    axios.put(`${API_URL}/${id}`, formData),
 
   // Toggle category status
   toggleStatus: (id) => axios.patch(`${API_URL}/${id}/toggle-status`),

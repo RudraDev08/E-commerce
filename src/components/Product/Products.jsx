@@ -11,7 +11,7 @@ const Products = () => {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [viewMode, setViewMode] = useState('grid');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null); 
+  const [editingProduct, setEditingProduct] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
@@ -43,27 +43,27 @@ const Products = () => {
 
   // --- API: Bulk/Single Delete ---
   const handleDelete = async (ids) => {
-  const idArray = Array.isArray(ids) ? ids : [ids];
-  
-  try {
-    const response = await fetch('http://localhost:5000/api/products/bulk-delete', {
-      method: 'POST', // Backend must match this method
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: idArray }) // Key must be "ids"
-    });
+    const idArray = Array.isArray(ids) ? ids : [ids];
 
-    const data = await response.json();
-    if (response.ok && data.success) {
-      toast.success("Registry cleared");
-      setSelectedProducts([]);
-      fetchProducts(); // Refresh the list
-    } else {
-      toast.error(data.message || "Delete failed");
+    try {
+      const response = await fetch('http://localhost:5000/api/products/bulk-delete', {
+        method: 'POST', // Backend must match this method
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idArray }) // Key must be "ids"
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        toast.success("Registry cleared");
+        setSelectedProducts([]);
+        fetchProducts(); // Refresh the list
+      } else {
+        toast.error(data.message || "Delete failed");
+      }
+    } catch (error) {
+      toast.error("Delete failed");
     }
-  } catch (error) {
-    console.error("Delete Error:", error);
-  }
-};
+  };
 
   // --- Handlers: Edit & Modal ---
   const handleEdit = (product) => {
@@ -92,7 +92,7 @@ const Products = () => {
       {/* Header */}
       <div className="mb-8 bg-white rounded-2xl p-6 shadow-lg border border-gray-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Product Management</h1>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="px-6 py-3 bg-slate-900 text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition-all flex items-center gap-2 uppercase text-xs tracking-widest"
         >
@@ -101,11 +101,11 @@ const Products = () => {
         </button>
       </div>
 
-      <ProductFilters 
-        filters={filters} 
-        onFilterChange={(n, v) => setFilters(prev => ({ ...prev, [n]: v }))} 
-        viewMode={viewMode} 
-        onViewModeChange={setViewMode} 
+      <ProductFilters
+        filters={filters}
+        onFilterChange={(n, v) => setFilters(prev => ({ ...prev, [n]: v }))}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
       <div className="my-6 relative z-40">
@@ -143,11 +143,11 @@ const Products = () => {
         )}
       </div>
 
-      <AddProductModal 
-        isOpen={isModalOpen} 
-        onClose={handleModalClose} 
-        initialData={editingProduct} 
-        onProductAdded={fetchProducts} 
+      <AddProductModal
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        initialData={editingProduct}
+        onProductAdded={fetchProducts}
       />
     </div>
   );

@@ -6,7 +6,8 @@ import {
   updateProduct,
   bulkUpdateProducts,
   deleteProduct,
-  bulkDeleteProducts
+  bulkDeleteProducts,
+  getProductById
 } from '../../controllers/Product/ProductController.js';
 
 const router = express.Router();
@@ -16,6 +17,9 @@ router.get('/', getProducts);
 
 // Get filter options (categories, brands)
 router.get('/filter-options', getFilterOptions);
+
+// Get single product
+router.get('/:id', getProductById);
 
 // Create product
 router.post('/', createProduct);

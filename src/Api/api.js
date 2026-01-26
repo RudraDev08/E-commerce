@@ -1,0 +1,56 @@
+import axios from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+const api = axios.create({
+    baseURL: API_BASE_URL,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
+// Size APIs
+export const sizeAPI = {
+    getAll: (params) => api.get('/sizes', { params }),
+    getById: (id) => api.get(`/sizes/${id}`),
+    create: (data) => api.post('/sizes', data),
+    update: (id, data) => api.put(`/sizes/${id}`, data),
+    delete: (id) => api.delete(`/sizes/${id}`),
+    toggleStatus: (id) => api.patch(`/sizes/${id}/toggle-status`),
+    bulkCreate: (data) => api.post('/sizes/bulk', data),
+};
+
+// Color APIs
+export const colorAPI = {
+    getAll: (params) => api.get('/colors', { params }),
+    getById: (id) => api.get(`/colors/${id}`),
+    create: (data) => api.post('/colors', data),
+    update: (id, data) => api.put(`/colors/${id}`, data),
+    delete: (id) => api.delete(`/colors/${id}`),
+    toggleStatus: (id) => api.patch(`/colors/${id}/toggle-status`),
+    bulkCreate: (data) => api.post('/colors/bulk', data),
+};
+
+// Product APIs
+export const productAPI = {
+    getAll: (params) => api.get('/products', { params }),
+    getById: (id) => api.get(`/products/${id}`),
+    create: (data) => api.post('/products', data),
+    update: (id, data) => api.put(`/products/${id}`, data),
+    delete: (id) => api.delete(`/products/${id}`),
+};
+
+// Variant APIs
+export const variantAPI = {
+    getAll: (params) => api.get('/variants', { params }),
+    getById: (id) => api.get(`/variants/${id}`),
+    getByProduct: (productId) => api.get(`/variants/product/${productId}`),
+    create: (data) => api.post('/variants', data),
+    generateVariants: (data) => api.post('/variants/generate', data),
+    update: (id, data) => api.put(`/variants/${id}`, data),
+    updateStock: (id, data) => api.patch(`/variants/${id}/stock`, data),
+    delete: (id) => api.delete(`/variants/${id}`),
+    getLowStock: () => api.get('/variants/low-stock'),
+};
+
+export default api;

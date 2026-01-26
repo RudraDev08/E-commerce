@@ -8,16 +8,19 @@ import CountryPage from "./page/CountryPage";
 import StatePage from "./page/StatePage";
 import CityPage from "./page/CityPage";
 import PincodeTable from "./components/tables/PincodeTable";
-import CategoryPage from "./page/Category/CategoryPage";
 import BrandList from "./components/Brands/BrandList";
 import AddBrand from "./components/Brands/AddBrand";
 import EditBrand from "./components/Brands/EditBrand";
 import Product from "./components/Product/Products";
 import InventoryMaster from "./page/inventory/InventoryMaster";
 import VariantTable from "./page/VariantBuilder"
-import SizePage from "./page/size/SizePage"
 import CategorySelectorDemo from "./page/CategorySelectorDemo";
 import CategoryManagement from "./page/category/CategoryManagement";
+import SizeManagement from "./page/size/SizeManagement";
+import ColorManagement from "./page/color/ColorManagement";
+import VariantManagement from "./page/variant/VariantManagement";
+import ProductVariantMapping from "./page/variant/ProductVariantMapping";
+import VariantBuilder from "./page/variant/VariantBuilder";
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -99,10 +102,17 @@ function App() {
               {/* inventory */}
               <Route path="/inventory" element={<InventoryMaster />} />
 
-              <Route path="/sizes" element={<SizePage />} />
-
               {/* CATEGORY SELECTOR DEMO */}
               <Route path="/category-selector-demo" element={<CategorySelectorDemo />} />
+
+              {/* SIZE & COLOR MANAGEMENT */}
+              <Route path="/size-management" element={<SizeManagement />} />
+              <Route path="/color-management" element={<ColorManagement />} />
+              <Route path="/variant-management" element={<VariantManagement />} />
+
+              {/* VARIANT MAPPING */}
+              <Route path="/variant-mapping" element={<ProductVariantMapping />} />
+              <Route path="/variant-builder/:productId" element={<VariantBuilder />} />
             </Routes>
           </main>
         </div>

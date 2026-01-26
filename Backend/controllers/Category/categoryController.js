@@ -49,11 +49,21 @@ export const createCategory = async (req, res) => {
       parsedCustomFields = {};
     }
 
+    // Validate parentId to prevent CastError
+    let validParentId = null;
+    if (parentId && parentId !== 'null' && parentId !== '') {
+      if (mongoose.Types.ObjectId.isValid(parentId)) {
+        validParentId = parentId;
+      } else {
+        console.warn(`⚠️ Invalid parentId received: ${parentId} - treating as root`);
+      }
+    }
+
     // Prepare category data
     const categoryData = {
       name: name.trim(),
       slug,
-      parentId: parentId && parentId !== 'null' && parentId !== '' ? parentId : null,
+      parentId: validParentId,
       tags: parsedTags,
       customFields: parsedCustomFields,
       ...otherFields,
@@ -79,7 +89,7 @@ export const createCategory = async (req, res) => {
     console.error('❌ Create category error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || "Failed to create category"
+      message: error.message + (process.env.NODE_ENV === 'development' ? ` Stack: ${error.stack}` : "")
     });
   }
 };
