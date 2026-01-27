@@ -14,6 +14,7 @@ import {
 import { CheckCircleIcon as CheckCircleIconSolid } from '@heroicons/react/24/solid';
 import { colorAPI } from '../../api/api';
 import toast from 'react-hot-toast';
+import StatusSelect from '../../components/Shared/Dropdowns/StatusSelect';
 
 const ColorManagement = () => {
     const [colors, setColors] = useState([]);
@@ -119,8 +120,8 @@ const ColorManagement = () => {
     // UI Components
     const StatusBadge = ({ status }) => (
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${status === 'active'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-gray-50 text-gray-600 border-gray-200'
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            : 'bg-gray-50 text-gray-600 border-gray-200'
             }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`} />
             {status === 'active' ? 'Active' : 'Inactive'}
@@ -310,15 +311,10 @@ const ColorManagement = () => {
                                         <input type="number" value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })} min="0" className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
-                                        <div className="flex gap-4">
-                                            {['active', 'inactive'].map(status => (
-                                                <label key={status} className={`flex-1 relative flex items-center justify-center gap-2 py-3 rounded-xl border cursor-pointer transition-all ${formData.status === status ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600' : 'border-gray-200 hover:border-gray-300 text-gray-600'}`}>
-                                                    <input type="radio" value={status} checked={formData.status === status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="sr-only" />
-                                                    <span className="capitalize text-sm font-semibold">{status}</span>
-                                                </label>
-                                            ))}
-                                        </div>
+                                        <StatusSelect
+                                            value={formData.status}
+                                            onChange={(val) => setFormData({ ...formData, status: val })}
+                                        />
                                     </div>
                                     <div className="flex gap-3 pt-4">
                                         <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors">Cancel</button>

@@ -12,6 +12,9 @@ import {
 } from '@heroicons/react/24/outline';
 import { productAPI, sizeAPI, colorAPI, variantAPI } from '../../api/api';
 import toast, { Toaster } from 'react-hot-toast';
+import ProductSelectDropdown from '../../components/Shared/Dropdowns/ProductSelectDropdown';
+import SizeMultiSelectDropdown from '../../components/Shared/Dropdowns/SizeMultiSelectDropdown';
+import ColorMultiSelectDropdown from '../../components/Shared/Dropdowns/ColorMultiSelectDropdown';
 
 const VariantBuilder = () => {
     const { productId } = useParams();
@@ -100,21 +103,7 @@ const VariantBuilder = () => {
     };
 
     // --- GENERATOR LOGIC ---
-    const toggleSize = (size) => {
-        setSelectedSizes(prev =>
-            prev.find(s => s._id === size._id)
-                ? prev.filter(s => s._id !== size._id)
-                : [...prev, size]
-        );
-    };
 
-    const toggleColor = (color) => {
-        setSelectedColors(prev =>
-            prev.find(c => c._id === color._id)
-                ? prev.filter(c => c._id !== color._id)
-                : [...prev, color]
-        );
-    };
 
     const generateVariants = () => {
         if (selectedSizes.length === 0 || selectedColors.length === 0) return;
@@ -276,10 +265,17 @@ const VariantBuilder = () => {
         let path = typeof image === 'string' ? image : image.url;
         if (!path) return null;
         if (path.startsWith('http') || path.startsWith('data:')) return path;
-        const cleanPath = path.replace(/^\//, '');
+
+        let cleanPath = path.replace(/^\//, '');
+        // If path is just a filename (no slash), assume it's in uploads
+        if (!cleanPath.includes('/') && !cleanPath.includes('\\')) {
+            cleanPath = `uploads/${cleanPath}`;
+        }
+
         const baseUrl = import.meta.env.VITE_API_URL
             ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
             : 'http://localhost:5000';
+
         return `${baseUrl}/${cleanPath}`;
     };
 
@@ -340,6 +336,14 @@ const VariantBuilder = () => {
                         </div>
                     </div>
 
+                    <div className="flex-1 max-w-sm mx-4">
+                        <ProductSelectDropdown
+                            value={productId}
+                            onChange={(newId) => navigate(`/variant-builder/${newId}`)}
+                            label=""
+                        />
+                    </div>
+
                     <div className="flex items-center gap-6">
                         <div className="hidden sm:flex flex-col items-end border-r border-slate-200 pr-6">
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Variants</span>
@@ -358,7 +362,7 @@ const VariantBuilder = () => {
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
                 {/* Generator */}
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300">
+                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-visible transition-all duration-300">
                     <div
                         className="p-6 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
                         onClick={() => setIsGenerating(!isGenerating)}
@@ -379,73 +383,51 @@ const VariantBuilder = () => {
 
                     {isGenerating && (
                         <div className="p-8 bg-slate-50/30">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                                {/* Size Dropdown */}
+                                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                    <div className="flex justify-between items-center mb-2">
                                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                            <TagIcon className="w-4 h-4 text-slate-400" />
+                                            <TagIcon className="w-4 h-4 text-indigo-500" />
                                             Select Sizes
                                         </h3>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                                        <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
                                             {selectedSizes.length} Selected
                                         </span>
                                     </div>
-                                    <div className="flex flex-wrap gap-3">
-                                        {allSizes.map(size => {
-                                            const isSelected = selectedSizes.find(s => s._id === size._id);
-                                            return (
-                                                <button
-                                                    key={size._id}
-                                                    onClick={() => toggleSize(size)}
-                                                    className={`min-w-[60px] h-10 px-4 rounded-lg text-sm font-bold border-2 transition-all duration-200 ${isSelected
-                                                        ? 'border-indigo-600 bg-indigo-600 text-white shadow-md transform scale-105'
-                                                        : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
-                                                        }`}
-                                                >
-                                                    {size.code}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                                    <SizeMultiSelectDropdown
+                                        value={selectedSizes.map(s => s._id)}
+                                        onChange={(ids) => {
+                                            const objects = allSizes.filter(s => ids.includes(s._id));
+                                            setSelectedSizes(objects);
+                                        }}
+                                        label=""
+                                    />
                                 </div>
 
-                                <div>
-                                    <div className="flex justify-between items-center mb-4">
+                                {/* Color Dropdown */}
+                                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                                    <div className="flex justify-between items-center mb-2">
                                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                            <SwatchIcon className="w-4 h-4 text-slate-400" />
+                                            <SwatchIcon className="w-4 h-4 text-indigo-500" />
                                             Select Colors
                                         </h3>
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                                        <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
                                             {selectedColors.length} Selected
                                         </span>
                                     </div>
-                                    <div className="flex flex-wrap gap-3">
-                                        {allColors.map(color => {
-                                            const isSelected = selectedColors.find(c => c._id === color._id);
-                                            return (
-                                                <button
-                                                    key={color._id}
-                                                    onClick={() => toggleColor(color)}
-                                                    className={`group flex items-center gap-3 pr-4 pl-1.5 py-1.5 rounded-full border-2 transition-all duration-200 ${isSelected
-                                                        ? 'border-indigo-600 bg-white ring-2 ring-indigo-100 ring-offset-2'
-                                                        : 'border-slate-200 bg-white hover:border-indigo-300'
-                                                        }`}
-                                                >
-                                                    <div
-                                                        className="w-8 h-8 rounded-full border border-slate-100 shadow-sm"
-                                                        style={{ backgroundColor: color.hexCode }}
-                                                    />
-                                                    <span className={`text-sm font-bold ${isSelected ? 'text-indigo-900' : 'text-slate-600'}`}>
-                                                        {color.name}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                                    <ColorMultiSelectDropdown
+                                        value={selectedColors.map(c => c._id)}
+                                        onChange={(ids) => {
+                                            const objects = allColors.filter(c => ids.includes(c._id));
+                                            setSelectedColors(objects);
+                                        }}
+                                        label=""
+                                    />
                                 </div>
                             </div>
 
-                            <div className="mt-8 flex justify-end items-center pt-6 border-t border-slate-200">
+                            <div className="flex justify-end items-center pt-4 border-t border-slate-200">
                                 <button
                                     onClick={generateVariants}
                                     disabled={selectedSizes.length === 0 || selectedColors.length === 0}

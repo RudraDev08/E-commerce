@@ -12,7 +12,7 @@ import {
     ChevronRightIcon,
     PhotoIcon
 } from '@heroicons/react/24/outline';
-import { productAPI, categoryAPI } from '../../api/api';
+import { productAPI, categoryAPI, variantAPI } from '../../api/api';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -89,7 +89,12 @@ const ProductVariantMapping = () => {
         }
 
         // Clean path and prepend base URL
-        const cleanPath = path.replace(/^\//, '');
+        let cleanPath = path.replace(/^\//, '');
+        // If path is just a filename (no slash), assume it's in uploads
+        if (!cleanPath.includes('/') && !cleanPath.includes('\\')) {
+            cleanPath = `uploads/${cleanPath}`;
+        }
+
         const baseUrl = import.meta.env.VITE_API_URL
             ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
             : 'http://localhost:5000';
@@ -375,48 +380,13 @@ const ProductVariantMapping = () => {
 
                         {/* === GRID VIEW === */}
                         {viewMode === 'grid' && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                                 {filteredProducts.map((product) => (
-                                    <div
+                                    <ProductGridCard
                                         key={product._id}
+                                        product={product}
                                         onClick={() => handleSelectProduct(product)}
-                                        className="group bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col hover:-translate-y-1"
-                                    >
-                                        <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
-                                            <ProductImage product={product} className="w-full h-full group-hover:scale-105 transition-transform duration-500" />
-                                            <div className="absolute top-3 right-3">
-                                                <StatusBadge configured={product.hasVariants} />
-                                            </div>
-                                        </div>
-
-                                        <div className="p-5 flex flex-col flex-1">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">
-                                                    {product.name}
-                                                </h3>
-                                            </div>
-
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <span className="text-xs font-mono text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                                                    {product.sku || 'N/A'}
-                                                </span>
-                                                {(product.category?.name || product.category) && (
-                                                    <span className="text-xs text-slate-400 truncate max-w-[120px]">
-                                                        • {product.category?.name || product.category}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
-                                                <span className="font-bold text-slate-900">
-                                                    ₹{product.basePrice || product.price || 0}
-                                                </span>
-                                                <span className="flex items-center gap-1 text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0">
-                                                    Configure <ArrowRightIcon className="w-3.5 h-3.5" />
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    />
                                 ))}
                             </div>
                         )}
@@ -432,6 +402,188 @@ const ProductVariantMapping = () => {
                     </div>
                 )}
             </div>
+        </div>
+    );
+};
+
+// --- SUB-COMPONENTS ---
+
+const ProductGridCard = ({ product, onClick }) => {
+    const [variants, setVariants] = useState([]);
+    const [selectedColor, setSelectedColor] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch variants
+    useEffect(() => {
+        let isMounted = true;
+
+        // Simple logic: Fetch if has variants
+        if (product.hasVariants) {
+            variantAPI.getByProduct(product._id)
+                .then(res => {
+                    if (isMounted) {
+                        setVariants(res.data.data || []);
+                        setLoading(false);
+                    }
+                })
+                .catch(() => {
+                    if (isMounted) setLoading(false);
+                });
+        } else {
+            setLoading(false);
+        }
+
+        return () => { isMounted = false; };
+    }, [product._id, product.hasVariants]);
+
+    // Extract Unique Colors
+    const uniqueColors = useMemo(() => {
+        const colors = [];
+        const seen = new Set();
+
+        variants.forEach(v => {
+            let hex = '#eee';
+            let name = 'Unknown';
+            let id = null;
+
+            if (v.color?.hexCode) {
+                hex = v.color.hexCode;
+                name = v.color.name;
+                id = v.color._id;
+            } else if (v.attributes?.color) {
+                name = v.attributes.color;
+                id = name;
+            }
+
+            if (id && !seen.has(id)) {
+                seen.add(id);
+                colors.push({ id, name, hex });
+            }
+        });
+        return colors;
+    }, [variants]);
+
+    // Set default selected color
+    useEffect(() => {
+        if (uniqueColors.length > 0 && !selectedColor) {
+            setSelectedColor(uniqueColors[0]);
+        }
+    }, [uniqueColors]);
+
+    // Dynamic Image Logic
+    const getDisplayImage = () => {
+        // 1. Try to find a variant matching the selected color that has an image
+        if (selectedColor && variants.length > 0) {
+            const matchingVariant = variants.find(v =>
+                (v.color?._id === selectedColor.id) || (v.attributes?.color === selectedColor.id)
+            );
+
+            if (matchingVariant?.image) return matchingVariant.image;
+        }
+
+        // 2. Fallback to product images
+        return product.image || product.images?.[0];
+    };
+
+    const imageUrl = getImageUrl(getDisplayImage());
+
+    // Helper for image url
+    function getImageUrl(image) {
+        if (!image) return null;
+        let path = typeof image === 'string' ? image : image.url;
+        if (!path) return null;
+        if (path.startsWith('http') || path.startsWith('data:')) return path;
+
+        let cleanPath = path.replace(/^\//, '');
+        if (!cleanPath.includes('/') && !cleanPath.includes('\\')) {
+            cleanPath = `uploads/${cleanPath}`;
+        }
+
+        const baseUrl = import.meta.env.VITE_API_URL
+            ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
+            : 'http://localhost:5000';
+
+        return `${baseUrl}/${cleanPath}`;
+    }
+
+    return (
+        <div
+            onClick={onClick}
+            className="group flex flex-col items-center cursor-pointer transition-all duration-300 hover:-translate-y-1"
+        >
+            {/* Card Image */}
+            <div className="relative w-full aspect-[4/5] bg-white rounded-[2.5rem] overflow-hidden mb-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all">
+                {imageUrl ? (
+                    <img
+                        src={imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50">
+                        <CubeIcon className="w-12 h-12" />
+                    </div>
+                )}
+
+                {/* Status Badges - Matching User Screenshot */}
+                <div className="absolute top-5 right-5 z-10">
+                    {product.hasVariants ? (
+                        <span className="text-xs font-bold text-slate-900 bg-white/80 backdrop-blur-md px-3 py-1 rounded-full shadow-sm">
+                            Ready
+                        </span>
+                    ) : (
+                        <span className="text-xs font-bold text-white bg-amber-500 px-4 py-1.5 rounded-full shadow-md">
+                            Pending
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* Product Title */}
+            <h3 className="text-xl font-bold text-slate-900 mb-1.5 text-center tracking-tight">{product.name}</h3>
+
+            {/* Price */}
+            <p className="text-sm font-semibold text-slate-500 mb-5">
+                From ₹{product.basePrice || product.price || 0}
+            </p>
+
+            {/* Color Swatches */}
+            {product.hasVariants && uniqueColors.length > 0 ? (
+                <div className="flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-full">
+                        {uniqueColors.map((color) => {
+                            const isSelected = selectedColor?.id === color.id;
+                            return (
+                                <div
+                                    key={color.id}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedColor(color);
+                                    }}
+                                    className={`relative w-6 h-6 rounded-full cursor-pointer transition-all duration-300 ${isSelected
+                                            ? 'scale-110 shadow-sm ring-2 ring-indigo-600 ring-offset-2'
+                                            : 'hover:scale-110 ring-1 ring-slate-200'
+                                        }`}
+                                    style={{ backgroundColor: color.hex }}
+                                    title={color.name}
+                                >
+                                    {/* White inset ring for cleaner swatch look */}
+                                    <div className="absolute inset-0 rounded-full border border-black/5"></div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Selected Color Name Label */}
+                    <p className="text-xs font-medium text-slate-500 h-4 transition-all duration-300 animate-fade-in">
+                        {selectedColor ? selectedColor.name : ''}
+                    </p>
+                </div>
+            ) : (
+                <div className="h-14 flex items-center justify-center">
+                    <span className="text-xs font-medium text-slate-400">No variants configured</span>
+                </div>
+            )}
         </div>
     );
 };

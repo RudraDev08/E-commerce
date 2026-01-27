@@ -83,17 +83,18 @@ const productSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Auto-generate slug
-productSchema.pre('save', async function (next) {
+// Auto-generate slug
+productSchema.pre('save', async function () {
   if (this.isModified('name') || !this.slug) {
     this.slug = slugify(this.name, { lower: true, strict: true });
 
     // Ensure uniqueness snippet
-    const existing = await mongoose.models.Product.findOne({ slug: this.slug, _id: { $ne: this._id } });
+    // Use this.constructor to access the model being saved
+    const existing = await this.constructor.findOne({ slug: this.slug, _id: { $ne: this._id } });
     if (existing) {
       this.slug = `${this.slug}-${Date.now()}`;
     }
   }
-  next();
 });
 
 export default mongoose.model('Product', productSchema);

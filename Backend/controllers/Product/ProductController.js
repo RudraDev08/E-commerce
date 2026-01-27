@@ -153,6 +153,7 @@ export const createProduct = async (req, res) => {
     const product = await Product.create(payload);
     res.status(201).json({ success: true, message: MSG.CREATED, data: product });
   } catch (error) {
+    console.error("Create Product Error:", error);
     // MongoDB Duplicate Key Error
     if (error.code === 11000) {
       return res.status(400).json({ success: false, message: 'Duplicate key error (Name or SKU)' });
@@ -177,6 +178,10 @@ export const updateProduct = async (req, res) => {
     if (!product) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
     res.json({ success: true, message: MSG.UPDATED, data: product });
   } catch (error) {
+    console.error("Update Product Error:", error);
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: 'Duplicate key error (Name or SKU)' });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

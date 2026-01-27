@@ -38,6 +38,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
     shortDescription: '',
     price: '',
     basePrice: '',
+    currency: 'USD',
     taxClass: 'standard',
     stock: '',
     minStock: 5,
@@ -88,6 +89,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
         shortDescription: initialData.shortDescription || '',
         price: initialData.price || '',
         basePrice: initialData.basePrice || '',
+        currency: initialData.currency || 'USD',
         taxClass: initialData.taxClass || 'standard',
         stock: initialData.stock || '',
         minStock: initialData.minStock || 5,
@@ -111,7 +113,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
     setFormData({
       name: '', sku: '', category: '', brand: '', productType: '',
       description: '', shortDescription: '',
-      price: '', basePrice: '', taxClass: 'standard',
+      price: '', basePrice: '', currency: 'USD', taxClass: 'standard',
       stock: '', minStock: 5, stockStatus: 'in_stock', hasVariants: false,
       image: null, imagePreview: null,
       gallery: [], galleryPreviews: [],
@@ -183,7 +185,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
         if (key === 'tags') {
           // Split tags by comma and trim
           formData.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(tag => {
-            submitData.append('tags[]', tag);
+            submitData.append('tags', tag);
           });
         } else {
           submitData.append(key, formData[key]);
@@ -359,12 +361,24 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
                       <div>
                         <label className="label">Selling Price <span className="text-red-500">*</span></label>
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                          <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10">
+                            <select
+                              value={formData.currency}
+                              onChange={(e) => handleChange('currency', e.target.value)}
+                              className="bg-slate-100 border-none rounded-md text-sm font-bold text-slate-700 py-1 pl-2 pr-1 cursor-pointer hover:bg-slate-200 outline-none focus:ring-2 focus:ring-indigo-100"
+                              style={{ appearance: 'none', WebkitAppearance: 'none', textAlign: 'center' }}
+                            >
+                              <option value="USD">$</option>
+                              <option value="EUR">€</option>
+                              <option value="INR">₹</option>
+                              <option value="GBP">£</option>
+                            </select>
+                          </div>
                           <input
                             type="number"
                             value={formData.price}
                             onChange={(e) => handleChange('price', e.target.value)}
-                            className="input-field pl-8 font-bold text-lg"
+                            className="input-field pl-16 font-bold text-lg"
                             placeholder="0.00"
                           />
                         </div>
@@ -372,12 +386,16 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
                       <div>
                         <label className="label">Compare at Price (MRP)</label>
                         <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                          <div className="absolute left-2 top-1/2 -translate-y-1/2 z-10">
+                            <span className="bg-slate-100 border-none rounded-md text-sm font-bold text-slate-500 py-1 px-3 select-none">
+                              {formData.currency === 'USD' ? '$' : formData.currency === 'EUR' ? '€' : formData.currency === 'INR' ? '₹' : '£'}
+                            </span>
+                          </div>
                           <input
                             type="number"
                             value={formData.basePrice}
                             onChange={(e) => handleChange('basePrice', e.target.value)}
-                            className="input-field pl-8 text-slate-500"
+                            className="input-field pl-16 text-slate-500"
                             placeholder="0.00"
                           />
                         </div>
@@ -585,7 +603,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
                 }
                 .input-field {
                     width: 100%;
-                    background: #f8fafc;
+                    background-color: #f8fafc;
                     border: 1px solid #e2e8f0;
                     border-radius: 0.75rem;
                     padding: 0.75rem 1rem;
@@ -595,7 +613,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
                 }
                 .input-field:focus {
                     outline: none;
-                    background: #ffffff;
+                    background-color: #ffffff;
                     border-color: #6366f1;
                     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
                 }
