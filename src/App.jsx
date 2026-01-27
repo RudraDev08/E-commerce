@@ -9,8 +9,7 @@ import StatePage from "./page/StatePage";
 import CityPage from "./page/CityPage";
 import PincodeTable from "./components/tables/PincodeTable";
 import BrandList from "./components/Brands/BrandList";
-import AddBrand from "./components/Brands/AddBrand";
-import EditBrand from "./components/Brands/EditBrand";
+
 import Product from "./components/Product/Products";
 import InventoryMaster from "./page/inventory/InventoryMaster";
 import VariantTable from "./page/VariantBuilder"
@@ -88,10 +87,7 @@ function App() {
               <Route path="/categories/:id" element={<CategoryManagement />} />
 
               {/* BRAND ROUTES */}
-
               <Route path="/brands" element={<BrandList />} />
-              <Route path="/brands/add" element={<AddBrand />} />
-              <Route path="/brands/edit/:id" element={<EditBrand />} />
 
               {/* PRODUCT ROUTES */}
 

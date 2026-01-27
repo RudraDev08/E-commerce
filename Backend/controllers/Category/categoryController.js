@@ -1,6 +1,105 @@
 // Enhanced Category Controller with Full CRUD Operations
+import mongoose from "mongoose";
 import Category from "../../models/Category/CategorySchema.js";
 import { slugify } from "../../utils/slugify.js";
+
+// ============================================================================
+// HELPER FUNCTIONS - Circular Reference & Depth Validation
+// ============================================================================
+
+/**
+ * Check for circular references in category hierarchy
+ * Prevents: A → B → C → A (infinite loop)
+ * @param {ObjectId} categoryId - The category being created/updated
+ * @param {ObjectId} parentId - The proposed parent category
+ * @returns {Promise<boolean>} - Throws error if circular reference detected
+ */
+const checkCircularReference = async (categoryId, parentId) => {
+  if (!parentId) return true; // Root category, no parent to check
+
+  let currentId = parentId;
+  const visited = new Set();
+  const maxIterations = 100; // Safety limit
+  let iterations = 0;
+
+  while (currentId && iterations < maxIterations) {
+    // Convert to string for comparison
+    const currentIdStr = currentId.toString();
+    const categoryIdStr = categoryId ? categoryId.toString() : null;
+
+    // Check if we've looped back to the original category
+    if (categoryIdStr && currentIdStr === categoryIdStr) {
+      throw new Error(
+        `Circular reference detected: Cannot set category as its own ancestor`
+      );
+    }
+
+    // Check if we've visited this node before (circular in existing data)
+    if (visited.has(currentIdStr)) {
+      throw new Error(
+        `Circular reference detected in existing category hierarchy`
+      );
+    }
+
+    visited.add(currentIdStr);
+
+    // Get parent category
+    const parent = await Category.findById(currentId);
+    if (!parent) break; // Parent not found, end of chain
+
+    currentId = parent.parentId;
+    iterations++;
+  }
+
+  if (iterations >= maxIterations) {
+    throw new Error(`Category hierarchy too deep or circular reference detected`);
+  }
+
+  return true;
+};
+
+/**
+ * Calculate depth of category in hierarchy
+ * @param {ObjectId} parentId - The parent category ID
+ * @returns {Promise<number>} - Depth level (0 = root)
+ */
+const getCategoryDepth = async (parentId) => {
+  if (!parentId) return 0; // Root category
+
+  let depth = 1;
+  let currentId = parentId;
+  const maxDepth = 10; // Safety limit
+
+  while (currentId && depth < maxDepth) {
+    const parent = await Category.findById(currentId);
+    if (!parent || !parent.parentId) break;
+    currentId = parent.parentId;
+    depth++;
+  }
+
+  return depth;
+};
+
+/**
+ * Validate category depth doesn't exceed maximum
+ * @param {ObjectId} parentId - The parent category ID
+ * @param {number} maxDepth - Maximum allowed depth (default: 5)
+ * @returns {Promise<boolean>} - Throws error if depth exceeded
+ */
+const validateCategoryDepth = async (parentId, maxDepth = 5) => {
+  if (!parentId) return true; // Root category
+
+  const depth = await getCategoryDepth(parentId);
+
+  if (depth >= maxDepth) {
+    throw new Error(
+      `Maximum category depth (${maxDepth} levels) exceeded. Current depth: ${depth}`
+    );
+  }
+
+  return true;
+};
+
 
 // Create Category
 export const createCategory = async (req, res) => {
@@ -54,6 +153,12 @@ export const createCategory = async (req, res) => {
     if (parentId && parentId !== 'null' && parentId !== '') {
       if (mongoose.Types.ObjectId.isValid(parentId)) {
         validParentId = parentId;
+
+        // ✅ CRITICAL: Check for circular references
+        await checkCircularReference(null, validParentId);
+
+        // ✅ CRITICAL: Validate depth limit (max 5 levels)
+        await validateCategoryDepth(validParentId, 5);
       } else {
         console.warn(`⚠️ Invalid parentId received: ${parentId} - treating as root`);
       }
@@ -269,6 +374,26 @@ export const updateCategory = async (req, res) => {
     // Parse tags if it's a string
     const parsedTags = typeof tags === 'string' ? JSON.parse(tags) : tags;
 
+    // ✅ CRITICAL: Validate parentId if it's being changed
+    if (otherFields.parentId !== undefined) {
+      const newParentId = otherFields.parentId;
+
+      if (newParentId && newParentId !== 'null' && newParentId !== '') {
+        if (mongoose.Types.ObjectId.isValid(newParentId)) {
+          // Check for circular references (passing current category ID)
+          await checkCircularReference(id, newParentId);
+
+          // Validate depth limit
+          await validateCategoryDepth(newParentId, 5);
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid parent category ID"
+          });
+        }
+      }
+    }
+
     // Update fields
     const updateData = {
       ...otherFields,
@@ -371,16 +496,7 @@ export const toggleFeatured = async (req, res) => {
 // Soft Delete Category
 export const softDelete = async (req, res) => {
   try {
-    const category = await Category.findById(req.params.id);
-
-    if (!category || category.isDeleted) {
-      return res.status(404).json({
-        success: false,
-        message: "Category not found"
-      });
-    }
-
-    // Check if category has children
+    // Check for active children before deleting
     const hasChildren = await Category.findOne({
       parentId: req.params.id,
       isDeleted: false
@@ -389,17 +505,25 @@ export const softDelete = async (req, res) => {
     if (hasChildren) {
       return res.status(400).json({
         success: false,
-        message: "Cannot delete category with subcategories. Please delete subcategories first."
+        message: "Cannot delete category with active subcategories. Please delete subcategories first."
       });
     }
 
-    category.isDeleted = true;
-    category.updatedBy = req.user?.name || 'admin';
-    await category.save();
+    // PERFORM HARD DELETE (Permanently remove from DB)
+    const category = await Category.findByIdAndDelete(req.params.id);
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found or already deleted"
+      });
+    }
+
+    // Optional: We could also delete associated image files here if needed
 
     res.json({
       success: true,
-      message: "Category deleted successfully"
+      message: "Category permanently deleted from database"
     });
   } catch (error) {
     console.error('Delete category error:', error);

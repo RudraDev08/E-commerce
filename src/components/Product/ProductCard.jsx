@@ -2,7 +2,7 @@ import React from 'react';
 
 const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
   return (
-    <div 
+    <div
       className={`
         relative
         bg-white 
@@ -25,8 +25,8 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
           w-5 h-5
           border-2 rounded
           transition-colors duration-200
-          ${isSelected 
-            ? 'bg-gray-900 border-gray-900' 
+          ${isSelected
+            ? 'bg-gray-900 border-gray-900'
             : 'bg-white border-gray-300 hover:border-gray-900'
           }
           ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
@@ -45,10 +45,10 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
             "
           />
           {isSelected && (
-            <svg 
-              className="w-3 h-3 text-white" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="w-3 h-3 text-white"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -56,7 +56,7 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
           )}
         </div>
       </div>
-      
+
       {/* UI ENHANCEMENT: Enhanced image container with fallback and hover effects */}
       <div className="relative w-full h-56 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
         <div className="
@@ -65,8 +65,8 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
           bg-gradient-to-br from-gray-50 to-gray-100
         ">
           {product.image ? (
-            <img 
-              src={product.image} 
+            <img
+              src={`http://localhost:5000/uploads/${product.image.split(/[/\\]/).pop()}`}
               alt={product.name}
               className="
                 w-full h-full
@@ -91,7 +91,7 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
             </div>
           )}
         </div>
-        
+
         {/* UI ENHANCEMENT: Gradient overlay for better text readability on images */}
         <div className="
           absolute bottom-0 left-0 right-0 
@@ -100,7 +100,7 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
           pointer-events-none
         "></div>
       </div>
-      
+
       {/* UI ENHANCEMENT: Enhanced content area with better spacing and typography */}
       <div className="p-4">
         {/* UI ENHANCEMENT: Product name with better hierarchy */}
@@ -114,24 +114,24 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
         ">
           {product.name}
         </h3>
-        
+
         {/* UI ENHANCEMENT: Improved meta information layout */}
         <div className="space-y-1 mb-4">
           <div className="flex items-center space-x-2">
             <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
-            <span className="text-sm font-medium text-gray-600">{product.category}</span>
+            <span className="text-sm font-medium text-gray-600">{product.category?.name || 'Uncategorized'}</span>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="text-sm font-medium text-gray-600">{product.brand}</span>
+            <span className="text-sm font-medium text-gray-600">{product.brand?.name || 'No Brand'}</span>
           </div>
         </div>
-        
+
         {/* UI ENHANCEMENT: Enhanced price and stock section */}
         <div className="
           flex 
@@ -153,7 +153,7 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
               ${product.price.toFixed(2)}
             </span>
           </div>
-          
+
           {/* UI ENHANCEMENT: Improved stock badge */}
           <div className={`
             inline-flex 
@@ -165,12 +165,12 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
             font-semibold 
             tracking-wide
             transition-all duration-200
-            ${product.stock > 0 
-              ? 'bg-green-50 text-green-700 border border-green-200' 
+            ${product.stock > 0
+              ? 'bg-green-50 text-green-700 border border-green-200'
               : 'bg-red-50 text-red-700 border border-red-200'
             }
-            ${product.stock > 0 && product.stock < 10 
-              ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' 
+            ${product.stock > 0 && product.stock < 10
+              ? 'bg-yellow-50 text-yellow-700 border border-yellow-200'
               : ''
             }
           `}>
@@ -188,7 +188,7 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
           </div>
         </div>
       </div>
-      
+
       {/* UI ENHANCEMENT: Selected state indicator */}
       {isSelected && (
         <div className="
@@ -201,7 +201,7 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
           rounded-bl-lg
         "></div>
       )}
-      
+
       {/* UI ENHANCEMENT: Hover overlay for better interaction feedback */}
       {!disabled && (
         <div className="

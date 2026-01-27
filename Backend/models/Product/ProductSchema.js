@@ -2,59 +2,98 @@ import mongoose from 'mongoose';
 import slugify from 'slugify';
 
 const productSchema = new mongoose.Schema({
+  // Identity
   name: {
     type: String,
-    required: [true, "Product identity is required"],
-    trim: true
+    required: [true, "Product Name is required"],
+    trim: true,
+    index: true
   },
   slug: {
     type: String,
-    unique: true
+    unique: true,
+    lowercase: true,
+    index: true
   },
-  description: {
+  sku: {
     type: String,
-    default: ""
+    required: [true, "SKU is required"],
+    unique: true,
+    uppercase: true,
+    trim: true,
+    index: true
   },
-  price: {
-    type: Number,
-    required: [true, "Valuation (price) is required"],
-    min: [0, "Price cannot be negative"]
-  },
+  description: { type: String, default: "" },
+  shortDescription: { type: String, default: "" },
+
+  // Relationships
   category: {
-    type: String,
-    required: [true, "Classification (category) is required"]
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    required: [true, "Category is required"],
+    index: true
+  },
+  brand: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Brand',
+    required: [true, "Brand is required"],
+    index: true
   },
   productType: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "ProductType",
-    required: [true, "Product type is required for variant mapping"]
+    // Not required strictly if not using variants, but good for specs
+    default: null
   },
-  brand: {
-    type: String,
-    required: [true, "Source brand is required"]
-  },
-  stock: {
-    type: Number,
-    required: [true, "Inventory count is required"],
-    default: 0
-  },
-  image: {
-    type: String,
-    default: ""
-  },
+
+  // Pricing
+  price: { type: Number, required: true, min: 0 }, // Selling Price
+  basePrice: { type: Number, default: 0, min: 0 }, // MRP / Compare At
+  dateStart: { type: Date },
+  dateEnd: { type: Date },
+  taxClass: { type: String, default: "standard" },
+
+  // Inventory & Variants
+  hasVariants: { type: Boolean, default: false },
+  stock: { type: Number, default: 0, min: 0 }, // Only for simple products
+  minStock: { type: Number, default: 5 },
+  stockStatus: { type: String, enum: ['in_stock', 'out_of_stock', 'pre_order'], default: 'in_stock' },
+
+  // Media
+  image: { type: String, default: "" }, // Primary
+  gallery: [{ type: String }], // Additional images
+
+  // Metadata / SEO
+  tags: [{ type: String }],
+  metaTitle: { type: String, default: "" },
+  metaDescription: { type: String, default: "" },
+  metaKeywords: { type: String, default: "" },
+
+  // System
   status: {
     type: String,
-    enum: ['active', 'inactive'],
-    default: 'active'
-  }
+    enum: ['active', 'inactive', 'draft', 'archived'],
+    default: 'active',
+    index: true
+  },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null },
+  createdBy: { type: String, default: "admin" },
+  updatedBy: { type: String, default: "admin" }
 }, { timestamps: true });
 
-// ✅ Generate Slug automatically before saving to DB
-productSchema.pre('save', async function() {
-  if (this.isModified('name')) {
-    // Ensure slugify is imported at the top of this file!
+// Auto-generate slug
+productSchema.pre('save', async function (next) {
+  if (this.isModified('name') || !this.slug) {
     this.slug = slugify(this.name, { lower: true, strict: true });
+
+    // Ensure uniqueness snippet
+    const existing = await mongoose.models.Product.findOne({ slug: this.slug, _id: { $ne: this._id } });
+    if (existing) {
+      this.slug = `${this.slug}-${Date.now()}`;
+    }
   }
+  next();
 });
 
 export default mongoose.model('Product', productSchema);

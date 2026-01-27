@@ -5,6 +5,7 @@ import ProductTable from '../../components/Product/ProductTable';
 import ProductFilters from '../../components/Product/ProductFilters';
 import ProductSelectionBar from '../../components/Product/ProductSelectionBar';
 import AddProductModal from '../../components/Product/AddProduct';
+import productApi from '../../Api/Product/productApi';
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -28,12 +29,12 @@ const Products = () => {
         if (filters[key] !== 'all' && filters[key] !== '') activeFilters[key] = filters[key];
       });
 
-      const queryParams = new URLSearchParams(activeFilters).toString();
-      const response = await fetch(`http://localhost:5000/api/products?${queryParams}`);
-      const data = await response.json();
-      if (response.ok && data.success) setProducts(data.data);
+      const response = await productApi.getAll(activeFilters);
+      if (response.data.success) {
+        setProducts(response.data.data);
+      }
     } catch (error) {
-      toast.error('Vault synchronization failed');
+      toast.error('Failed to load products');
     } finally {
       setLoading(false);
     }
@@ -46,20 +47,15 @@ const Products = () => {
     const idArray = Array.isArray(ids) ? ids : [ids];
 
     try {
-      const response = await fetch('http://localhost:5000/api/products/bulk-delete', {
-        method: 'POST', // Backend must match this method
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: idArray }) // Key must be "ids"
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
-        toast.success("Registry cleared");
-        setSelectedProducts([]);
-        fetchProducts(); // Refresh the list
+      if (idArray.length === 1) {
+        await productApi.delete(idArray[0]);
       } else {
-        toast.error(data.message || "Delete failed");
+        await productApi.bulkDelete(idArray);
       }
+
+      toast.success("Products moved to trash");
+      setSelectedProducts([]);
+      fetchProducts();
     } catch (error) {
       toast.error("Delete failed");
     }

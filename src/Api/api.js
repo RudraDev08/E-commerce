@@ -31,6 +31,19 @@ export const colorAPI = {
     bulkCreate: (data) => api.post('/colors/bulk', data),
 };
 
+// Category APIs
+export const categoryAPI = {
+    getAll: (params) => api.get('/categories', { params }),
+    getTree: () => api.get('/categories/tree'),
+    getStats: () => api.get('/categories/stats'),
+    getById: (id) => api.get(`/categories/${id}`),
+    create: (data) => api.post('/categories', data),
+    update: (id, data) => api.put(`/categories/${id}`, data),
+    delete: (id) => api.delete(`/categories/${id}`),
+    toggleStatus: (id) => api.patch(`/categories/${id}/toggle-status`),
+    toggleFeatured: (id) => api.patch(`/categories/${id}/toggle-featured`),
+};
+
 // Product APIs
 export const productAPI = {
     getAll: (params) => api.get('/products', { params }),

@@ -1,39 +1,48 @@
 import express from 'express';
 import {
   getProducts,
-  getFilterOptions,
+  getProductById,
   createProduct,
   updateProduct,
-  bulkUpdateProducts,
   deleteProduct,
+  restoreProduct,
   bulkDeleteProducts,
-  getProductById
+  getProductStats
 } from '../../controllers/Product/ProductController.js';
+
+import { upload } from "../../config/multer.js";
 
 const router = express.Router();
 
-// Get all products with filters
+// Stats
+router.get("/stats", getProductStats);
+
+// Bulk Actions
+router.post('/bulk-delete', bulkDeleteProducts);
+
+// CRUD
 router.get('/', getProducts);
-
-// Get filter options (categories, brands)
-router.get('/filter-options', getFilterOptions);
-
-// Get single product
 router.get('/:id', getProductById);
 
-// Create product
-router.post('/', createProduct);
+router.post(
+  '/',
+  upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'gallery', maxCount: 10 }
+  ]),
+  createProduct
+);
 
-// Update product
-router.put('/:id', updateProduct);
+router.put(
+  '/:id',
+  upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'gallery', maxCount: 10 }
+  ]),
+  updateProduct
+);
 
-// Bulk update products
-router.put('/bulk/update', bulkUpdateProducts);
-
-// Delete product
 router.delete('/:id', deleteProduct);
-
-// Bulk delete products
-router.delete('/bulk/delete', bulkDeleteProducts);
+router.patch('/:id/restore', restoreProduct);
 
 export default router;
