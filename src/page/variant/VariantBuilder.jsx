@@ -8,7 +8,8 @@ import {
     MagnifyingGlassIcon,
     SparklesIcon,
     SwatchIcon,
-    TagIcon
+    TagIcon,
+    XMarkIcon
 } from '@heroicons/react/24/outline';
 import { productAPI, sizeAPI, colorAPI, variantAPI } from '../../api/api';
 import toast, { Toaster } from 'react-hot-toast';
@@ -28,10 +29,16 @@ const VariantBuilder = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    // Generator State
+    // Generator State (Shared)
     const [selectedSizes, setSelectedSizes] = useState([]);
-    const [selectedColors, setSelectedColors] = useState([]);
     const [isGenerating, setIsGenerating] = useState(true);
+
+    // Generator State (Single Color)
+    const [selectedColors, setSelectedColors] = useState([]);
+
+    // Generator State (Colorway)
+    const [colorwayName, setColorwayName] = useState('');
+    const [colorwayPalette, setColorwayPalette] = useState([]); // Array of Color Objects
 
     // UI State
     const [filter, setFilter] = useState('all');
@@ -59,35 +66,44 @@ const VariantBuilder = () => {
             setAllColors(loadedColors);
 
             // Map existing variants to UI structure
-            // FIX: Handle Boolean Status (DB) vs String Status (UI)
+            // -----------------------------------------------------
             const existingArgs = (varRes.data.data || []).map(v => {
-                // ROBUST COLOR LOOKUP:
-                // 1. Try populated color.hexCode
-                // 2. Try finding by ID in loadedColors
-                // 3. Try finding by Name in loadedColors (fallback)
-                let resolvedHex = '#EEEEEE';
+                // Determine if this is a legacy variant (single) or new colorway
+                const isColorway = !!v.colorwayName || (v.colorParts && v.colorParts.length > 0);
 
-                if (v.color?.hexCode) {
-                    resolvedHex = v.color.hexCode;
+                // Color Logic
+                let displayColorName = 'N/A';
+                let displayHex = null; // Single Hex
+                let displayPalette = []; // Array of Hexes
+
+                if (isColorway) {
+                    displayColorName = v.colorwayName || 'Custom Colorway';
+                    // Map populated colorParts to hexes
+                    if (v.colorParts && v.colorParts.length > 0) {
+                        displayPalette = v.colorParts.map(cp => cp.hexCode || '#eee');
+                    }
                 } else {
-                    const colorId = v.color?._id || (typeof v.color === 'string' ? v.color : null);
-                    const colorName = v.attributes?.color || v.color?.name;
-
-                    const matchedColor = loadedColors.find(c =>
-                        (colorId && c._id === colorId) ||
-                        (colorName && c.name.toLowerCase() === colorName.toLowerCase())
-                    );
-
-                    if (matchedColor) resolvedHex = matchedColor.hexCode;
+                    // Single Color
+                    const cId = v.colorId || (typeof v.color === 'string' ? v.color : v.color?._id);
+                    const matchedColor = loadedColors.find(c => c._id === cId);
+                    displayColorName = v.attributes?.color || matchedColor?.name || 'N/A';
+                    displayHex = matchedColor?.hexCode || '#eee';
                 }
 
                 return {
-                    ...v,
+                    ...v, // Keep original DB fields
                     isNew: false,
                     isEdited: false,
+
+                    // Unified UI Fields
                     sizeCode: v.attributes?.size || v.size?.code || 'N/A',
-                    colorName: v.attributes?.color || v.color?.name || 'N/A',
-                    colorHex: resolvedHex,
+
+                    // Render Hints
+                    isColorway,
+                    displayColorName,
+                    displayHex,      // Used if Single
+                    displayPalette,  // Used if Colorway
+
                     price: Number(v.price) || 0,
                     stock: Number(v.stock) || 0,
                     status: (v.status === true || v.status === 'active') ? 'active' : 'inactive'
@@ -103,67 +119,143 @@ const VariantBuilder = () => {
     };
 
     // --- GENERATOR LOGIC ---
-
-
     const generateVariants = () => {
-        if (selectedSizes.length === 0 || selectedColors.length === 0) return;
+        if (selectedSizes.length === 0) return;
 
-        // FIX: Robust Base SKU generation
-        // Fallback: SKU -> Slug -> Name -> 'PROD'
+        const isColorwayMode = product.variantType === 'COLORWAY';
+
+        // Validation based on Mode
+        if (isColorwayMode) {
+            if (!colorwayName) { toast.error("Colorway Name is required"); return; }
+            if (colorwayPalette.length === 0) { toast.error("Select at least 1 color for the palette"); return; }
+        } else {
+            if (selectedColors.length === 0) { toast.error("Select at least 1 color"); return; }
+        }
+
+        // Base SKU Logic
         let baseRef = product.sku;
         if (!baseRef) {
-            const safeSlug = product.slug || product.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            const safeSlug = product.slug || product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
             baseRef = safeSlug.toUpperCase().substring(0, 8);
         }
         if (!baseRef || baseRef.length < 2) baseRef = 'PROD-' + Math.floor(Math.random() * 1000);
-
         const baseSku = baseRef.replace(/[^A-Z0-9-]/g, '').toUpperCase();
 
         const newVariants = [];
         let skipped = 0;
 
+        // Generator Loop
         selectedSizes.forEach(size => {
-            selectedColors.forEach(color => {
-                // Duplicate Check
-                const exists = variants.find(v => {
-                    const vSize = v.sizeCode || v.attributes?.size;
-                    const vColor = v.colorName || v.attributes?.color;
-                    return vSize === size.code && vColor === color.name;
-                });
+            const sizeCode = size.code.replace(/[^a-zA-Z0-9]/g, '');
+            const genPrice = Number(product.basePrice || product.price || 0);
+
+            if (isColorwayMode) {
+                // ------------------------------------
+                // MODE: COLORWAY (One Concept, Multiple Sizes)
+                // ------------------------------------
+
+                // Duplicate Check (Same Size + Same Colorway Name)
+                const exists = variants.find(v =>
+                    (v.sizeCode === size.code) &&
+                    (v.displayColorName.toLowerCase() === colorwayName.toLowerCase())
+                );
 
                 if (exists) {
                     skipped++;
                     return;
                 }
 
-                const colorCode = color.name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 3).toUpperCase();
-                const sizeCode = size.code.replace(/[^a-zA-Z0-9]/g, '');
-                const genPrice = Number(product.basePrice || product.price || 0);
+                // SKU: MODEL-SIZE-COLORWAY (e.g. J4-US9-CHI)
+                const colorwayCode = colorwayName.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, 'X');
+
+                const tempId = `temp-${Date.now()}-${size._id}`; // Date.now() is safer here as user clicks once per "concept"
 
                 newVariants.push({
-                    _id: `temp-${Date.now()}-${size.code}-${color.code}`,
+                    _id: tempId,
                     productId: product._id,
+                    variantType: 'COLORWAY',
+
+                    // Identity
                     sizeId: size._id,
-                    colorId: color._id,
                     sizeCode: size.code,
-                    sizeName: size.name,
-                    colorName: color.name,
-                    colorHex: color.hexCode,
-                    sku: `${baseSku}-${sizeCode}-${colorCode}`,
+
+                    // Color Data
+                    colorwayName: colorwayName,
+                    colorParts: colorwayPalette, // Store full objects for UI, extract IDs on save
+
+                    // UI Helpers
+                    isColorway: true,
+                    displayColorName: colorwayName,
+                    displayPalette: colorwayPalette.map(c => c.hexCode),
+
+                    // Biz Data
+                    sku: `${baseSku}-${sizeCode}-${colorwayCode}`,
                     price: genPrice,
                     stock: 0,
                     status: 'active',
                     isNew: true,
                     isEdited: true
                 });
-            });
+
+            } else {
+                // ------------------------------------
+                // MODE: SINGLE COLOR (Matrix: Sizes x Colors)
+                // ------------------------------------
+                selectedColors.forEach(color => {
+                    // Duplicate Check
+                    const exists = variants.find(v => {
+                        return v.sizeCode === size.code && v.displayColorName === color.name;
+                    });
+
+                    if (exists) {
+                        skipped++;
+                        return;
+                    }
+
+                    const colorCode = color.name.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    const tempId = `temp-${size._id}-${color._id}`;
+
+                    newVariants.push({
+                        _id: tempId,
+                        productId: product._id,
+                        variantType: 'SINGLE_COLOR',
+
+                        sizeId: size._id,
+                        sizeCode: size.code,
+
+                        colorId: color._id,
+                        colorName: color.name, // Legacy helper
+
+                        isColorway: false,
+                        displayColorName: color.name,
+                        displayHex: color.hexCode,
+
+                        sku: `${baseSku}-${sizeCode}-${colorCode}`,
+                        price: genPrice,
+                        stock: 0,
+                        status: 'active',
+                        isNew: true,
+                        isEdited: true
+                    });
+                });
+            }
         });
 
         if (newVariants.length > 0) {
             setVariants(prev => [...prev, ...newVariants]);
             toast.success(`Generated ${newVariants.length} new variants`);
+
+            // Clear inputs based on mode
             setSelectedSizes([]);
-            setSelectedColors([]);
+            if (isColorwayMode) {
+                // Keep the colorway name/palette? Usually user wants to add same shoe in different sizes.
+                // Or maybe they want to switch colorways. Let's clear Name to be safe.
+                setColorwayName('');
+                // Keep Palette? Maybe not.
+                setColorwayPalette([]);
+            } else {
+                setSelectedColors([]);
+            }
         } else if (skipped > 0) {
             toast('Combinations already exist', { icon: 'ℹ️' });
         }
@@ -211,16 +303,29 @@ const VariantBuilder = () => {
             if (newItems.length > 0) {
                 const payload = {
                     productId: product._id,
-                    variants: newItems.map(v => ({
-                        attributes: {
-                            size: v.sizeName || v.sizeCode,
-                            color: v.colorName
-                        },
-                        sku: v.sku,
-                        price: Number(v.price) || 0,
-                        stock: Number(v.stock) || 0,
-                        status: v.status === 'active' // Convert String to Boolean
-                    }))
+                    variants: newItems.map(v => {
+                        const base = {
+                            attributes: {
+                                size: v.sizeCode,
+                                color: v.displayColorName // Fallback for legacy search
+                            },
+                            sizeId: v.sizeId,
+                            sku: v.sku,
+                            price: Number(v.price) || 0,
+                            stock: Number(v.stock) || 0,
+                            status: v.status === 'active'
+                        };
+
+                        // Add Type Specifics
+                        if (v.isColorway) {
+                            base.colorwayName = v.colorwayName;
+                            base.colorParts = v.colorParts.map(c => c._id); // Extract IDs
+                        } else {
+                            base.colorId = v.colorId;
+                        }
+
+                        return base;
+                    })
                 };
                 await variantAPI.create(payload);
             }
@@ -232,7 +337,7 @@ const VariantBuilder = () => {
                         price: Number(v.price),
                         stock: Number(v.stock),
                         sku: v.sku,
-                        status: v.status === 'active' // Convert String to Boolean
+                        status: v.status === 'active'
                     })
                 ));
             }
@@ -267,7 +372,6 @@ const VariantBuilder = () => {
         if (path.startsWith('http') || path.startsWith('data:')) return path;
 
         let cleanPath = path.replace(/^\//, '');
-        // If path is just a filename (no slash), assume it's in uploads
         if (!cleanPath.includes('/') && !cleanPath.includes('\\')) {
             cleanPath = `uploads/${cleanPath}`;
         }
@@ -292,6 +396,7 @@ const VariantBuilder = () => {
 
     const mainImage = product.image || product.images?.[0];
     const productImageUrl = getImageUrl(mainImage);
+    const isColorwayMode = product.variantType === 'COLORWAY';
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20 font-sans">
@@ -309,11 +414,7 @@ const VariantBuilder = () => {
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0">
                                 {productImageUrl ? (
-                                    <img
-                                        src={productImageUrl}
-                                        alt=""
-                                        className="w-full h-full object-cover"
-                                    />
+                                    <img src={productImageUrl} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center">
                                         <CubeIcon className="w-6 h-6 text-slate-300" />
@@ -326,9 +427,14 @@ const VariantBuilder = () => {
                                     <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                                         {product.sku || 'NO-SKU'}
                                     </span>
-                                    {stats.new > 0 && (
-                                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                                            Unsaved Changes
+                                    {/* Strategy Badge */}
+                                    {isColorwayMode ? (
+                                        <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100 uppercase">
+                                            Colorway Strategy
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 uppercase">
+                                            Single Color Strategy
                                         </span>
                                     )}
                                 </div>
@@ -373,7 +479,12 @@ const VariantBuilder = () => {
                             </div>
                             <div>
                                 <h2 className="font-bold text-slate-900 text-lg">Variant Generator</h2>
-                                <p className="text-sm text-slate-500">Combine sizes and colors to create new SKUs</p>
+                                <p className="text-sm text-slate-500">
+                                    {isColorwayMode
+                                        ? "Create defined colorways for multiple sizes"
+                                        : "Combine sizes and colors to create new SKUs"
+                                    }
+                                </p>
                             </div>
                         </div>
                         <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-4 py-2 rounded-lg transition-colors">
@@ -383,8 +494,10 @@ const VariantBuilder = () => {
 
                     {isGenerating && (
                         <div className="p-8 bg-slate-50/30">
+                            {/* DYNAMIC GENERATOR UI */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
-                                {/* Size Dropdown */}
+
+                                {/* 1. Size Dropdown (Common) */}
                                 <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
                                     <div className="flex justify-between items-center mb-2">
                                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
@@ -405,36 +518,163 @@ const VariantBuilder = () => {
                                     />
                                 </div>
 
-                                {/* Color Dropdown */}
-                                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                            <SwatchIcon className="w-4 h-4 text-indigo-500" />
-                                            Select Colors
-                                        </h3>
-                                        <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
-                                            {selectedColors.length} Selected
-                                        </span>
+                                {/* 2. Color Logic (Conditional) */}
+                                {isColorwayMode ? (
+                                    // MODE: COLORWAY COMPOSER
+                                    <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-5">
+
+                                        {/* Name Input */}
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                                                Colorway Name <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
+                                                placeholder="e.g. 'Chicago', 'Panda', 'Triple Black'"
+                                                value={colorwayName}
+                                                onChange={(e) => setColorwayName(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <div className="border-t border-slate-100 pt-4">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                                    <SwatchIcon className="w-4 h-4 text-indigo-500" />
+                                                    Composition
+                                                </h3>
+                                                <span className="text-xs font-medium text-slate-400">
+                                                    {colorwayPalette.length} Parts
+                                                </span>
+                                            </div>
+
+                                            {/* Composite List */}
+                                            <div className="space-y-2 mb-4">
+                                                {colorwayPalette.map((color, index) => (
+                                                    <div
+                                                        key={`${color._id}-${index}`}
+                                                        className="group flex items-center justify-between p-2 pl-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-indigo-200 transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+
+                                                            {/* Index / Primary Badge */}
+                                                            {index === 0 ? (
+                                                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-wider">
+                                                                    Primary
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[10px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100 min-w-[24px] text-center">
+                                                                    Part {index + 1}
+                                                                </span>
+                                                            )}
+
+                                                            {/* Color Preview */}
+                                                            <div
+                                                                className="w-6 h-6 rounded-full border border-slate-200 shadow-sm"
+                                                                style={{ backgroundColor: color.hexCode }}
+                                                            />
+
+                                                            {/* Details */}
+                                                            <div className="flex flex-col">
+                                                                <span className="text-sm font-bold text-slate-700 leading-none">
+                                                                    {color.name}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-400 font-mono uppercase mt-0.5">
+                                                                    {color.hexCode}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={() => {
+                                                                const newPalette = [...colorwayPalette];
+                                                                newPalette.splice(index, 1);
+                                                                setColorwayPalette(newPalette);
+                                                            }}
+                                                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
+                                                            title="Remove part"
+                                                        >
+                                                            <XMarkIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+
+                                                {colorwayPalette.length === 0 && (
+                                                    <div className="p-4 border-2 border-dashed border-slate-200 rounded-lg text-center">
+                                                        <p className="text-xs font-medium text-slate-400">No colors added yet.</p>
+                                                        <p className="text-[10px] text-slate-300">Add colors to build the palette.</p>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Add Color Dropdown (Re-using MultiSelect logic or simplified) */}
+                                            {/* Ideally this should be a simplified "Pick one to append" dropdown. 
+                                                For now we re-purpose the existing one but strictly handle "Append".
+                                            */}
+                                            <div className="relative">
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Add Part</label>
+                                                <select
+                                                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
+                                                    onChange={(e) => {
+                                                        const cId = e.target.value;
+                                                        if (!cId) return;
+                                                        const color = allColors.find(c => c._id === cId);
+                                                        if (color) {
+                                                            // Verify it's not already in (or allow duplicates if "Part Name" logic existed?)
+                                                            // For now, prevent exact duplicates for simplicity/safety
+                                                            if (colorwayPalette.find(p => p._id === cId)) {
+                                                                toast('Color already in palette', { icon: '⚠️' });
+                                                            } else {
+                                                                setColorwayPalette(prev => [...prev, color]);
+                                                            }
+                                                        }
+                                                        e.target.value = ""; // Reset
+                                                    }}
+                                                >
+                                                    <option value="">+ Select Color to Add</option>
+                                                    {allColors.map(c => (
+                                                        <option key={c._id} value={c._id}>{c.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <ColorMultiSelectDropdown
-                                        value={selectedColors.map(c => c._id)}
-                                        onChange={(ids) => {
-                                            const objects = allColors.filter(c => ids.includes(c._id));
-                                            setSelectedColors(objects);
-                                        }}
-                                        label=""
-                                    />
-                                </div>
+                                ) : (
+                                    // MODE: SINGLE COLOR MATRIX
+                                    <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm h-full">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                                <SwatchIcon className="w-4 h-4 text-indigo-500" />
+                                                Select Colors
+                                            </h3>
+                                            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                                                {selectedColors.length} Selected
+                                            </span>
+                                        </div>
+                                        <div className="min-h-[200px]">
+                                            <ColorMultiSelectDropdown
+                                                value={selectedColors.map(c => c._id)}
+                                                onChange={(ids) => {
+                                                    const objects = allColors.filter(c => ids.includes(c._id));
+                                                    setSelectedColors(objects);
+                                                }}
+                                                label=""
+                                            />
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-4 leading-relaxed">
+                                            This will generate <strong>{selectedColors.length * selectedSizes.length}</strong> unique SKUs (1 per size-color combination).
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex justify-end items-center pt-4 border-t border-slate-200">
                                 <button
                                     onClick={generateVariants}
-                                    disabled={selectedSizes.length === 0 || selectedColors.length === 0}
                                     className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-3"
                                 >
                                     <PlusIcon className="w-5 h-5" />
-                                    Generate {selectedSizes.length > 0 && selectedColors.length > 0 ? selectedSizes.length * selectedColors.length : ''} Combinations
+                                    Generate Variants
                                 </button>
                             </div>
                         </div>
@@ -496,25 +736,44 @@ const VariantBuilder = () => {
                                     filteredVariants.map((variant) => (
                                         <tr key={variant._id} className={`group transition-all hover:bg-slate-50/80 ${variant.isNew ? 'bg-indigo-50/30' : ''}`}>
                                             <td className="px-8 py-5">
-                                                <div className="flex items-center gap-4" title="Size and Color are fixed. Delete and recreate to change.">
-                                                    <div className="w-12 h-12 rounded-xl border border-slate-200 flex items-center justify-center bg-white shadow-sm flex-shrink-0">
-                                                        <div
-                                                            className="w-8 h-8 rounded-lg border border-slate-100 shadow-inner"
-                                                            style={{ backgroundColor: variant.colorHex }}
-                                                            title={variant.colorHex}
-                                                        />
+                                                <div className="flex items-center gap-4">
+                                                    {/* VISUAL IDENTITY (DOTS vs PALETTE) */}
+                                                    <div className="w-12 h-12 rounded-xl border border-slate-200 flex items-center justify-center bg-white shadow-sm flex-shrink-0 relative overflow-hidden">
+                                                        {variant.isColorway ? (
+                                                            // COLORWAY PALETTE VISUAL
+                                                            <div className="flex flex-wrap w-full h-full">
+                                                                {variant.displayPalette.slice(0, 4).map((hex, i) => (
+                                                                    <div key={i} className="flex-1 h-full" style={{ backgroundColor: hex }}></div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            // SINGLE COLOR VISUAL
+                                                            <div
+                                                                className="w-8 h-8 rounded-lg border border-slate-100 shadow-inner"
+                                                                style={{ backgroundColor: variant.displayHex }}
+                                                            />
+                                                        )}
+
+                                                        {variant.isNew && (
+                                                            <div className="absolute top-0 right-0 p-0.5 bg-indigo-500 rounded-bl-lg">
+                                                                <SparklesIcon className="w-2.5 h-2.5 text-white" />
+                                                            </div>
+                                                        )}
                                                     </div>
+
+                                                    {/* TEXT IDENTITY */}
                                                     <div>
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-black text-slate-900 text-lg">{variant.sizeCode}</span>
                                                             <span className="text-slate-300 text-xs">•</span>
-                                                            <span className="font-medium text-slate-600">{variant.colorName}</span>
+                                                            <span className="font-medium text-slate-600">{variant.displayColorName}</span>
                                                         </div>
-                                                        {variant.isNew && (
-                                                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-indigo-600 bg-white border border-indigo-200 px-2 py-0.5 rounded-full shadow-sm">
-                                                                <SparklesIcon className="w-3 h-3" />
-                                                                New
-                                                            </span>
+                                                        {variant.isColorway && (
+                                                            <div className="flex -space-x-1 mt-1">
+                                                                {variant.displayPalette.map((hex, i) => (
+                                                                    <div key={i} className="w-3 h-3 rounded-full border border-white" style={{ backgroundColor: hex }} />
+                                                                ))}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>

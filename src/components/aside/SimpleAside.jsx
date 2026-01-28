@@ -91,8 +91,16 @@ const ProfessionalAside = ({ isExpanded, setIsExpanded }) => {
         </div>
 
         {/* PREMIUM UI ENHANCEMENT: Clean navigation */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-4 space-y-1 custom-scrollbar">
-          <Section label="Main" isExpanded={isExpanded} />
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-1 custom-scrollbar">
+          <div className="pt-2 pb-1 px-3">
+            {isExpanded ? (
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Main
+              </p>
+            ) : (
+              <div className="w-full h-px bg-slate-200" />
+            )}
+          </div>
           <Item icon={LayoutGrid} label="Dashboard" to="/" isExpanded={isExpanded} onNavigate={handleNavigation} />
 
           <Section label="Infrastructure" isExpanded={isExpanded} />
@@ -200,7 +208,7 @@ const Item = ({ icon: Icon, label, to, isExpanded, onNavigate }) => {
 
 const Section = ({ label, isExpanded }) => (
   // PREMIUM UI ENHANCEMENT: Clean section headers
-  <div className="pt-5 pb-2 px-3">
+  <div className="pt-3 pb-1 px-3">
     {isExpanded ? (
       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
         {label}

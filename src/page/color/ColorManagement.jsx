@@ -2,25 +2,43 @@ import { useState, useEffect } from 'react';
 import {
     PlusIcon,
     MagnifyingGlassIcon,
-    PencilSquareIcon,
+    PencilIcon,
     TrashIcon,
-    ArrowPathIcon,
+    FunnelIcon,
+    ArrowsUpDownIcon,
+    SwatchIcon,
+    ClipboardDocumentIcon,
     CheckCircleIcon,
     XCircleIcon,
-    SwatchIcon, // For color icon
-    FunnelIcon,
-    XMarkIcon
+    XMarkIcon,
+    ChevronLeftIcon,
+    ChevronRightIcon
 } from '@heroicons/react/24/outline';
-import { CheckCircleIcon as CheckCircleIconSolid } from '@heroicons/react/24/solid';
+
 import { colorAPI } from '../../api/api';
 import toast from 'react-hot-toast';
 import StatusSelect from '../../components/Shared/Dropdowns/StatusSelect';
 
+
+
 const ColorManagement = () => {
+    // Data State
     const [colors, setColors] = useState([]);
     const [loading, setLoading] = useState(false);
+
+    // Filter & Sort State
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [sortOrder, setSortOrder] = useState('newest'); // 'name', 'priority', 'newest'
+
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const itemsPerPage = 5;
+
+    // Modal State
     const [showModal, setShowModal] = useState(false);
     const [modalMode, setModalMode] = useState('create');
     const [selectedColor, setSelectedColor] = useState(null);
@@ -33,22 +51,51 @@ const ColorManagement = () => {
         description: ''
     });
 
+    // Debounce Search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setCurrentPage(1); // Reset to page 1 on search
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    // Load Data
     useEffect(() => {
         loadColors();
-    }, [filterStatus]);
+    }, [currentPage, filterStatus, sortOrder, debouncedSearch]);
 
     const loadColors = async () => {
         setLoading(true);
         try {
-            const params = filterStatus !== 'all' ? { status: filterStatus } : {};
+            const params = {
+                page: currentPage,
+                limit: itemsPerPage,
+                sort: sortOrder
+            };
+
+            if (filterStatus !== 'all') params.status = filterStatus;
+            if (debouncedSearch) params.search = debouncedSearch;
+
             const response = await colorAPI.getAll(params);
+
             setColors(response.data.data || []);
+
+            if (response.data.pagination) {
+                setTotalPages(response.data.pagination.pages);
+                setTotalItems(response.data.pagination.total);
+            }
         } catch (error) {
             toast.error('Failed to load colors');
             setColors([]);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleCopyHex = (hex) => {
+        navigator.clipboard.writeText(hex);
+        toast.success(`Copied: ${hex}`, { icon: '📋' });
     };
 
     const handleCreate = () => {
@@ -92,7 +139,7 @@ const ColorManagement = () => {
         if (!window.confirm("Are you sure you want to delete this color?")) return;
         try {
             await colorAPI.delete(id);
-            toast.success('Color deleted successfully');
+            toast.success('Color deleted');
             loadColors();
         } catch (error) {
             toast.error(error.response?.data?.message || 'Delete failed');
@@ -102,230 +149,328 @@ const ColorManagement = () => {
     const toggleStatus = async (id) => {
         try {
             await colorAPI.toggleStatus(id);
-            toast.success('Status updated');
             loadColors();
+            toast.success('Status updated');
         } catch (error) {
             toast.error('Failed to update status');
         }
     };
 
-    const filteredColors = colors.filter(color => {
-        const term = searchTerm.toLowerCase();
-        return color.name.toLowerCase().includes(term) || color.hexCode.toLowerCase().includes(term);
-    });
+    // Helper for Sort Label
+    const getSortLabel = () => {
+        if (sortOrder === 'name') return 'Name (A-Z)';
+        if (sortOrder === 'priority') return 'Priority';
+        return 'Newest First';
+    };
 
-    const activeCount = colors.filter(c => c.status === 'active').length;
-    const inactiveCount = colors.filter(c => c.status === 'inactive').length;
-
-    // UI Components
-    const StatusBadge = ({ status }) => (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${status === 'active'
-            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-            : 'bg-gray-50 text-gray-600 border-gray-200'
-            }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-            {status === 'active' ? 'Active' : 'Inactive'}
-        </span>
-    );
-
-    const TableSkeleton = () => (
-        <>{[1, 2, 3].map(i => (
-            <tr key={i} className="animate-pulse border-b border-gray-100"><td className="px-6 py-4" colSpan="4"><div className="h-8 bg-gray-100 rounded"></div></td></tr>
-        ))}</>
-    );
+    // Cycle Sort Order
+    const handleSortChange = () => {
+        const nextSort = sortOrder === 'newest' ? 'name' : sortOrder === 'name' ? 'priority' : 'newest';
+        setSortOrder(nextSort);
+    };
 
     return (
-        <div className="min-h-screen bg-gray-50/50 font-sans text-gray-900 pb-12">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+        <div className="min-h-screen bg-slate-50/50 pb-12 font-sans text-slate-900">
+            {/* Top Bar Background */}
+            <div className="bg-white border-b border-slate-200 sticky top-0 z-20">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Color Management</h1>
-                        <p className="text-sm text-gray-500 mt-1">Manage color palette and hex codes.</p>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Color Master</h1>
+                        <p className="text-sm text-slate-500 font-medium">Manage solid colors and variants</p>
                     </div>
-                    <button
-                        onClick={handleCreate}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-100 transition-all shadow-sm hover:shadow-md"
-                    >
-                        <PlusIcon className="w-5 h-5" />
-                        Add Color
-                    </button>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-                    {[
-                        { label: 'Total Colors', value: colors.length, icon: SwatchIcon, color: 'text-blue-600', bg: 'bg-blue-50' },
-                        { label: 'Active', value: activeCount, icon: CheckCircleIcon, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                        { label: 'Inactive', value: inactiveCount, icon: XCircleIcon, color: 'text-amber-600', bg: 'bg-amber-50' },
-                    ].map((stat, idx) => (
-                        <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow flex items-center justify-between">
-                            <div>
-                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{stat.label}</p>
-                                <p className="text-2xl font-bold mt-1">{stat.value}</p>
-                            </div>
-                            <div className={`p-3 rounded-xl ${stat.bg}`}>
-                                <stat.icon className={`w-6 h-6 ${stat.color}`} />
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Controls */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-6">
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 relative">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <div className="flex items-center gap-3">
+                        <div className="relative group">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                             <input
-                                type="text"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 placeholder="Search colors..."
-                                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                                className="pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all w-64"
                             />
-                            {searchTerm && (
-                                <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                                    <XMarkIcon className="w-4 h-4" />
-                                </button>
-                            )}
-                        </div>
-                        <div className="relative min-w-[180px]">
-                            <FunnelIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            <select
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 appearance-none cursor-pointer"
-                            >
-                                <option value="all">All Status</option>
-                                <option value="active">Active Only</option>
-                                <option value="inactive">Inactive Only</option>
-                            </select>
                         </div>
                         <button
-                            onClick={loadColors}
-                            className="p-2.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-gray-200 md:border-transparent"
-                            title="Refresh"
+                            onClick={handleCreate}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 active:scale-95"
                         >
-                            <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                            <PlusIcon className="w-4 h-4" />
+                            Add Color
                         </button>
                     </div>
                 </div>
+            </div>
 
-                {/* Table */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-gray-50/50 border-b border-gray-100 text-xs uppercase text-gray-500 font-semibold tracking-wider">
-                                    <th className="px-6 py-4">Color Info</th>
-                                    <th className="px-6 py-4">Hex Code</th>
-                                    <th className="px-6 py-4">Status</th>
-                                    <th className="px-6 py-4 text-right">Actions</th>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+                {/* Stats & Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Stats Card (Static for now as API doesn't return total counts by status easily without extra calls) */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Items</p>
+                            <p className="text-2xl font-black text-slate-900">{totalItems}</p>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center">
+                            <SwatchIcon className="w-6 h-6 text-indigo-500" />
+                        </div>
+                    </div>
+
+                    {/* Status Filter */}
+                    <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm flex items-center col-span-2 relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                            <FunnelIcon className="w-4 h-4" />
+                        </span>
+                        <select
+                            value={filterStatus}
+                            onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+                            className="w-full pl-10 pr-4 py-3 bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 cursor-pointer hover:bg-slate-50 rounded-lg transition-colors appearance-none"
+                        >
+                            <option value="all">All Statuses</option>
+                            <option value="active">Active Only</option>
+                            <option value="inactive">Inactive Only</option>
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <ArrowsUpDownIcon className="w-4 h-4 text-slate-300 transform" />
+                        </div>
+                    </div>
+
+                    {/* Sort */}
+                    <button
+                        onClick={handleSortChange}
+                        className="bg-white px-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-center gap-3 hover:bg-slate-50 transition-colors font-bold text-sm text-slate-600"
+                    >
+                        <ArrowsUpDownIcon className="w-4 h-4 text-slate-400" />
+                        {getSortLabel()}
+                        <span className="text-xs text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">SORT</span>
+                    </button>
+                </div>
+
+                {/* Main Table */}
+                <div className="bg-white border border-slate-200 shadow-sm rounded-2xl overflow-hidden">
+                    <table className="w-full">
+                        <thead className="bg-slate-50 border-b border-slate-100">
+                            <tr>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Color Info</th>
+                                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Hex Code</th>
+                                <th className="px-6 py-4 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {loading ? (
+                                // Skeleton
+                                [1, 2, 3, 4].map(i => (
+                                    <tr key={i} className="animate-pulse">
+                                        <td className="px-6 py-4"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded bg-slate-100"></div><div className="h-4 bg-slate-100 w-24 rounded"></div></div></td>
+                                        <td className="px-6 py-4"><div className="h-4 bg-slate-100 w-16 rounded"></div></td>
+                                        <td className="px-6 py-4"><div className="h-6 bg-slate-100 w-12 mx-auto rounded-full"></div></td>
+                                        <td className="px-6 py-4"><div className="h-8 bg-slate-100 w-8 ml-auto rounded"></div></td>
+                                    </tr>
+                                ))
+                            ) : colors.length === 0 ? (
+                                <tr>
+                                    <td colSpan="4" className="px-6 py-20 text-center text-slate-400">
+                                        <div className="mx-auto w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                            <SwatchIcon className="w-8 h-8 text-slate-300" />
+                                        </div>
+                                        <h3 className="text-lg font-bold text-slate-900">No colors found</h3>
+                                        <p className="text-sm mt-1 mb-6">Create your first color or adjust filters.</p>
+                                        <button onClick={handleCreate} className="px-4 py-2 rounded-lg bg-indigo-50 text-indigo-600 text-sm font-bold hover:bg-indigo-100 transition-colors">
+                                            Create New Color
+                                        </button>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {loading ? (
-                                    <TableSkeleton />
-                                ) : filteredColors.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="4" className="px-6 py-12 text-center text-gray-500">
-                                            <div className="flex flex-col items-center justify-center">
-                                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                                                    <SwatchIcon className="w-8 h-8 text-gray-400" />
+                            ) : (
+                                colors.map((color) => (
+                                    <tr key={color._id} className="group hover:bg-slate-50/80 transition-colors">
+                                        {/* Color Info */}
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-4">
+                                                <div
+                                                    className="w-10 h-10 rounded-xl shadow-sm border border-slate-100 ring-1 ring-slate-100 overflow-hidden relative"
+                                                    style={{ backgroundColor: color.hexCode }}
+                                                >
+                                                    {/* Shine/Gloss effect */}
+                                                    <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-white/20 pointer-events-none"></div>
                                                 </div>
-                                                <p className="text-lg font-medium text-gray-900">No colors found</p>
-                                                <p className="text-sm mt-1">Create your first color.</p>
+                                                <div>
+                                                    <div className="font-bold text-slate-900">{color.name}</div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Solid Color</div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* Hex Code */}
+                                        <td className="px-6 py-4">
+                                            <button
+                                                onClick={() => handleCopyHex(color.hexCode)}
+                                                className="group/code flex items-center gap-2 px-3 py-1.5 rounded-md bg-white border border-slate-200 shadow-sm text-xs font-mono font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md transition-all active:scale-95 uppercase"
+                                                title="Click to copy HEX"
+                                            >
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color.hexCode }}></div>
+                                                {color.hexCode}
+                                                <ClipboardDocumentIcon className="w-3 h-3 opacity-0 group-hover/code:opacity-100 transition-opacity" />
+                                            </button>
+                                        </td>
+
+                                        {/* Status */}
+                                        <td className="px-6 py-4 text-center">
+                                            <button
+                                                onClick={() => toggleStatus(color._id)}
+                                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${color.status === 'active' ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                                            >
+                                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${color.status === 'active' ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                        </td>
+
+                                        {/* Actions */}
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => handleEdit(color)}
+                                                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                    title="Edit Color"
+                                                >
+                                                    <PencilIcon className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(color._id)}
+                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Delete Color"
+                                                >
+                                                    <TrashIcon className="w-5 h-5" />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
-                                ) : (
-                                    filteredColors.map((color) => (
-                                        <tr key={color._id} className="hover:bg-gray-50/80 transition-colors group">
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div
-                                                        className="w-8 h-8 rounded-lg border border-gray-200 shadow-sm"
-                                                        style={{ backgroundColor: color.hexCode }}
-                                                    />
-                                                    <span className="font-medium text-gray-900">{color.name}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <code className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded border border-gray-200 font-mono">
-                                                    {color.hexCode}
-                                                </code>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <StatusBadge status={color.status} />
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => toggleStatus(color._id)} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Toggle Status">
-                                                        <ArrowPathIcon className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={() => handleEdit(color)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
-                                                        <PencilSquareIcon className="w-4 h-4" />
-                                                    </button>
-                                                    <button onClick={() => handleDelete(color._id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
 
-                {/* Modal */}
-                {showModal && (
-                    <div className="fixed inset-0 z-50 overflow-y-auto">
-                        <div className="flex min-h-screen items-center justify-center p-4">
-                            <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowModal(false)}></div>
-                            <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl transform transition-all p-6 sm:p-8">
-                                <div className="flex items-center justify-between mb-6">
-                                    <div>
-                                        <h2 className="text-xl font-bold text-gray-900">{modalMode === 'create' ? 'Add Color' : 'Edit Color'}</h2>
-                                        <p className="text-sm text-gray-500 mt-1">Define color properties.</p>
-                                    </div>
-                                    <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full"><XMarkIcon className="w-6 h-6" /></button>
-                                </div>
-
-                                <form onSubmit={handleSubmit} className="space-y-5">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Color Name *</label>
-                                        <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm" placeholder="e.g. Midnight Blue" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Hex Code *</label>
-                                        <div className="flex gap-3">
-                                            <input type="color" value={formData.hexCode} onChange={(e) => setFormData({ ...formData, hexCode: e.target.value })} className="h-[42px] w-[60px] cursor-pointer rounded-xl border border-gray-300" />
-                                            <input type="text" value={formData.hexCode} onChange={(e) => setFormData({ ...formData, hexCode: e.target.value })} required className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm uppercase font-mono" />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Priority</label>
-                                        <input type="number" value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })} min="0" className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-sm" />
-                                    </div>
-                                    <div>
-                                        <StatusSelect
-                                            value={formData.status}
-                                            onChange={(val) => setFormData({ ...formData, status: val })}
-                                        />
-                                    </div>
-                                    <div className="flex gap-3 pt-4">
-                                        <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors">Cancel</button>
-                                        <button type="submit" className="flex-1 px-4 py-2.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all">{modalMode === 'create' ? 'Create' : 'Save'}</button>
-                                    </div>
-                                </form>
+                    {/* Pagination Controls */}
+                    {!loading && colors.length > 0 && (
+                        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+                            <p className="text-sm text-slate-500 font-medium">
+                                Showing <span className="font-bold text-slate-700">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-bold text-slate-700">{Math.min(currentPage * itemsPerPage, totalItems)}</span> of <span className="font-bold text-slate-700">{totalItems}</span> results
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="p-2 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                    <ChevronLeftIcon className="w-4 h-4" />
+                                </button>
+                                <span className="px-4 py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg shadow-sm">
+                                    Page {currentPage} of {totalPages}
+                                </span>
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="p-2 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                    <ChevronRightIcon className="w-4 h-4" />
+                                </button>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
+
+            {/* Modal */}
+            {showModal && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100">
+                        <div className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">
+                                    {modalMode === 'create' ? 'Add New Color' : 'Edit Color'}
+                                </h2>
+                                <p className="text-xs text-slate-500 mt-0.5">Define visual properties for variants</p>
+                            </div>
+                            <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+                                <XCircleIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+                                    Color Name <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    placeholder="e.g. Midnight Blue"
+                                    required
+                                    autoFocus
+                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:font-normal"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+                                    Hex Code <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex gap-3">
+                                    <div className="relative">
+                                        <input
+                                            type="color"
+                                            value={formData.hexCode}
+                                            onChange={(e) => setFormData({ ...formData, hexCode: e.target.value })}
+                                            className="w-12 h-12 p-0 border-0 rounded-xl overflow-hidden cursor-pointer shadow-sm ring-1 ring-slate-200"
+                                        />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={formData.hexCode}
+                                        onChange={(e) => setFormData({ ...formData, hexCode: e.target.value.toUpperCase() })}
+                                        placeholder="#000000"
+                                        required
+                                        className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all uppercase"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Priority</label>
+                                    <input
+                                        type="number"
+                                        value={formData.priority}
+                                        onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Status</label>
+                                    <StatusSelect
+                                        value={formData.status}
+                                        onChange={(val) => setFormData({ ...formData, status: val })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-6 border-t border-slate-100 mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowModal(false)}
+                                    className="flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors font-bold text-sm shadow-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-bold text-sm shadow-md shadow-indigo-600/20"
+                                >
+                                    {modalMode === 'create' ? 'Create Color' : 'Update Color'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

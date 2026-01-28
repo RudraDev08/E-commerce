@@ -1,8 +1,9 @@
 import InventoryMaster from '../models/inventory/inventoryMasterSchema.js';
 import InventoryLedger from '../models/inventory/inventoryLedgerSchema.js';
+import ProductVariant from '../models/variant/productVariantSchema.js'; // Ensure model registration
 
 class InventoryService {
-  
+
   /**
    * Create new inventory master entry
    */
@@ -37,15 +38,15 @@ class InventoryService {
   /**
    * Get all inventory masters with filters
    */
-  async getAllInventoryMasters(filters = {}) {
+  async getAllInventoryMasters(filters = {}, page = 1, limit = 10) {
     const query = {};
-    
+
     if (filters.status) {
       query.status = filters.status;
     }
     if (filters.search) {
       query.$or = [
-        { productId: { $regex: filters.search, $options: 'i' } },
+        // { productId: { $regex: filters.search, $options: 'i' } }, // Risky if mixing ObjectId/String.
         { productName: { $regex: filters.search, $options: 'i' } },
         { sku: { $regex: filters.search, $options: 'i' } },
         { barcode: { $regex: filters.search, $options: 'i' } }
@@ -55,11 +56,32 @@ class InventoryService {
       query.$expr = { $lte: ['$currentStock', '$reorderLevel'] };
     }
 
-    const inventories = await InventoryMaster.find(query)
-      .sort({ createdAt: -1 })
-      .lean();
+    const skip = (page - 1) * limit;
 
-    return inventories;
+    const [inventories, total] = await Promise.all([
+      InventoryMaster.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('productId', 'name image')
+        .populate({
+          path: 'variantId',
+          populate: [
+            { path: 'sizeId', select: 'name code' },
+            { path: 'colorId', select: 'name hex' },
+            { path: 'colorParts', select: 'name hex' }
+          ]
+        })
+        .lean(),
+      InventoryMaster.countDocuments(query)
+    ]);
+
+    return {
+      inventories,
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   /**
@@ -178,7 +200,7 @@ class InventoryService {
    */
   async getInventoryLedger(productId, filters = {}) {
     const query = { productId };
-    
+
     if (filters.transactionType) {
       query.transactionType = filters.transactionType;
     }
@@ -237,7 +259,7 @@ class InventoryService {
     const lowStockItems = await InventoryMaster.countDocuments({
       $expr: { $lte: ['$currentStock', '$reorderLevel'] }
     });
-    
+
     const stockValue = await InventoryMaster.aggregate([
       { $match: { status: 'ACTIVE' } },
       { $group: { _id: null, totalValue: { $sum: '$stockValue' } } }
@@ -283,6 +305,82 @@ class InventoryService {
     await inventory.save();
 
     return inventory;
+  }
+  /**
+   * Bulk Update Inventories (Scalable)
+   * expects updates: [{ variantId, newStock, reason }]
+   */
+  async bulkUpdateInventories(updates, performedBy = 'ADMIN') {
+    if (!updates || updates.length === 0) return { message: 'No updates provided' };
+
+    const variantIds = updates.map(u => u.variantId);
+    const inventories = await InventoryMaster.find({ variantId: { $in: variantIds } });
+
+    const inventoryMap = new Map();
+    inventories.forEach(inv => inventoryMap.set(inv.variantId.toString(), inv));
+
+    const masterOps = [];
+    const ledgerEntries = [];
+    const errors = [];
+
+    for (const update of updates) {
+      const inventory = inventoryMap.get(update.variantId);
+
+      if (!inventory) {
+        errors.push(`Inventory not found for variant ${update.variantId}`);
+        continue;
+      }
+
+      const currentStock = inventory.currentStock;
+      const newStock = Number(update.newStock);
+      const diff = newStock - currentStock;
+
+      if (diff === 0) continue; // No change
+
+      // Validation
+      if (newStock < 0) {
+        errors.push(`Negative stock not allowed for SKU ${inventory.sku}`);
+        continue;
+      }
+
+      // 1. Prepare Master Update
+      masterOps.push({
+        updateOne: {
+          filter: { _id: inventory._id },
+          update: {
+            $set: {
+              currentStock: newStock,
+              updatedBy: performedBy
+            }
+          }
+        }
+      });
+
+      // 2. Prepare Ledger Entry
+      ledgerEntries.push({
+        productId: inventory.productId,
+        sku: inventory.sku,
+        transactionType: diff > 0 ? 'IN' : 'OUT',
+        quantity: Math.abs(diff),
+        stockBefore: currentStock,
+        stockAfter: newStock,
+        reason: update.reason || 'Bulk Update',
+        referenceType: 'BULK_UPDATE',
+        unitCost: inventory.costPrice || 0,
+        performedBy: performedBy,
+        transactionDate: new Date()
+      });
+    }
+
+    if (masterOps.length > 0) {
+      await InventoryMaster.bulkWrite(masterOps);
+      await InventoryLedger.insertMany(ledgerEntries);
+    }
+
+    return {
+      updated: masterOps.length,
+      errors
+    };
   }
 }
 

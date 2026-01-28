@@ -17,6 +17,16 @@ const MSG = {
 // HELPERS
 // --------------------------------------------------------------------------
 const cleanBody = (body, files) => {
+  let attributes = body.attributes;
+  if (typeof attributes === 'string') {
+    try {
+      attributes = JSON.parse(attributes);
+    } catch (e) {
+      // If parsing fails, maybe it's not JSON, ignore or set empty
+      attributes = undefined;
+    }
+  }
+
   const payload = {
     ...body,
     price: Number(body.price),
@@ -32,10 +42,12 @@ const cleanBody = (body, files) => {
     ]
   };
 
-  // Sanitize ObjectIds to prevent CastError
-  if (!payload.productType) delete payload.productType;
-  if (!payload.category) delete payload.category; // Let mongoose validation handle 'required'
-  if (!payload.brand) delete payload.brand;
+  if (attributes) payload.attributes = attributes;
+
+  // Sanitize ObjectIds
+  if (!payload.productType || payload.productType === 'null' || payload.productType === 'undefined') delete payload.productType;
+  if (!payload.category || payload.category === 'null' || payload.category === 'undefined') delete payload.category;
+  if (!payload.brand || payload.brand === 'null' || payload.brand === 'undefined') delete payload.brand;
 
   return payload;
 };
@@ -135,20 +147,31 @@ export const getProductById = async (req, res) => {
 // --------------------------------------------------------------------------
 // CREATE
 // --------------------------------------------------------------------------
+// --------------------------------------------------------------------------
+// CREATE
+// --------------------------------------------------------------------------
 export const createProduct = async (req, res) => {
   try {
     // Handle SKU Auto-generation if empty
     let sku = req.body.sku;
     if (!sku) {
-      const count = await Product.countDocuments();
-      sku = `PROD-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
+      // Robust SKU Generation: PROD-YEAR-RANDOM4
+      const random = Math.floor(1000 + Math.random() * 9000); // 4 digit random
+      sku = `PROD-${new Date().getFullYear()}-${random}`;
     }
 
     const payload = cleanBody({ ...req.body, sku }, req.files || {});
 
     // Check SKU uniqueness
     const existSku = await Product.findOne({ sku: payload.sku });
-    if (existSku) return res.status(400).json({ success: false, message: `SKU ${payload.sku} already exists` });
+    if (existSku) {
+      // If auto-generated one failed (rare), try one more time with timestamp
+      if (!req.body.sku) {
+        payload.sku = `PROD-${Date.now()}`;
+      } else {
+        return res.status(400).json({ success: false, message: `SKU ${payload.sku} already exists` });
+      }
+    }
 
     const product = await Product.create(payload);
     res.status(201).json({ success: true, message: MSG.CREATED, data: product });
@@ -167,6 +190,9 @@ export const createProduct = async (req, res) => {
 // --------------------------------------------------------------------------
 export const updateProduct = async (req, res) => {
   try {
+    console.log("Update Payload Body:", req.body); // Debug Log
+    console.log("Update Payload Files:", req.files ? Object.keys(req.files) : "No files");
+
     const payload = cleanBody(req.body, req.files || {});
 
     const product = await Product.findByIdAndUpdate(
@@ -179,25 +205,35 @@ export const updateProduct = async (req, res) => {
     res.json({ success: true, message: MSG.UPDATED, data: product });
   } catch (error) {
     console.error("Update Product Error:", error);
+
+    // Mongoose Validation Error
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({ success: false, message: `Validation Error: ${messages.join(', ')}` });
+    }
+
+    // Mongoose Cast Error (Invalid ID)
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: `Invalid Data Type: ${error.message}` });
+    }
+
     if (error.code === 11000) {
       return res.status(400).json({ success: false, message: 'Duplicate key error (Name or SKU)' });
     }
-    res.status(500).json({ success: false, message: error.message });
+
+    // Return detailed error for debugging
+    res.status(500).json({ success: false, message: error.message, stack: error.stack });
   }
 };
 
 // --------------------------------------------------------------------------
-// SOFT DELETE
+// HARD DELETE
 // --------------------------------------------------------------------------
 export const deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { isDeleted: true, deletedAt: new Date() },
-      { new: true }
-    );
+    const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
-    res.json({ success: true, message: MSG.DELETED_SOFT });
+    res.json({ success: true, message: 'Product permanently deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -238,18 +274,15 @@ export const getProductStats = async (req, res) => {
 };
 
 // --------------------------------------------------------------------------
-// BULK DELETE (SOFT)
+// BULK DELETE (HARD)
 // --------------------------------------------------------------------------
 export const bulkDeleteProducts = async (req, res) => {
   try {
     const { ids } = req.body;
     if (!ids || !ids.length) return res.status(400).json({ success: false, message: "No items selected" });
 
-    await Product.updateMany(
-      { _id: { $in: ids } },
-      { isDeleted: true, deletedAt: new Date() }
-    );
-    res.json({ success: true, message: `${ids.length} products moved to trash` });
+    await Product.deleteMany({ _id: { $in: ids } });
+    res.json({ success: true, message: `${ids.length} products permanently deleted` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

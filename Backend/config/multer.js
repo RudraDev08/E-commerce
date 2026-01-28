@@ -9,9 +9,13 @@ const storage = multer.diskStorage({
 
 export const upload = multer({
   storage,
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB Limit
   fileFilter(_, file, cb) {
-    const allowed = ["image/png", "image/jpeg", "image/svg+xml"];
-    cb(null, allowed.includes(file.mimetype));
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/svg+xml"];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid file type. Only PNG, JPEG, WEBP, and SVG are allowed."));
+    }
   }
 });

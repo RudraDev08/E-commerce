@@ -10,6 +10,9 @@ export const validateInventoryMaster = (data) => {
   if (!data.productName?.trim()) {
     errors.productName = 'Product name is required';
   }
+  if (!data.variantId?.trim()) {
+    errors.variantId = 'Variant ID is required';
+  }
   if (!data.sku?.trim()) {
     errors.sku = 'SKU is required';
   }
@@ -32,8 +35,8 @@ export const validateInventoryMaster = (data) => {
   }
 
   // Business logic validations
-  if (data.maximumStockLevel && data.minimumStockLevel && 
-      data.maximumStockLevel <= data.minimumStockLevel) {
+  if (data.maximumStockLevel && data.minimumStockLevel &&
+    data.maximumStockLevel <= data.minimumStockLevel) {
     errors.maximumStockLevel = 'Maximum stock must be greater than minimum stock';
   }
   if (data.reorderQuantity && data.reorderQuantity <= 0) {
@@ -76,14 +79,15 @@ export const validateStockAdjustment = (data) => {
 
 export const sanitizeInput = (data) => {
   const sanitized = { ...data };
-  
+
   // Trim string fields
   if (sanitized.productId) sanitized.productId = sanitized.productId.trim();
+  if (sanitized.variantId) sanitized.variantId = sanitized.variantId.trim();
   if (sanitized.productName) sanitized.productName = sanitized.productName.trim();
   if (sanitized.sku) sanitized.sku = sanitized.sku.trim().toUpperCase();
   if (sanitized.barcode) sanitized.barcode = sanitized.barcode.trim();
   if (sanitized.reason) sanitized.reason = sanitized.reason.trim();
-  
+
   // Parse numeric fields
   if (sanitized.openingStock) sanitized.openingStock = Number(sanitized.openingStock);
   if (sanitized.costPrice) sanitized.costPrice = Number(sanitized.costPrice);
@@ -92,6 +96,6 @@ export const sanitizeInput = (data) => {
   if (sanitized.reorderLevel) sanitized.reorderLevel = Number(sanitized.reorderLevel);
   if (sanitized.reorderQuantity) sanitized.reorderQuantity = Number(sanitized.reorderQuantity);
   if (sanitized.quantity) sanitized.quantity = Number(sanitized.quantity);
-  
+
   return sanitized;
 };

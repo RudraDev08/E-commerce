@@ -202,11 +202,11 @@ const ProductVariantMapping = () => {
     );
 
     return (
-        <div className="min-h-screen bg-slate-50/50 font-sans text-slate-900 pb-20">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="min-h-screen bg-slate-50/50 font-sans text-slate-900 pb-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
 
                 {/* --- HEADER SECTION --- */}
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
                             Variant Mapping
@@ -234,7 +234,7 @@ const ProductVariantMapping = () => {
                 </div>
 
                 {/* --- TOOLBAR --- */}
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm mb-6 flex flex-col md:flex-row items-center p-1.5 gap-2">
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm mb-4 flex flex-col md:flex-row items-center p-1.5 gap-2">
                     {/* Search */}
                     <div className="relative flex-1 w-full md:w-auto">
                         <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -395,7 +395,7 @@ const ProductVariantMapping = () => {
 
                 {/* Footer Count */}
                 {!loading && filteredProducts.length > 0 && (
-                    <div className="mt-8 text-center">
+                    <div className="mt-4 text-center">
                         <span className="inline-block px-3 py-1 bg-white border border-slate-200 rounded-full text-xs font-medium text-slate-500">
                             Showing {filteredProducts.length} of {products.length} products
                         </span>
@@ -561,8 +561,8 @@ const ProductGridCard = ({ product, onClick }) => {
                                         setSelectedColor(color);
                                     }}
                                     className={`relative w-6 h-6 rounded-full cursor-pointer transition-all duration-300 ${isSelected
-                                            ? 'scale-110 shadow-sm ring-2 ring-indigo-600 ring-offset-2'
-                                            : 'hover:scale-110 ring-1 ring-slate-200'
+                                        ? 'scale-110 shadow-sm ring-2 ring-indigo-600 ring-offset-2'
+                                        : 'hover:scale-110 ring-1 ring-slate-200'
                                         }`}
                                     style={{ backgroundColor: color.hex }}
                                     title={color.name}

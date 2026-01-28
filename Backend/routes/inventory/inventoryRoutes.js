@@ -14,6 +14,7 @@ router.put('/inventory-master/:id', inventoryController.updateInventory.bind(inv
 
 // Stock Adjustment Routes
 router.patch('/inventory-master/adjust', inventoryController.adjustStock.bind(inventoryController));
+router.patch('/inventory-master/bulk-update', inventoryController.bulkUpdate.bind(inventoryController));
 router.post('/inventory-master/reserve', inventoryController.reserveStock.bind(inventoryController));
 router.post('/inventory-master/release-reserve', inventoryController.releaseReservedStock.bind(inventoryController));
 

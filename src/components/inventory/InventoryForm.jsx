@@ -4,6 +4,7 @@ import { generateSKU } from '../../utils/stockUtils';
 const InventoryForm = ({ onSubmit, onCancel, initialData = null, isLoading = false }) => {
   const [formData, setFormData] = useState({
     productId: '',
+    variantId: '',
     productName: '',
     sku: '',
     barcode: '',
@@ -35,7 +36,7 @@ const InventoryForm = ({ onSubmit, onCancel, initialData = null, isLoading = fal
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
-    
+
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: null }));
     }
@@ -52,7 +53,7 @@ const InventoryForm = ({ onSubmit, onCancel, initialData = null, isLoading = fal
 
   const validate = () => {
     const newErrors = {};
-    
+
     if (!formData.productId.trim()) newErrors.productId = 'Product ID is required';
     if (!formData.productName.trim()) newErrors.productName = 'Product name is required';
     if (!formData.sku.trim()) newErrors.sku = 'SKU is required';
@@ -61,7 +62,7 @@ const InventoryForm = ({ onSubmit, onCancel, initialData = null, isLoading = fal
     if (formData.maximumStockLevel <= formData.minimumStockLevel) {
       newErrors.maximumStockLevel = 'Maximum must be greater than minimum';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -92,6 +93,20 @@ const InventoryForm = ({ onSubmit, onCancel, initialData = null, isLoading = fal
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             />
             {errors.productId && <p className="text-red-500 text-xs mt-1">{errors.productId}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Variant ID <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="variantId"
+              value={formData.variantId}
+              onChange={handleChange}
+              disabled={initialData !== null}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            />
           </div>
 
           <div>

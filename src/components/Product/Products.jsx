@@ -83,6 +83,16 @@ const Products = () => {
       .reduce((sum, p) => sum + (p.price || 0), 0);
   };
 
+  const handleSelectAll = () => {
+    if (products.length === 0) return;
+    const allSelected = products.every(p => selectedProducts.includes(p._id));
+    if (allSelected) {
+      setSelectedProducts([]);
+    } else {
+      setSelectedProducts(products.map(p => p._id));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 p-4 md:p-6 lg:p-8">
       {/* Header */}
@@ -133,7 +143,14 @@ const Products = () => {
                 ))}
               </div>
             ) : (
-              <ProductTable products={products} selectedProducts={selectedProducts} onSelect={(id) => setSelectedProducts(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])} onEdit={handleEdit} onDelete={handleDelete} />
+              <ProductTable
+                products={products}
+                selectedProducts={selectedProducts}
+                onSelect={(id) => setSelectedProducts(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
+                onSelectAll={handleSelectAll}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
             )}
           </div>
         )}

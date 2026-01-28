@@ -4,7 +4,7 @@ import { formatDate, formatNumber, getTransactionTypeColor } from '../../utils/s
 
 const InventoryLedger = ({ isOpen, onClose, inventory }) => {
   const [filterType, setFilterType] = useState('');
-  const { ledger, loading } = useInventoryLedger(inventory?.productId);
+  const { ledger, loading } = useInventoryLedger(inventory?.productId?._id || inventory?.productId);
 
   if (!isOpen || !inventory) return null;
 
@@ -20,7 +20,7 @@ const InventoryLedger = ({ isOpen, onClose, inventory }) => {
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Inventory Ledger</h2>
             <p className="text-sm text-gray-500 mt-1">
-              {inventory.productName} ({inventory.sku})
+              {inventory?.productId?.name || inventory?.productName} ({inventory?.sku})
             </p>
           </div>
           <button
@@ -39,41 +39,37 @@ const InventoryLedger = ({ isOpen, onClose, inventory }) => {
             <span className="text-sm font-medium text-gray-700">Filter:</span>
             <button
               onClick={() => setFilterType('')}
-              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                filterType === ''
+              className={`px-3 py-1 rounded-full text-sm font-medium ${filterType === ''
                   ? 'bg-blue-600 text-white'
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
+                }`}
             >
               All
             </button>
             <button
               onClick={() => setFilterType('IN')}
-              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                filterType === 'IN'
+              className={`px-3 py-1 rounded-full text-sm font-medium ${filterType === 'IN'
                   ? 'bg-green-600 text-white'
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
+                }`}
             >
               IN
             </button>
             <button
               onClick={() => setFilterType('OUT')}
-              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                filterType === 'OUT'
+              className={`px-3 py-1 rounded-full text-sm font-medium ${filterType === 'OUT'
                   ? 'bg-red-600 text-white'
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
+                }`}
             >
               OUT
             </button>
             <button
               onClick={() => setFilterType('ADJUST')}
-              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                filterType === 'ADJUST'
+              className={`px-3 py-1 rounded-full text-sm font-medium ${filterType === 'ADJUST'
                   ? 'bg-blue-600 text-white'
                   : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
+                }`}
             >
               ADJUST
             </button>
@@ -120,9 +116,8 @@ const InventoryLedger = ({ isOpen, onClose, inventory }) => {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
                         <div>
                           <p className="text-xs text-gray-500">Quantity</p>
-                          <p className={`text-sm font-semibold ${
-                            entry.quantity > 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
+                          <p className={`text-sm font-semibold ${entry.quantity > 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
                             {entry.quantity > 0 ? '+' : ''}{formatNumber(entry.quantity)}
                           </p>
                         </div>

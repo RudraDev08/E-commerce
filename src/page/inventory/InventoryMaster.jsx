@@ -1,28 +1,31 @@
 import { useState } from 'react';
 import { useInventory } from '../../hooks/useInventory';
 import InventoryTable from '../../components/inventory/InventoryTable';
-import InventoryForm from '../../components/inventory/InventoryForm';
+import InventorySettingsModal from '../../components/inventory/InventorySettingsModal';
 import StockAdjustModal from '../../components/inventory/StockAdjustModal';
 import InventoryLedger from '../../components/inventory/InventoryLedger';
 import { formatNumber, formatCurrency } from '../../utils/stockUtils';
 
+import BulkStockEditor from '../../components/inventory/BulkStockEditor';
+
 const InventoryMaster = () => {
+  // Re-enable updateInventory from hook
   const {
     inventories,
     loading,
     error,
     stats,
     fetchInventories,
-    createInventory,
     updateInventory,
     adjustStock,
+    bulkUpdate, // From hook
   } = useInventory();
 
-  const [showForm, setShowForm] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showLedger, setShowLedger] = useState(false);
   const [selectedInventory, setSelectedInventory] = useState(null);
-  const [editMode, setEditMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [lowStockFilter, setLowStockFilter] = useState(false);
@@ -33,34 +36,29 @@ const InventoryMaster = () => {
     setTimeout(() => setNotification(null), 5000);
   };
 
-  const handleCreateNew = () => {
-    setSelectedInventory(null);
-    setEditMode(false);
-    setShowForm(true);
-  };
-
-  const handleEdit = (inventory) => {
+  const handleEditSettings = (inventory) => {
     setSelectedInventory(inventory);
-    setEditMode(true);
-    setShowForm(true);
+    setShowSettingsModal(true);
   };
 
-  const handleFormSubmit = async (data) => {
-    let result;
-    if (editMode && selectedInventory) {
-      result = await updateInventory(selectedInventory._id, data);
-    } else {
-      result = await createInventory(data);
-    }
-
+  const handleSettingsSubmit = async (data) => {
+    const result = await updateInventory(selectedInventory._id, data);
     if (result.success) {
-      setShowForm(false);
+      setShowSettingsModal(false);
       setSelectedInventory(null);
-      showNotification(
-        editMode ? 'Inventory updated successfully' : 'Inventory created successfully'
-      );
+      showNotification('Settings updated successfully');
     } else {
       showNotification(result.error, 'error');
+    }
+  };
+
+  const handleBulkSave = async (updates) => {
+    const result = await bulkUpdate({ updates, performedBy: 'ADMIN' });
+    if (result.success) {
+      setBulkMode(false);
+      showNotification(`Successfully updated ${result.data.updated} items`);
+    } else {
+      showNotification(result.error || 'Bulk update failed', 'error');
     }
   };
 
@@ -102,9 +100,12 @@ const InventoryMaster = () => {
 
   const filteredInventories = inventories.filter(item => {
     const matchesSearch = !searchTerm ||
-      item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.productId.toLowerCase().includes(searchTerm.toLowerCase());
+      item.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (typeof item.productId === 'object'
+        ? item.productId?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+        : item.productId?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
 
     const matchesStatus = !statusFilter || item.status === statusFilter;
     const matchesLowStock = !lowStockFilter || item.currentStock <= item.reorderLevel;
@@ -122,15 +123,17 @@ const InventoryMaster = () => {
               <h1 className="text-3xl font-bold text-gray-900">Inventory Master</h1>
               <p className="text-sm text-gray-500 mt-1">Manage your inventory stock and controls</p>
             </div>
-            <button
-              onClick={handleCreateNew}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add New Item
-            </button>
+            {!bulkMode && (
+              <button
+                onClick={() => setBulkMode(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                Bulk Stock Editor
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -139,8 +142,8 @@ const InventoryMaster = () => {
       {notification && (
         <div className="px-8 pt-4">
           <div className={`p-4 rounded-lg ${notification.type === 'error'
-              ? 'bg-red-50 border border-red-200 text-red-700'
-              : 'bg-green-50 border border-green-200 text-green-700'
+            ? 'bg-red-50 border border-red-200 text-red-700'
+            : 'bg-green-50 border border-green-200 text-green-700'
             }`}>
             <div className="flex items-center gap-2">
               {notification.type === 'error' ? (
@@ -224,23 +227,11 @@ const InventoryMaster = () => {
       {/* Main Content - UI LAYOUT FIX */}
       <div className="px-8 py-6">
         <div className="bg-white rounded-lg shadow">
-          {showForm ? (
-            <div className="p-6">
-              <div className="mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {editMode ? 'Edit Inventory Item' : 'Create New Inventory Item'}
-                </h2>
-              </div>
-              <InventoryForm
-                onSubmit={handleFormSubmit}
-                onCancel={() => {
-                  setShowForm(false);
-                  setSelectedInventory(null);
-                }}
-                initialData={editMode ? selectedInventory : null}
-                isLoading={loading}
-              />
-            </div>
+          {bulkMode ? (
+            <BulkStockEditor
+              onCancel={() => setBulkMode(false)}
+              onSave={handleBulkSave}
+            />
           ) : (
             <>
               {/* Filters */}
@@ -306,7 +297,7 @@ const InventoryMaster = () => {
                 ) : (
                   <InventoryTable
                     inventories={filteredInventories}
-                    onEdit={handleEdit}
+                    onEdit={handleEditSettings}
                     onAdjustStock={handleAdjustStock}
                     onViewLedger={handleViewLedger}
                     loading={loading}
@@ -326,6 +317,17 @@ const InventoryMaster = () => {
           setSelectedInventory(null);
         }}
         onSubmit={handleStockAdjustSubmit}
+        inventory={selectedInventory}
+        isLoading={loading}
+      />
+
+      <InventorySettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => {
+          setShowSettingsModal(false);
+          setSelectedInventory(null);
+        }}
+        onSubmit={handleSettingsSubmit}
         inventory={selectedInventory}
         isLoading={loading}
       />

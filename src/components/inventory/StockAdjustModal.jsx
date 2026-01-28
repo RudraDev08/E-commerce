@@ -90,7 +90,7 @@ const StockAdjustModal = ({ isOpen, onClose, onSubmit, inventory, isLoading }) =
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">Stock Adjustment</h2>
-            <p className="text-sm text-gray-500 mt-1">{inventory.productName} ({inventory.sku})</p>
+            <p className="text-sm text-gray-500 mt-1">{inventory.productId?.name || inventory.productName} ({inventory.sku})</p>
           </div>
           <button
             onClick={onClose}
@@ -131,33 +131,30 @@ const StockAdjustModal = ({ isOpen, onClose, onSubmit, inventory, isLoading }) =
               <button
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, transactionType: 'IN' }))}
-                className={`px-4 py-3 rounded-lg border-2 font-medium transition-colors ${
-                  formData.transactionType === 'IN'
+                className={`px-4 py-3 rounded-lg border-2 font-medium transition-colors ${formData.transactionType === 'IN'
                     ? 'border-green-500 bg-green-50 text-green-700'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 Stock IN
               </button>
               <button
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, transactionType: 'OUT' }))}
-                className={`px-4 py-3 rounded-lg border-2 font-medium transition-colors ${
-                  formData.transactionType === 'OUT'
+                className={`px-4 py-3 rounded-lg border-2 font-medium transition-colors ${formData.transactionType === 'OUT'
                     ? 'border-red-500 bg-red-50 text-red-700'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 Stock OUT
               </button>
               <button
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, transactionType: 'ADJUST' }))}
-                className={`px-4 py-3 rounded-lg border-2 font-medium transition-colors ${
-                  formData.transactionType === 'ADJUST'
+                className={`px-4 py-3 rounded-lg border-2 font-medium transition-colors ${formData.transactionType === 'ADJUST'
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 Adjustment
               </button>
@@ -178,7 +175,7 @@ const StockAdjustModal = ({ isOpen, onClose, onSubmit, inventory, isLoading }) =
               placeholder={formData.transactionType === 'ADJUST' ? 'Enter +/- quantity' : 'Enter quantity'}
             />
             <p className="text-xs text-gray-500 mt-1">
-              {formData.transactionType === 'ADJUST' 
+              {formData.transactionType === 'ADJUST'
                 ? 'Use positive for increase, negative for decrease'
                 : 'Enter positive number only'}
             </p>

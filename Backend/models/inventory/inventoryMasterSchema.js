@@ -2,11 +2,18 @@ import mongoose from 'mongoose';
 
 const inventoryMasterSchema = new mongoose.Schema({
   // Product Identification
+  // Product Identification
   productId: {
     type: String,
+    ref: 'Product',
     required: [true, 'Product ID is required'],
+    index: true
+  },
+  variantId: {
+    type: String, // Changed to String to prevent CastError on manual input
+    ref: 'ProductVariant',
+    required: [true, 'Variant ID is required'],
     unique: true,
-    trim: true,
     index: true
   },
   productName: {
@@ -27,7 +34,7 @@ const inventoryMasterSchema = new mongoose.Schema({
     trim: true,
     index: true
   },
-  
+
   // Unit of Measure
   unitOfMeasure: {
     type: String,
@@ -144,28 +151,28 @@ const inventoryMasterSchema = new mongoose.Schema({
 });
 
 // Virtual: Check if low stock
-inventoryMasterSchema.virtual('isLowStock').get(function() {
+inventoryMasterSchema.virtual('isLowStock').get(function () {
   return this.currentStock <= this.reorderLevel;
 });
 
 // Virtual: Check if needs reorder
-inventoryMasterSchema.virtual('needsReorder').get(function() {
+inventoryMasterSchema.virtual('needsReorder').get(function () {
   return this.autoReorderSuggestion && this.currentStock <= this.reorderLevel;
 });
 
 // Pre-save middleware: Calculate available stock and stock value
-inventoryMasterSchema.pre('save', function(next) {
+inventoryMasterSchema.pre('save', function (next) {
   // Calculate available stock
   this.availableStock = Math.max(0, this.currentStock - this.reservedStock);
-  
+
   // Calculate stock value
   this.stockValue = this.currentStock * this.costPrice;
-  
+
   // Auto block if zero stock and flag is enabled
   if (this.autoBlockOnZeroStock && this.currentStock === 0) {
     this.status = 'BLOCKED';
   }
-  
+
   this.lastStockUpdate = new Date();
   next();
 });

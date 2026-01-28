@@ -66,4 +66,18 @@ export const variantAPI = {
     getLowStock: () => api.get('/variants/low-stock'),
 };
 
+// Inventory APIs
+export const inventoryAPI = {
+    getAll: (params) => api.get('/inventory/inventory-master', { params }),
+    getById: (id) => api.get(`/inventory/inventory-master/${id}`),
+    create: (data) => api.post('/inventory/inventory-master', data),
+    update: (id, data) => api.put(`/inventory/inventory-master/${id}`, data),
+    adjustStock: (data) => api.patch('/inventory/inventory-master/adjust', data),
+    getStats: () => api.get('/inventory/inventory-master/stats'),
+    getLowStock: () => api.get('/inventory/inventory-master/low-stock'),
+    // Bulk update
+    bulkUpdate: (data) => api.patch('/inventory/inventory-master/bulk-update', data),
+    getLedger: (productId, params) => api.get(`/inventory/inventory-ledger/${productId}`, { params }),
+};
+
 export default api;

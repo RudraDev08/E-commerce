@@ -95,6 +95,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
         minStock: initialData.minStock || 5,
         stockStatus: initialData.stockStatus || 'in_stock',
         hasVariants: initialData.hasVariants || false,
+        variantType: initialData.variantType || 'SINGLE_COLOR',
         image: initialData.image || null,
         imagePreview: initialData.image ? `http://localhost:5000/uploads/${initialData.image.split(/[/\\]/).pop()}` : null,
         gallery: initialData.gallery || [],
@@ -114,7 +115,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
       name: '', sku: '', category: '', brand: '', productType: '',
       description: '', shortDescription: '',
       price: '', basePrice: '', currency: 'USD', taxClass: 'standard',
-      stock: '', minStock: 5, stockStatus: 'in_stock', hasVariants: false,
+      stock: '', minStock: 5, stockStatus: 'in_stock', hasVariants: false, variantType: 'SINGLE_COLOR',
       image: null, imagePreview: null,
       gallery: [], galleryPreviews: [],
       tags: '', metaTitle: '', metaDescription: '', status: 'active'
@@ -378,7 +379,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
                             type="number"
                             value={formData.price}
                             onChange={(e) => handleChange('price', e.target.value)}
-                            className="input-field pl-16 font-bold text-lg"
+                            className="input-field !pl-20 font-bold text-lg"
                             placeholder="0.00"
                           />
                         </div>
@@ -395,7 +396,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
                             type="number"
                             value={formData.basePrice}
                             onChange={(e) => handleChange('basePrice', e.target.value)}
-                            className="input-field pl-16 text-slate-500"
+                            className="input-field !pl-20 text-slate-500"
                             placeholder="0.00"
                           />
                         </div>
@@ -423,6 +424,37 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
                       <div className="w-14 h-7 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                     </label>
                   </div>
+
+                  {formData.hasVariants && (
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                      <label className="label">Variant Configuration Strategy</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div
+                          onClick={() => handleChange('variantType', 'SINGLE_COLOR')}
+                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.variantType === 'SINGLE_COLOR' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+                            <span className="font-bold text-slate-900">Single Color</span>
+                          </div>
+                          <p className="text-xs text-slate-500">Best for T-Shirts, Mobiles. (e.g. Red, Blue, Black)</p>
+                        </div>
+
+                        <div
+                          onClick={() => handleChange('variantType', 'COLORWAY')}
+                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${formData.variantType === 'COLORWAY' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+                        >
+                          <div className="flex items-center gap-1 mb-2">
+                            <div className="w-4 h-4 rounded-full bg-red-500 border border-white -mr-2 z-10"></div>
+                            <div className="w-4 h-4 rounded-full bg-black border border-white -mr-2 z-0"></div>
+                            <div className="w-4 h-4 rounded-full bg-white border border-slate-200 z-0"></div>
+                            <span className="font-bold text-slate-900 ml-2">Colorway</span>
+                          </div>
+                          <p className="text-xs text-slate-500">Best for Sneakers. (e.g. Chicago, Bred, Panda)</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {!formData.hasVariants && (
                     <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm grid grid-cols-2 gap-6">

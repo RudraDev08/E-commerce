@@ -44,18 +44,26 @@ class InventoryController {
    */
   async getAllInventories(req, res, next) {
     try {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+
       const filters = {
         status: req.query.status,
         search: req.query.search,
         lowStock: req.query.lowStock
       };
 
-      const inventories = await inventoryService.getAllInventoryMasters(filters);
+      const result = await inventoryService.getAllInventoryMasters(filters, page, limit);
 
       res.status(200).json({
         success: true,
-        count: inventories.length,
-        data: inventories
+        data: result.inventories,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          totalPages: result.totalPages,
+          limit
+        }
       });
     } catch (error) {
       next(error);
@@ -142,14 +150,37 @@ class InventoryController {
         }
       });
     } catch (error) {
-      if (error.message.includes('Insufficient stock') || 
-          error.message.includes('negative stock') ||
-          error.message === 'Inventory not found') {
+      if (error.message.includes('Insufficient stock') ||
+        error.message.includes('negative stock') ||
+        error.message === 'Inventory not found') {
         return res.status(400).json({
           success: false,
           message: error.message
         });
       }
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /inventory-master/bulk-update
+   * Bulk update stock
+   */
+  async bulkUpdate(req, res, next) {
+    try {
+      const { updates } = req.body; // Expects { updates: [{ variantId, newStock, reason }] }
+
+      if (!Array.isArray(updates)) {
+        return res.status(400).json({ success: false, message: 'updates must be an array' });
+      }
+
+      const result = await inventoryService.bulkUpdateInventories(updates, req.body.performedBy || 'ADMIN');
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
       next(error);
     }
   }

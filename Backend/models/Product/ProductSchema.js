@@ -55,6 +55,11 @@ const productSchema = new mongoose.Schema({
 
   // Inventory & Variants
   hasVariants: { type: Boolean, default: false },
+  variantType: {
+    type: String,
+    enum: ['SINGLE_COLOR', 'COLORWAY'],
+    default: 'SINGLE_COLOR'
+  },
   stock: { type: Number, default: 0, min: 0 }, // Only for simple products
   minStock: { type: Number, default: 5 },
   stockStatus: { type: String, enum: ['in_stock', 'out_of_stock', 'pre_order'], default: 'in_stock' },
@@ -62,6 +67,14 @@ const productSchema = new mongoose.Schema({
   // Media
   image: { type: String, default: "" }, // Primary
   gallery: [{ type: String }], // Additional images
+
+  // Attributes (Dynamic)
+  attributes: [{
+    key: { type: String, required: true }, // e.g. "Screen Type"
+    value: { type: String, required: true }, // e.g. "OLED"
+    group: { type: String, default: "Specifications" },
+    searchable: { type: Boolean, default: true }
+  }],
 
   // Metadata / SEO
   tags: [{ type: String }],
