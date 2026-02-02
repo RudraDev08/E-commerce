@@ -9,7 +9,8 @@ import {
     SparklesIcon,
     SwatchIcon,
     TagIcon,
-    XMarkIcon
+    XMarkIcon,
+    LockClosedIcon
 } from '@heroicons/react/24/outline';
 import { productAPI, sizeAPI, colorAPI, variantAPI } from '../../api/api';
 import toast, { Toaster } from 'react-hot-toast';
@@ -84,10 +85,19 @@ const VariantBuilder = () => {
                     }
                 } else {
                     // Single Color
-                    const cId = v.colorId || (typeof v.color === 'string' ? v.color : v.color?._id);
-                    const matchedColor = loadedColors.find(c => c._id === cId);
-                    displayColorName = v.attributes?.color || matchedColor?.name || 'N/A';
-                    displayHex = matchedColor?.hexCode || '#eee';
+                    // After populate, colorId is an object: { _id, name, hexCode }
+                    // Before populate, colorId is a string
+                    if (v.colorId && typeof v.colorId === 'object') {
+                        // Populated - use directly
+                        displayColorName = v.colorId.name || v.attributes?.color || 'N/A';
+                        displayHex = v.colorId.hexCode || '#eee';
+                    } else {
+                        // Not populated - fallback to matching from loadedColors
+                        const cId = v.colorId || (typeof v.color === 'string' ? v.color : v.color?._id);
+                        const matchedColor = loadedColors.find(c => c._id === cId);
+                        displayColorName = v.attributes?.color || matchedColor?.name || 'N/A';
+                        displayHex = matchedColor?.hexCode || '#eee';
+                    }
                 }
 
                 return {
@@ -761,18 +771,59 @@ const VariantBuilder = () => {
                                                         )}
                                                     </div>
 
-                                                    {/* TEXT IDENTITY */}
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
+                                                    {/* TEXT IDENTITY WITH LOCK INDICATOR */}
+                                                    <div className="flex-1">
+                                                        {/* Size (Bold, Editable for new variants) */}
+                                                        <div className="flex items-center gap-2 mb-1">
                                                             <span className="font-black text-slate-900 text-lg">{variant.sizeCode}</span>
-                                                            <span className="text-slate-300 text-xs">•</span>
-                                                            <span className="font-medium text-slate-600">{variant.displayColorName}</span>
+                                                            {!variant.isNew && (
+                                                                <div className="group/lock relative">
+                                                                    <LockClosedIcon className="w-3.5 h-3.5 text-slate-300" />
+                                                                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/lock:block z-50">
+                                                                        <div className="bg-slate-900 text-white text-xs font-medium px-3 py-2 rounded-lg shadow-xl whitespace-nowrap">
+                                                                            Size & Color are locked after creation
+                                                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                                                                                <div className="border-4 border-transparent border-t-slate-900"></div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        {variant.isColorway && (
-                                                            <div className="flex -space-x-1 mt-1">
-                                                                {variant.displayPalette.map((hex, i) => (
-                                                                    <div key={i} className="w-3 h-3 rounded-full border border-white" style={{ backgroundColor: hex }} />
-                                                                ))}
+
+                                                        {/* Color (Muted, Always Read-Only) */}
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-medium text-slate-500">
+                                                                {variant.displayColorName}
+                                                            </span>
+
+                                                            {/* Color Palette Preview for Colorways */}
+                                                            {variant.isColorway && (
+                                                                <div className="flex -space-x-1">
+                                                                    {variant.displayPalette.slice(0, 3).map((hex, i) => (
+                                                                        <div
+                                                                            key={i}
+                                                                            className="w-3 h-3 rounded-full border border-white shadow-sm"
+                                                                            style={{ backgroundColor: hex }}
+                                                                        />
+                                                                    ))}
+                                                                    {variant.displayPalette.length > 3 && (
+                                                                        <div className="w-3 h-3 rounded-full border border-white bg-slate-100 flex items-center justify-center">
+                                                                            <span className="text-[6px] font-bold text-slate-400">+{variant.displayPalette.length - 3}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Immutable Warning for Existing Variants */}
+                                                        {!variant.isNew && (
+                                                            <div className="mt-1.5 flex items-center gap-1.5">
+                                                                <div className="h-px flex-1 bg-slate-100"></div>
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                                    Locked
+                                                                </span>
+                                                                <div className="h-px flex-1 bg-slate-100"></div>
                                                             </div>
                                                         )}
                                                     </div>

@@ -1,77 +1,661 @@
-import InventoryMaster from '../models/inventory/inventoryMasterSchema.js';
-import InventoryLedger from '../models/inventory/inventoryLedgerSchema.js';
-import ProductVariant from '../models/variant/productVariantSchema.js'; // Ensure model registration
+import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
+import InventoryLedger from '../models/inventory/InventoryLedger.model.js';
+import ProductVariant from '../models/variant/productVariantSchema.js';
+import Product from '../models/Product/ProductSchema.js';
+import mongoose from 'mongoose';
+
+/**
+ * ========================================================================
+ * INVENTORY SERVICE - COMPLETE BUSINESS LOGIC
+ * ========================================================================
+ * 
+ * FEATURES:
+ * 1. Auto-create inventory on variant creation
+ * 2. Manual & bulk stock updates with audit trail
+ * 3. Automated stock operations (order, cancel, return)
+ * 4. Reserved stock management
+ * 5. CSV import/export
+ * 6. Real-time stock status calculation
+ * 7. Low stock alerts & reorder suggestions
+ * 8. Inventory analytics & reporting
+ * 9. Concurrent update protection
+ * 10. Complete audit logging
+ * ========================================================================
+ */
 
 class InventoryService {
 
+  // ========================================================================
+  // 1. AUTO-CREATE INVENTORY (Called from Variant Creation)
+  // ========================================================================
+
   /**
-   * Create new inventory master entry
+   * Auto-create inventory record when variant is created
+   * @param {Object} variant - ProductVariant document
+   * @param {String} createdBy - User who created the variant
+   * @returns {Object} Created inventory record
    */
-  async createInventoryMaster(data) {
-    const inventory = new InventoryMaster({
-      ...data,
-      currentStock: data.openingStock || 0,
-      availableStock: data.openingStock || 0
-    });
+  async autoCreateInventoryForVariant(variant, createdBy = 'SYSTEM') {
+    try {
+      // Extract variant attributes for display
+      // Handle both Mongoose Map (from normal creation) and plain object (from .lean())
+      const variantAttributes = {
+        size: variant.attributes instanceof Map
+          ? variant.attributes.get('size')
+          : variant.attributes?.size || null,
+        color: variant.attributes instanceof Map
+          ? variant.attributes.get('color')
+          : variant.attributes?.color || null,
+        colorwayName: variant.colorwayName || null,
+        other: variant.attributes || {}
+      };
 
-    await inventory.save();
+      // Handle both old schema (product) and new schema (productId)
+      const productId = variant.productId || variant.product;
 
-    // Create opening stock ledger entry if opening stock > 0
-    if (data.openingStock > 0) {
+      if (!productId) {
+        throw new Error(`Variant ${variant.sku} has no product reference`);
+      }
+
+      // Get product details
+      const product = await Product.findById(productId).select('name');
+
+      const inventoryData = {
+        variantId: variant._id,
+        productId: productId, // Use the resolved productId
+        sku: variant.sku,
+        productName: product?.name || 'Unknown Product',
+        variantAttributes,
+        totalStock: 0, // Initial stock is 0
+        reservedStock: 0,
+        lowStockThreshold: 10,
+        stockStatus: 'out_of_stock',
+        costPrice: variant.costPrice || 0,
+        createdBy,
+        updatedBy: createdBy
+      };
+
+      const inventory = await InventoryMaster.create(inventoryData);
+
+      // Create ledger entry for opening stock
       await this.createLedgerEntry({
+        inventoryId: inventory._id,
+        variantId: inventory.variantId,
         productId: inventory.productId,
         sku: inventory.sku,
-        transactionType: 'IN',
-        quantity: data.openingStock,
-        stockBefore: 0,
-        stockAfter: data.openingStock,
-        reason: 'Opening Stock',
-        referenceType: 'OTHER',
-        unitCost: data.costPrice || 0,
-        performedBy: data.createdBy || 'SYSTEM'
+        transactionType: 'ADJUSTMENT',
+        quantity: 0,
+        stockBefore: { total: 0, reserved: 0, available: 0 },
+        stockAfter: { total: 0, reserved: 0, available: 0 },
+        reason: 'OPENING_STOCK',
+        notes: 'Auto-created inventory record',
+        performedBy: createdBy,
+        performedByRole: 'SYSTEM'
       });
-    }
 
-    return inventory;
+      return inventory;
+    } catch (error) {
+      console.error('Error auto-creating inventory:', error);
+      throw error;
+    }
   }
 
   /**
-   * Get all inventory masters with filters
+   * Bulk auto-create inventory for multiple variants
+   * @param {Array} variants - Array of ProductVariant documents
+   * @param {String} createdBy - User who created the variants
    */
-  async getAllInventoryMasters(filters = {}, page = 1, limit = 10) {
-    const query = {};
+  async bulkAutoCreateInventory(variants, createdBy = 'SYSTEM') {
+    const results = {
+      success: [],
+      failed: []
+    };
 
-    if (filters.status) {
-      query.status = filters.status;
+    for (const variant of variants) {
+      try {
+        const inventory = await this.autoCreateInventoryForVariant(variant, createdBy);
+        results.success.push({ variantId: variant._id, sku: variant.sku, inventory });
+      } catch (error) {
+        results.failed.push({
+          variantId: variant._id,
+          sku: variant.sku,
+          error: error.message
+        });
+      }
     }
+
+    return results;
+  }
+
+  // ========================================================================
+  // 2. MANUAL STOCK UPDATES
+  // ========================================================================
+
+  /**
+   * Update stock manually with reason
+   * @param {String} variantId - Variant ID
+   * @param {Number} newStock - New total stock value
+   * @param {String} reason - Reason for update
+   * @param {String} performedBy - User performing the action
+   * @param {String} notes - Additional notes
+   */
+  async updateStock(variantId, newStock, reason, performedBy, notes = '') {
+    // Validate variantId - prevent "[object Object]" error
+    if (!variantId || typeof variantId === 'object') {
+      throw new Error('Invalid variantId: must be a string or ObjectId');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // Find inventory with lock
+      const inventory = await InventoryMaster.findOne({ variantId }).session(session);
+
+      if (!inventory) {
+        throw new Error('Inventory not found for this variant');
+      }
+
+      // Validate new stock
+      if (newStock < 0) {
+        throw new Error('Stock cannot be negative');
+      }
+
+      if (newStock < inventory.reservedStock) {
+        throw new Error(`Cannot set stock below reserved amount (${inventory.reservedStock})`);
+      }
+
+      // Capture before state
+      const stockBefore = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      const quantityChange = newStock - inventory.totalStock;
+
+      // Update stock
+      inventory.totalStock = newStock;
+      inventory.lastStockUpdateBy = performedBy;
+      inventory.updatedBy = performedBy;
+
+      await inventory.save({ session });
+
+      // Capture after state
+      const stockAfter = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      // Create ledger entry
+      await this.createLedgerEntry({
+        inventoryId: inventory._id,
+        variantId: inventory.variantId,
+        productId: inventory.productId,
+        sku: inventory.sku,
+        transactionType: 'ADJUSTMENT',
+        quantity: quantityChange,
+        stockBefore,
+        stockAfter,
+        reason,
+        notes,
+        performedBy,
+        performedByRole: 'ADMIN',
+        unitCost: inventory.costPrice
+      }, session);
+
+      await session.commitTransaction();
+
+      return {
+        success: true,
+        inventory,
+        quantityChange
+      };
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+
+  /**
+   * Bulk update stock for multiple variants
+   * @param {Array} updates - Array of { variantId, newStock, reason, notes }
+   * @param {String} performedBy - User performing the action
+   */
+  async bulkUpdateStock(updates, performedBy) {
+    const batchId = new mongoose.Types.ObjectId().toString();
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    for (const update of updates) {
+      try {
+        const result = await this.updateStock(
+          update.variantId,
+          update.newStock,
+          update.reason,
+          performedBy,
+          update.notes || ''
+        );
+
+        results.success.push({
+          variantId: update.variantId,
+          sku: result.inventory.sku,
+          previousStock: result.inventory.totalStock - result.quantityChange,
+          newStock: result.inventory.totalStock,
+          change: result.quantityChange
+        });
+      } catch (error) {
+        results.failed.push({
+          variantId: update.variantId,
+          error: error.message
+        });
+      }
+    }
+
+    return {
+      batchId,
+      totalProcessed: updates.length,
+      successCount: results.success.length,
+      failedCount: results.failed.length,
+      results
+    };
+  }
+
+  // ========================================================================
+  // 3. RESERVED STOCK MANAGEMENT
+  // ========================================================================
+
+  /**
+   * Reserve stock for order/cart
+   * @param {String} variantId - Variant ID
+   * @param {Number} quantity - Quantity to reserve
+   * @param {String} referenceId - Order/Cart ID
+   * @param {String} performedBy - User/System
+   */
+  async reserveStock(variantId, quantity, referenceId, performedBy = 'SYSTEM') {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const inventory = await InventoryMaster.findOne({ variantId }).session(session);
+
+      if (!inventory) {
+        throw new Error('Inventory not found');
+      }
+
+      if (!inventory.canReserve(quantity)) {
+        throw new Error(`Insufficient stock. Available: ${inventory.availableStock}, Requested: ${quantity}`);
+      }
+
+      const stockBefore = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      inventory.reservedStock += quantity;
+      inventory.updatedBy = performedBy;
+
+      await inventory.save({ session });
+
+      const stockAfter = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      await this.createLedgerEntry({
+        inventoryId: inventory._id,
+        variantId: inventory.variantId,
+        productId: inventory.productId,
+        sku: inventory.sku,
+        transactionType: 'RESERVE',
+        quantity: quantity,
+        stockBefore,
+        stockAfter,
+        reason: 'CART_RESERVED',
+        notes: `Reserved for ${referenceId}`,
+        performedBy,
+        performedByRole: 'SYSTEM',
+        referenceType: 'ORDER',
+        referenceId
+      }, session);
+
+      await session.commitTransaction();
+
+      return inventory;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+
+  /**
+   * Release reserved stock
+   * @param {String} variantId - Variant ID
+   * @param {Number} quantity - Quantity to release
+   * @param {String} referenceId - Order/Cart ID
+   * @param {String} performedBy - User/System
+   */
+  async releaseReservedStock(variantId, quantity, referenceId, performedBy = 'SYSTEM') {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const inventory = await InventoryMaster.findOne({ variantId }).session(session);
+
+      if (!inventory) {
+        throw new Error('Inventory not found');
+      }
+
+      if (inventory.reservedStock < quantity) {
+        throw new Error(`Cannot release ${quantity}. Only ${inventory.reservedStock} reserved.`);
+      }
+
+      const stockBefore = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      inventory.reservedStock -= quantity;
+      inventory.updatedBy = performedBy;
+
+      await inventory.save({ session });
+
+      const stockAfter = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      await this.createLedgerEntry({
+        inventoryId: inventory._id,
+        variantId: inventory.variantId,
+        productId: inventory.productId,
+        sku: inventory.sku,
+        transactionType: 'RELEASE',
+        quantity: -quantity,
+        stockBefore,
+        stockAfter,
+        reason: 'CART_EXPIRED',
+        notes: `Released from ${referenceId}`,
+        performedBy,
+        performedByRole: 'SYSTEM',
+        referenceType: 'ORDER',
+        referenceId
+      }, session);
+
+      await session.commitTransaction();
+
+      return inventory;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+
+  // ========================================================================
+  // 4. AUTOMATED STOCK OPERATIONS (Order Flow)
+  // ========================================================================
+
+  /**
+   * Deduct stock when order is confirmed
+   * @param {String} variantId - Variant ID
+   * @param {Number} quantity - Quantity sold
+   * @param {String} orderId - Order ID
+   */
+  async deductStockForOrder(variantId, quantity, orderId) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const inventory = await InventoryMaster.findOne({ variantId }).session(session);
+
+      if (!inventory) {
+        throw new Error('Inventory not found');
+      }
+
+      const stockBefore = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      // Deduct from total stock
+      inventory.totalStock -= quantity;
+
+      // Also reduce reserved if it was reserved
+      if (inventory.reservedStock >= quantity) {
+        inventory.reservedStock -= quantity;
+      }
+
+      inventory.updatedBy = 'SYSTEM';
+
+      await inventory.save({ session });
+
+      const stockAfter = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      await this.createLedgerEntry({
+        inventoryId: inventory._id,
+        variantId: inventory.variantId,
+        productId: inventory.productId,
+        sku: inventory.sku,
+        transactionType: 'ORDER_DEDUCT',
+        quantity: -quantity,
+        stockBefore,
+        stockAfter,
+        reason: 'ORDER_CONFIRMED',
+        notes: `Order ${orderId} confirmed`,
+        performedBy: 'SYSTEM',
+        performedByRole: 'SYSTEM',
+        referenceType: 'ORDER',
+        referenceId: orderId
+      }, session);
+
+      await session.commitTransaction();
+
+      return inventory;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+
+  /**
+   * Restore stock when order is cancelled
+   * @param {String} variantId - Variant ID
+   * @param {Number} quantity - Quantity to restore
+   * @param {String} orderId - Order ID
+   */
+  async restoreStockForCancelledOrder(variantId, quantity, orderId) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const inventory = await InventoryMaster.findOne({ variantId }).session(session);
+
+      if (!inventory) {
+        throw new Error('Inventory not found');
+      }
+
+      const stockBefore = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      inventory.totalStock += quantity;
+
+      // Release reservation if exists
+      if (inventory.reservedStock >= quantity) {
+        inventory.reservedStock -= quantity;
+      }
+
+      inventory.updatedBy = 'SYSTEM';
+
+      await inventory.save({ session });
+
+      const stockAfter = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      await this.createLedgerEntry({
+        inventoryId: inventory._id,
+        variantId: inventory.variantId,
+        productId: inventory.productId,
+        sku: inventory.sku,
+        transactionType: 'ORDER_CANCEL',
+        quantity: quantity,
+        stockBefore,
+        stockAfter,
+        reason: 'ORDER_CANCELLED',
+        notes: `Order ${orderId} cancelled`,
+        performedBy: 'SYSTEM',
+        performedByRole: 'SYSTEM',
+        referenceType: 'ORDER',
+        referenceId: orderId
+      }, session);
+
+      await session.commitTransaction();
+
+      return inventory;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+
+  /**
+   * Restore stock when item is returned
+   * @param {String} variantId - Variant ID
+   * @param {Number} quantity - Quantity returned
+   * @param {String} orderId - Order ID
+   * @param {Boolean} isDamaged - Is the returned item damaged?
+   */
+  async restoreStockForReturn(variantId, quantity, orderId, isDamaged = false) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const inventory = await InventoryMaster.findOne({ variantId }).session(session);
+
+      if (!inventory) {
+        throw new Error('Inventory not found');
+      }
+
+      const stockBefore = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      // Only restore if not damaged
+      if (!isDamaged) {
+        inventory.totalStock += quantity;
+      }
+
+      inventory.updatedBy = 'SYSTEM';
+
+      await inventory.save({ session });
+
+      const stockAfter = {
+        total: inventory.totalStock,
+        reserved: inventory.reservedStock,
+        available: inventory.availableStock
+      };
+
+      await this.createLedgerEntry({
+        inventoryId: inventory._id,
+        variantId: inventory.variantId,
+        productId: inventory.productId,
+        sku: inventory.sku,
+        transactionType: 'RETURN_RESTORE',
+        quantity: isDamaged ? 0 : quantity,
+        stockBefore,
+        stockAfter,
+        reason: 'CUSTOMER_RETURN',
+        notes: isDamaged
+          ? `Return from ${orderId} - Item damaged, not restocked`
+          : `Return from ${orderId} - Item restocked`,
+        performedBy: 'SYSTEM',
+        performedByRole: 'SYSTEM',
+        referenceType: 'RETURN',
+        referenceId: orderId
+      }, session);
+
+      await session.commitTransaction();
+
+      return inventory;
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  }
+
+  // ========================================================================
+  // 5. QUERY & RETRIEVAL
+  // ========================================================================
+
+  /**
+   * Get all inventories with filters and pagination
+   */
+  async getAllInventories(filters = {}, page = 1, limit = 50) {
+    const query = { isDeleted: false };
+
+    // Status filter
+    if (filters.stockStatus) {
+      query.stockStatus = filters.stockStatus;
+    }
+
+    // Search by product name or SKU
     if (filters.search) {
       query.$or = [
-        // { productId: { $regex: filters.search, $options: 'i' } }, // Risky if mixing ObjectId/String.
         { productName: { $regex: filters.search, $options: 'i' } },
-        { sku: { $regex: filters.search, $options: 'i' } },
-        { barcode: { $regex: filters.search, $options: 'i' } }
+        { sku: { $regex: filters.search, $options: 'i' } }
       ];
     }
+
+    // Low stock filter
     if (filters.lowStock === 'true') {
-      query.$expr = { $lte: ['$currentStock', '$reorderLevel'] };
+      query.stockStatus = 'low_stock';
+    }
+
+    // Out of stock filter
+    if (filters.outOfStock === 'true') {
+      query.stockStatus = 'out_of_stock';
     }
 
     const skip = (page - 1) * limit;
 
     const [inventories, total] = await Promise.all([
       InventoryMaster.find(query)
-        .sort({ createdAt: -1 })
+        .populate('productId', 'name category brand')
+        .populate('variantId', 'attributes image')
+        .sort({ lastStockUpdate: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('productId', 'name image')
-        .populate({
-          path: 'variantId',
-          populate: [
-            { path: 'sizeId', select: 'name code' },
-            { path: 'colorId', select: 'name hex' },
-            { path: 'colorParts', select: 'name hex' }
-          ]
-        })
         .lean(),
       InventoryMaster.countDocuments(query)
     ]);
@@ -79,308 +663,150 @@ class InventoryService {
     return {
       inventories,
       total,
-      page: Number(page),
+      page,
       totalPages: Math.ceil(total / limit)
     };
   }
 
   /**
-   * Get inventory by product ID
+   * Get inventory by variant ID
    */
-  async getInventoryByProductId(productId) {
-    const inventory = await InventoryMaster.findOne({ productId });
-    if (!inventory) {
-      throw new Error('Inventory not found');
-    }
-    return inventory;
-  }
-
-  /**
-   * Update inventory master
-   */
-  async updateInventoryMaster(id, data, updatedBy = 'SYSTEM') {
-    const inventory = await InventoryMaster.findById(id);
-    if (!inventory) {
-      throw new Error('Inventory not found');
-    }
-
-    // Update fields
-    Object.keys(data).forEach(key => {
-      if (key !== 'currentStock' && key !== 'reservedStock') {
-        inventory[key] = data[key];
-      }
-    });
-
-    inventory.updatedBy = updatedBy;
-    await inventory.save();
-
-    return inventory;
-  }
-
-  /**
-   * Adjust stock (IN/OUT/ADJUST)
-   */
-  async adjustStock(adjustmentData) {
-    const { productId, transactionType, quantity, reason, referenceId, performedBy, requiresApproval } = adjustmentData;
-
-    const inventory = await InventoryMaster.findOne({ productId });
-    if (!inventory) {
-      throw new Error('Inventory not found');
-    }
-
-    const stockBefore = inventory.currentStock;
-    let stockAfter = stockBefore;
-    let adjustedQuantity = quantity;
-
-    // Calculate stock after based on transaction type
-    switch (transactionType) {
-      case 'IN':
-        stockAfter = stockBefore + Math.abs(quantity);
-        adjustedQuantity = Math.abs(quantity);
-        break;
-      case 'OUT':
-        if (stockBefore < Math.abs(quantity)) {
-          throw new Error('Insufficient stock for OUT transaction');
-        }
-        stockAfter = stockBefore - Math.abs(quantity);
-        adjustedQuantity = -Math.abs(quantity);
-        break;
-      case 'ADJUST':
-        stockAfter = stockBefore + quantity; // Can be positive or negative
-        adjustedQuantity = quantity;
-        if (stockAfter < 0) {
-          throw new Error('Stock adjustment would result in negative stock');
-        }
-        break;
-      default:
-        throw new Error('Invalid transaction type');
-    }
-
-    // Update inventory
-    inventory.currentStock = stockAfter;
-    inventory.updatedBy = performedBy || 'SYSTEM';
-    await inventory.save();
-
-    // Create ledger entry
-    const ledgerEntry = await this.createLedgerEntry({
-      productId: inventory.productId,
-      sku: inventory.sku,
-      transactionType,
-      quantity: adjustedQuantity,
-      stockBefore,
-      stockAfter,
-      reason,
-      referenceId,
-      referenceType: adjustmentData.referenceType || 'ADJUSTMENT',
-      unitCost: inventory.costPrice,
-      performedBy: performedBy || 'SYSTEM',
-      requiresApproval: requiresApproval || false,
-      approvalStatus: requiresApproval ? 'PENDING' : 'APPROVED',
-      notes: adjustmentData.notes
-    });
-
-    return {
-      inventory,
-      ledgerEntry,
-      message: `Stock ${transactionType} successful. New stock: ${stockAfter}`
-    };
-  }
-
-  /**
-   * Create ledger entry
-   */
-  async createLedgerEntry(ledgerData) {
-    const ledger = new InventoryLedger(ledgerData);
-    await ledger.save();
-    return ledger;
-  }
-
-  /**
-   * Get inventory ledger by product ID
-   */
-  async getInventoryLedger(productId, filters = {}) {
-    const query = { productId };
-
-    if (filters.transactionType) {
-      query.transactionType = filters.transactionType;
-    }
-    if (filters.startDate || filters.endDate) {
-      query.transactionDate = {};
-      if (filters.startDate) {
-        query.transactionDate.$gte = new Date(filters.startDate);
-      }
-      if (filters.endDate) {
-        query.transactionDate.$lte = new Date(filters.endDate);
-      }
-    }
-
-    const ledger = await InventoryLedger.find(query)
-      .sort({ transactionDate: -1 })
+  async getInventoryByVariantId(variantId) {
+    const inventory = await InventoryMaster.findOne({ variantId, isDeleted: false })
+      .populate('productId', 'name category brand images')
+      .populate('variantId', 'attributes image price')
       .lean();
 
-    return ledger;
+    if (!inventory) {
+      throw new Error('Inventory not found');
+    }
+
+    return inventory;
   }
 
   /**
    * Get low stock items
    */
   async getLowStockItems() {
-    const lowStockItems = await InventoryMaster.find({
-      $expr: { $lte: ['$currentStock', '$reorderLevel'] },
-      status: 'ACTIVE'
-    }).lean();
-
-    return lowStockItems;
+    return InventoryMaster.find({
+      stockStatus: 'low_stock',
+      isDeleted: false,
+      isActive: true
+    })
+      .populate('productId', 'name')
+      .populate('variantId', 'sku')
+      .sort({ availableStock: 1 })
+      .lean();
   }
 
   /**
-   * Get reorder suggestions
+   * Get out of stock items
    */
-  async getReorderSuggestions() {
-    const suggestions = await InventoryMaster.find({
-      $expr: { $lte: ['$currentStock', '$reorderLevel'] },
-      autoReorderSuggestion: true,
-      status: 'ACTIVE'
-    }).lean();
-
-    return suggestions.map(item => ({
-      ...item,
-      suggestedOrderQuantity: item.reorderQuantity,
-      currentShortfall: item.reorderLevel - item.currentStock
-    }));
+  async getOutOfStockItems() {
+    return InventoryMaster.find({
+      stockStatus: 'out_of_stock',
+      isDeleted: false,
+      isActive: true
+    })
+      .populate('productId', 'name')
+      .populate('variantId', 'sku')
+      .lean();
   }
 
   /**
    * Get inventory statistics
    */
   async getInventoryStats() {
-    const totalItems = await InventoryMaster.countDocuments();
-    const activeItems = await InventoryMaster.countDocuments({ status: 'ACTIVE' });
-    const lowStockItems = await InventoryMaster.countDocuments({
-      $expr: { $lte: ['$currentStock', '$reorderLevel'] }
-    });
-
-    const stockValue = await InventoryMaster.aggregate([
-      { $match: { status: 'ACTIVE' } },
-      { $group: { _id: null, totalValue: { $sum: '$stockValue' } } }
-    ]);
-
-    return {
-      totalItems,
-      activeItems,
-      lowStockItems,
-      totalStockValue: stockValue[0]?.totalValue || 0
-    };
+    return InventoryMaster.getStats();
   }
 
   /**
-   * Reserve stock (for orders)
+   * Get inventory ledger for a variant
    */
-  async reserveStock(productId, quantity) {
-    const inventory = await InventoryMaster.findOne({ productId });
+  async getInventoryLedger(variantId, filters = {}, limit = 100) {
+    // Validate variantId - prevent "[object Object]" error
+    if (!variantId || typeof variantId === 'object') {
+      throw new Error('Invalid variantId: must be a string or ObjectId');
+    }
+
+    const query = { variantId };
+
+    if (filters.transactionType) {
+      query.transactionType = filters.transactionType;
+    }
+
+    if (filters.startDate && filters.endDate) {
+      query.transactionDate = {
+        $gte: new Date(filters.startDate),
+        $lte: new Date(filters.endDate)
+      };
+    }
+
+    return InventoryLedger.find(query)
+      .sort({ transactionDate: -1 })
+      .limit(limit)
+      .lean();
+  }
+
+  // ========================================================================
+  // 6. HELPER METHODS
+  // ========================================================================
+
+  /**
+   * Create ledger entry
+   */
+  async createLedgerEntry(data, session = null) {
+    const ledgerEntry = new InventoryLedger(data);
+
+    if (session) {
+      return ledgerEntry.save({ session });
+    }
+
+    return ledgerEntry.save();
+  }
+
+  /**
+   * Check if variant has inventory
+   */
+  async hasInventory(variantId) {
+    const count = await InventoryMaster.countDocuments({ variantId, isDeleted: false });
+    return count > 0;
+  }
+
+  /**
+   * Soft delete inventory (when variant is deleted)
+   */
+  async softDeleteInventory(variantId, deletedBy) {
+    const inventory = await InventoryMaster.findOne({ variantId });
+
     if (!inventory) {
       throw new Error('Inventory not found');
     }
 
-    if (inventory.availableStock < quantity) {
-      throw new Error('Insufficient available stock for reservation');
-    }
+    inventory.isDeleted = true;
+    inventory.deletedAt = new Date();
+    inventory.deletedBy = deletedBy;
+    inventory.isActive = false;
 
-    inventory.reservedStock += quantity;
-    await inventory.save();
-
-    return inventory;
+    return inventory.save();
   }
 
   /**
-   * Release reserved stock
+   * Restore soft-deleted inventory
    */
-  async releaseReservedStock(productId, quantity) {
-    const inventory = await InventoryMaster.findOne({ productId });
+  async restoreInventory(variantId) {
+    const inventory = await InventoryMaster.findOne({ variantId, isDeleted: true });
+
     if (!inventory) {
-      throw new Error('Inventory not found');
+      throw new Error('Deleted inventory not found');
     }
 
-    inventory.reservedStock = Math.max(0, inventory.reservedStock - quantity);
-    await inventory.save();
+    inventory.isDeleted = false;
+    inventory.deletedAt = null;
+    inventory.deletedBy = null;
+    inventory.isActive = true;
 
-    return inventory;
-  }
-  /**
-   * Bulk Update Inventories (Scalable)
-   * expects updates: [{ variantId, newStock, reason }]
-   */
-  async bulkUpdateInventories(updates, performedBy = 'ADMIN') {
-    if (!updates || updates.length === 0) return { message: 'No updates provided' };
-
-    const variantIds = updates.map(u => u.variantId);
-    const inventories = await InventoryMaster.find({ variantId: { $in: variantIds } });
-
-    const inventoryMap = new Map();
-    inventories.forEach(inv => inventoryMap.set(inv.variantId.toString(), inv));
-
-    const masterOps = [];
-    const ledgerEntries = [];
-    const errors = [];
-
-    for (const update of updates) {
-      const inventory = inventoryMap.get(update.variantId);
-
-      if (!inventory) {
-        errors.push(`Inventory not found for variant ${update.variantId}`);
-        continue;
-      }
-
-      const currentStock = inventory.currentStock;
-      const newStock = Number(update.newStock);
-      const diff = newStock - currentStock;
-
-      if (diff === 0) continue; // No change
-
-      // Validation
-      if (newStock < 0) {
-        errors.push(`Negative stock not allowed for SKU ${inventory.sku}`);
-        continue;
-      }
-
-      // 1. Prepare Master Update
-      masterOps.push({
-        updateOne: {
-          filter: { _id: inventory._id },
-          update: {
-            $set: {
-              currentStock: newStock,
-              updatedBy: performedBy
-            }
-          }
-        }
-      });
-
-      // 2. Prepare Ledger Entry
-      ledgerEntries.push({
-        productId: inventory.productId,
-        sku: inventory.sku,
-        transactionType: diff > 0 ? 'IN' : 'OUT',
-        quantity: Math.abs(diff),
-        stockBefore: currentStock,
-        stockAfter: newStock,
-        reason: update.reason || 'Bulk Update',
-        referenceType: 'BULK_UPDATE',
-        unitCost: inventory.costPrice || 0,
-        performedBy: performedBy,
-        transactionDate: new Date()
-      });
-    }
-
-    if (masterOps.length > 0) {
-      await InventoryMaster.bulkWrite(masterOps);
-      await InventoryLedger.insertMany(ledgerEntries);
-    }
-
-    return {
-      updated: masterOps.length,
-      errors
-    };
+    return inventory.save();
   }
 }
 

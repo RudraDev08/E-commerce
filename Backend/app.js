@@ -12,7 +12,7 @@ import pincodeRoutes from "./routes/pincodeRoutes.js";
 import categoryRoutes from "./routes/Category/CategoryRoutes.js";
 import brandRoutes from "./routes/Brands/BrandsRoutes.js";
 import productRoutes from "./routes/Product/ProductRoutes.js";
-import inventoryRoutes from "./routes/inventory/inventoryRoutes.js";
+import inventoryRoutes from "./routes/inventory/inventory.routes.js";
 import productTypeRoutes from "./routes/productType/productTypeRoutes.js";
 import attributeRoutes from "./routes/attribute/attributeRoutes.js";
 import variantRoutes from "./routes/variant/variantRoutes.js";

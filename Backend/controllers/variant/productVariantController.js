@@ -28,33 +28,12 @@ export const createVariant = async (req, res) => {
 
     // 4. Auto-Create Inventory Record
     try {
-      const inventoryData = {
-        productId: variant.productId,
-        variantId: variant._id,
-        productName: req.body.productName || 'Unknown Product', // Ideally fetch product name or pass it
-        sku: variant.sku,
-        unitOfMeasure: 'PCS',
-        openingStock: 0,
-        costPrice: variant.costPrice || 0, // Assuming costPrice might be in variant
-        minimumStockLevel: 5,
-        reorderLevel: 5
-      };
-
-      // We need to fetch product name if not provided, for the inventory schema requirement
-      // However, to keep it fast, we assume it's okay or we handle it in service.
-      // Wait, inventorySchema requires productName. 
-      // I should allow the service to handle "Unknown" if missing, or fetch it.
-      // Better: Since the variant creation is successful, we try to create inventory. 
-      // If it fails (e.g. missing name), we catch it but don't fail the variant creation?
-      // No, we should probably ensure integrity. But user wants "Auto".
-
-      // Let's import InventoryService at the top first.
-      await inventoryService.createInventoryMaster(inventoryData);
-
+      await inventoryService.autoCreateInventoryForVariant(variant, 'SYSTEM');
+      console.log(`✅ Inventory auto-created for variant ${variant.sku}`);
     } catch (invError) {
-      console.error("Auto-Inventory Creation Failed:", invError);
-      // Optional: Undo variant creation? Or just warn?
-      // For now, log it. The Admin can create it manually if it fails, or we assume it won't fail often.
+      console.error("❌ Auto-Inventory Creation Failed:", invError);
+      // Log error but don't fail variant creation
+      // Admin can manually create inventory if needed
     }
 
     res.status(201).json({ success: true, data: variant });
@@ -93,7 +72,10 @@ export const getVariants = async (req, res) => {
 
   const data = await ProductVariant
     .find(query)
-    .populate("productId", "name");
+    .populate("productId", "name")
+    .populate("sizeId", "code name")           // Populate size details
+    .populate("colorId", "name hexCode")       // Populate single color (for SINGLE_COLOR variants)
+    .populate("colorParts", "name hexCode");   // Populate colorway palette (for COLORWAY variants)
 
   res.json({ success: true, data });
 };
@@ -110,7 +92,17 @@ export const updateVariant = async (req, res) => {
 
 /* DELETE */
 export const deleteVariant = async (req, res) => {
-  await ProductVariant.findByIdAndDelete(req.params.id);
+  const variantId = req.params.id;
+  await ProductVariant.findByIdAndDelete(variantId);
+
+  // Also delete associated inventory
+  try {
+    const InventoryMaster = (await import("../../models/inventory/InventoryMaster.model.js")).default;
+    await InventoryMaster.findOneAndDelete({ variantId });
+  } catch (err) {
+    console.error("Error deleting inventory for variant:", err);
+  }
+
   res.json({ success: true, message: "Variant deleted" });
 };
 
