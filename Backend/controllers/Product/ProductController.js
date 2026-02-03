@@ -1,4 +1,6 @@
 import Product from '../../models/Product/ProductSchema.js';
+import Category from '../../models/Category/CategorySchema.js';
+import Brand from '../../models/Brands/BrandsSchema.js';
 import slugify from 'slugify';
 
 // --------------------------------------------------------------------------
@@ -192,9 +194,6 @@ export const createProduct = async (req, res) => {
     }
 
     // ===== VALIDATION 4: Category & Brand Existence =====
-    const Category = (await import('../../models/Category/CategorySchema.js')).default;
-    const Brand = (await import('../../models/Brands/BrandSchema.js')).default;
-
     const [categoryExists, brandExists] = await Promise.all([
       Category.findById(req.body.category),
       Brand.findById(req.body.brand)
@@ -268,6 +267,14 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Validation Error: ${messages.join(', ')}`
+      });
+    }
+
+    // Mongoose Cast Error (Invalid ID)
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid Data Type: ${error.message}`
       });
     }
 
