@@ -1,3 +1,4 @@
+
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,26 +15,56 @@ import {
   ChevronLeft,
   ChevronRight,
   Navigation,
-  Settings,
-  Palette
+  Palette,
+  ArrowRightLeft,
+  ClipboardCheck
 } from "lucide-react";
+
+// Configuration for sidebar menu items
+const MENU_ITEMS = [
+  { type: 'header', label: 'Main' },
+  { type: 'item', label: 'Dashboard', icon: LayoutGrid, path: '/' },
+
+  { type: 'header', label: 'Infrastructure' },
+  { type: 'item', label: 'Country', icon: Globe, path: '/country' },
+  { type: 'item', label: 'State', icon: MapPin, path: '/state' },
+  { type: 'item', label: 'City', icon: Building, path: '/city' },
+  { type: 'item', label: 'Pincode', icon: Hash, path: '/pincode' },
+
+  { type: 'header', label: 'Catalogue' },
+  { type: 'item', label: 'Categories', icon: Layers, path: '/categories' },
+  { type: 'item', label: 'Brands', icon: Tag, path: '/brands' },
+
+  { type: 'header', label: 'Products' },
+  { type: 'item', label: 'Products', icon: Package, path: '/products' },
+  { type: 'item', label: 'Size Management', icon: Ruler, path: '/size-management' },
+  { type: 'item', label: 'Color Management', icon: Palette, path: '/color-management' },
+  { type: 'item', label: 'Variant Mapping', icon: Layers, path: '/variant-mapping' },
+
+  { type: 'header', label: 'Inventory' },
+  { type: 'item', label: 'Inventory', icon: Map, path: '/inventory' },
+  { type: 'item', label: 'Warehouses', icon: Building, path: '/inventory/warehouses' },
+  { type: 'item', label: 'Stock Transfers', icon: ArrowRightLeft, path: '/inventory/transfers' },
+  { type: 'item', label: 'Inventory Audits', icon: ClipboardCheck, path: '/inventory/audits' },
+];
 
 const ProfessionalAside = ({ isExpanded, setIsExpanded }) => {
   const navigate = useNavigate();
 
-  // RESPONSIVE UI ENHANCEMENT: Close sidebar on mobile after navigation
+  // Close sidebar on mobile after navigation
   const handleNavigation = (path) => {
     navigate(path);
-    // BUG FIX: Safety check for window object
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       setIsExpanded(false);
     }
   };
 
-  // PREMIUM UI ENHANCEMENT: Clean enterprise sidebar with perfect collapsed state
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+  const sidebarX = isMobile && !isExpanded ? -72 : 0;
+
   return (
     <>
-      {/* RESPONSIVE UI ENHANCEMENT: Mobile overlay backdrop */}
+      {/* Mobile overlay backdrop */}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -50,12 +81,12 @@ const ProfessionalAside = ({ isExpanded, setIsExpanded }) => {
         initial={false}
         animate={{
           width: isExpanded ? 260 : 72,
-          x: typeof window !== 'undefined' && window.innerWidth < 1024 && !isExpanded ? -72 : 0
+          x: sidebarX
         }}
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
         className="h-screen bg-white border-r border-slate-200 flex flex-col fixed lg:sticky top-0 z-50 shadow-sm"
       >
-        {/* PREMIUM UI ENHANCEMENT: Clean brand section */}
+        {/* Brand Section */}
         <div className="h-16 flex items-center justify-center px-4 border-b border-slate-100">
           <AnimatePresence mode="wait">
             {isExpanded ? (
@@ -90,40 +121,29 @@ const ProfessionalAside = ({ isExpanded, setIsExpanded }) => {
           </AnimatePresence>
         </div>
 
-        {/* PREMIUM UI ENHANCEMENT: Clean navigation */}
+        {/* Navigation Items */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-1 custom-scrollbar">
-          <div className="pt-2 pb-1 px-3">
-            {isExpanded ? (
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Main
-              </p>
+          {MENU_ITEMS.map((item, index) => (
+            item.type === 'header' ? (
+              <Section
+                key={`header-${index}`}
+                label={item.label}
+                isExpanded={isExpanded}
+              />
             ) : (
-              <div className="w-full h-px bg-slate-200" />
-            )}
-          </div>
-          <Item icon={LayoutGrid} label="Dashboard" to="/" isExpanded={isExpanded} onNavigate={handleNavigation} />
-
-          <Section label="Infrastructure" isExpanded={isExpanded} />
-          <Item icon={Globe} label="Country" to="/country" isExpanded={isExpanded} onNavigate={handleNavigation} />
-          <Item icon={MapPin} label="State" to="/state" isExpanded={isExpanded} onNavigate={handleNavigation} />
-          <Item icon={Building} label="City" to="/city" isExpanded={isExpanded} onNavigate={handleNavigation} />
-          <Item icon={Hash} label="Pincode" to="/pincode" isExpanded={isExpanded} onNavigate={handleNavigation} />
-
-          <Section label="Catalogue" isExpanded={isExpanded} />
-          <Item icon={Layers} label="Categories" to="/categories" isExpanded={isExpanded} onNavigate={handleNavigation} />
-          <Item icon={Tag} label="Brands" to="/brands" isExpanded={isExpanded} onNavigate={handleNavigation} />
-
-          <Section label="Products" isExpanded={isExpanded} />
-          <Item icon={Package} label="Products" to="/products" isExpanded={isExpanded} onNavigate={handleNavigation} />
-          <Item icon={Ruler} label="Size Management" to="/size-management" isExpanded={isExpanded} onNavigate={handleNavigation} />
-          <Item icon={Palette} label="Color Management" to="/color-management" isExpanded={isExpanded} onNavigate={handleNavigation} />
-          <Item icon={Layers} label="Variant Mapping" to="/variant-mapping" isExpanded={isExpanded} onNavigate={handleNavigation} />
-
-          <Section label="Inventory" isExpanded={isExpanded} />
-          <Item icon={Map} label="Inventory" to="/inventory" isExpanded={isExpanded} onNavigate={handleNavigation} />
+              <Item
+                key={`item-${item.path}`}
+                icon={item.icon}
+                label={item.label}
+                to={item.path}
+                isExpanded={isExpanded}
+                onNavigate={handleNavigation}
+              />
+            )
+          ))}
         </div>
 
-        {/* PREMIUM UI ENHANCEMENT: Clean collapse button */}
+        {/* Collapse Button */}
         <div className="p-2 border-t border-slate-100">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
@@ -151,7 +171,6 @@ const Item = ({ icon: Icon, label, to, isExpanded, onNavigate }) => {
   const { pathname } = useLocation();
   const isActive = pathname === to || pathname.startsWith(`${to}/`);
 
-  // PREMIUM UI ENHANCEMENT: Clean item with perfect active state
   return (
     <button
       type="button"
@@ -165,7 +184,7 @@ const Item = ({ icon: Icon, label, to, isExpanded, onNavigate }) => {
         }
       `}
     >
-      {/* PREMIUM UI ENHANCEMENT: Clean active indicator */}
+      {/* Active Indicator Background */}
       {isActive && (
         <motion.div
           layoutId="activeIndicator"
@@ -174,12 +193,12 @@ const Item = ({ icon: Icon, label, to, isExpanded, onNavigate }) => {
         />
       )}
 
-      {/* PREMIUM UI ENHANCEMENT: Icon */}
+      {/* Icon */}
       <div className="relative z-10 flex items-center justify-center min-w-[20px]">
         <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className="transition-transform duration-200 group-hover:scale-110" />
       </div>
 
-      {/* PREMIUM UI ENHANCEMENT: Label */}
+      {/* Label */}
       <AnimatePresence mode="wait">
         {isExpanded && (
           <motion.span
@@ -194,7 +213,7 @@ const Item = ({ icon: Icon, label, to, isExpanded, onNavigate }) => {
         )}
       </AnimatePresence>
 
-      {/* PREMIUM UI ENHANCEMENT: Active dot */}
+      {/* Active Dot */}
       {isActive && isExpanded && (
         <motion.div
           initial={{ scale: 0 }}
@@ -207,7 +226,6 @@ const Item = ({ icon: Icon, label, to, isExpanded, onNavigate }) => {
 };
 
 const Section = ({ label, isExpanded }) => (
-  // PREMIUM UI ENHANCEMENT: Clean section headers
   <div className="pt-3 pb-1 px-3">
     {isExpanded ? (
       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">

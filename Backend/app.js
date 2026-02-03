@@ -16,19 +16,38 @@ import inventoryRoutes from "./routes/inventory/inventory.routes.js";
 import productTypeRoutes from "./routes/productType/productTypeRoutes.js";
 import attributeRoutes from "./routes/attribute/attributeRoutes.js";
 import variantRoutes from "./routes/variant/variantRoutes.js";
+import orderRoutes from "./routes/Order/OrderRoutes.js";
+import wishlistRoutes from "./routes/Wishlist/WishlistRoutes.js";
+
 import sizeRoutes from "./routes/size/sizeRoutes.js";
 import colorRoutes from "./routes/color/colorRoutes.js";
+import warehouseRoutes from "./routes/inventory/warehouse.routes.js";
+import stockTransferRoutes from "./routes/inventory/stockTransfer.routes.js";
+import binLocationRoutes from "./routes/inventory/binLocation.routes.js";
+import cycleCountRoutes from "./routes/inventory/cycleCount.routes.js";
 
 const app = express();
 
 /* ================= CORE MIDDLEWARE ================= */
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl} [${res.statusCode}] - ${duration}ms`);
+  });
+  next();
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",  // Admin Panel
+      "http://localhost:3000"   // Customer Website
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -56,8 +75,14 @@ app.use("/api/inventory", inventoryRoutes);
 app.use("/api/product-types", productTypeRoutes);
 app.use("/api/attributes", attributeRoutes);
 app.use("/api/variants", variantRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/sizes", sizeRoutes);
 app.use("/api/colors", colorRoutes);
+app.use("/api/warehouses", warehouseRoutes);
+app.use("/api/stock-transfers", stockTransferRoutes);
+app.use("/api/bin-locations", binLocationRoutes);
+app.use("/api/cycle-counts", cycleCountRoutes);
 /* ================= HEALTH ================= */
 
 app.get("/health", (req, res) => {

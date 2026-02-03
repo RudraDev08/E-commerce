@@ -51,6 +51,9 @@ router.post('/:variantId/reserve', inventoryController.reserveStock.bind(invento
 // Release reserved stock
 router.post('/:variantId/release', inventoryController.releaseReservedStock.bind(inventoryController));
 
+// Cleanup expired reservations
+router.post('/cleanup-reservations', inventoryController.cleanupExpiredReservations.bind(inventoryController));
+
 // ========================================================================
 // 4. AUTOMATED ORDER FLOW ROUTES
 // ========================================================================

@@ -43,7 +43,8 @@ class InventoryController {
                 stockStatus: req.query.stockStatus,
                 search: req.query.search,
                 lowStock: req.query.lowStock,
-                outOfStock: req.query.outOfStock
+                outOfStock: req.query.outOfStock,
+                warehouseId: req.query.warehouseId
             };
 
             const result = await inventoryService.getAllInventories(filters, page, limit);
@@ -218,8 +219,35 @@ class InventoryController {
     async updateStock(req, res) {
         try {
             const { variantId } = req.params;
-            const { newStock, reason, notes, performedBy } = req.body;
+            const { newStock, reason, notes, performedBy, warehouseId, updateType, quantity } = req.body;
 
+            // NEW: Warehouse Logic
+            if (warehouseId) {
+                if (!updateType || quantity === undefined) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'updateType and quantity are required when updating warehouse stock'
+                    });
+                }
+
+                const result = await inventoryService.updateLocationStock(
+                    variantId,
+                    warehouseId,
+                    updateType,
+                    parseInt(quantity),
+                    reason,
+                    performedBy || 'ADMIN',
+                    notes || ''
+                );
+
+                return res.status(200).json({
+                    success: true,
+                    message: 'Location stock updated successfully',
+                    data: result
+                });
+            }
+
+            // FALLBACK: Legacy Total Stock Update
             // Validation
             if (newStock === undefined || newStock === null) {
                 return res.status(400).json({
@@ -263,7 +291,8 @@ class InventoryController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to update stock',
-                error: error.message
+                error: error.message,
+                stack: error.stack
             });
         }
     }
@@ -404,6 +433,30 @@ class InventoryController {
             res.status(500).json({
                 success: false,
                 message: 'Failed to release reserved stock',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * POST /api/inventory/cleanup-reservations
+     * Cleanup expired reservations
+     */
+    async cleanupExpiredReservations(req, res) {
+        try {
+            const result = await inventoryService.cleanupExpiredReservations();
+
+            res.status(200).json({
+                success: true,
+                message: 'Expired reservations cleaned up',
+                count: result.length,
+                data: result
+            });
+        } catch (error) {
+            console.error('Error cleaning up reservations:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to cleanup reservations',
                 error: error.message
             });
         }

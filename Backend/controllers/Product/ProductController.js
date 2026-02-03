@@ -145,42 +145,132 @@ export const getProductById = async (req, res) => {
 };
 
 // --------------------------------------------------------------------------
-// CREATE
+// GET BY SLUG (For Customer Website)
 // --------------------------------------------------------------------------
+export const getProductBySlug = async (req, res) => {
+  try {
+    const product = await Product.findOne({ slug: req.params.slug, isDeleted: false })
+      .populate('category', 'name slug')
+      .populate('brand', 'name slug logo')
+      .populate('productType', 'name');
+
+    if (!product) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
+    res.json({ success: true, data: product });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // --------------------------------------------------------------------------
-// CREATE
+// CREATE (Enhanced with Validations)
 // --------------------------------------------------------------------------
 export const createProduct = async (req, res) => {
   try {
-    // Handle SKU Auto-generation if empty
+    // ===== VALIDATION 1: Required Fields =====
+    if (!req.body.name || !req.body.name.trim()) {
+      return res.status(400).json({ success: false, message: 'Product name is required' });
+    }
+
+    if (!req.body.category) {
+      return res.status(400).json({ success: false, message: 'Category is required' });
+    }
+
+    if (!req.body.brand) {
+      return res.status(400).json({ success: false, message: 'Brand is required' });
+    }
+
+    // ===== VALIDATION 2: Price Validation =====
+    const price = Number(req.body.price);
+    if (isNaN(price) || price < 0) {
+      return res.status(400).json({ success: false, message: 'Price must be a positive number' });
+    }
+
+    // ===== VALIDATION 3: Stock Validation =====
+    const stock = Number(req.body.stock || 0);
+    if (isNaN(stock) || stock < 0) {
+      return res.status(400).json({ success: false, message: 'Stock must be a positive number' });
+    }
+
+    // ===== VALIDATION 4: Category & Brand Existence =====
+    const Category = (await import('../../models/Category/CategorySchema.js')).default;
+    const Brand = (await import('../../models/Brands/BrandSchema.js')).default;
+
+    const [categoryExists, brandExists] = await Promise.all([
+      Category.findById(req.body.category),
+      Brand.findById(req.body.brand)
+    ]);
+
+    if (!categoryExists) {
+      return res.status(400).json({ success: false, message: 'Invalid category ID' });
+    }
+
+    if (!brandExists) {
+      return res.status(400).json({ success: false, message: 'Invalid brand ID' });
+    }
+
+    // ===== VALIDATION 5: Image Requirement =====
+    if (!req.files?.image && !req.body.image) {
+      return res.status(400).json({ success: false, message: 'At least one product image is required' });
+    }
+
+    // ===== SKU Auto-generation =====
     let sku = req.body.sku;
     if (!sku) {
-      // Robust SKU Generation: PROD-YEAR-RANDOM4
-      const random = Math.floor(1000 + Math.random() * 9000); // 4 digit random
+      const random = Math.floor(1000 + Math.random() * 9000);
       sku = `PROD-${new Date().getFullYear()}-${random}`;
     }
 
-    const payload = cleanBody({ ...req.body, sku }, req.files || {});
-
-    // Check SKU uniqueness
-    const existSku = await Product.findOne({ sku: payload.sku });
+    // ===== Check SKU Uniqueness =====
+    const existSku = await Product.findOne({ sku: sku.toUpperCase() });
     if (existSku) {
-      // If auto-generated one failed (rare), try one more time with timestamp
       if (!req.body.sku) {
-        payload.sku = `PROD-${Date.now()}`;
+        sku = `PROD-${Date.now()}`;
       } else {
-        return res.status(400).json({ success: false, message: `SKU ${payload.sku} already exists` });
+        return res.status(400).json({ success: false, message: `SKU ${sku} already exists` });
       }
     }
 
+    // ===== Calculate Discount Price =====
+    const basePrice = Number(req.body.basePrice || price);
+    const discount = Number(req.body.discount || 0);
+    const discountPrice = discount > 0 ? price - (price * discount / 100) : price;
+
+    // ===== Prepare Payload =====
+    const payload = cleanBody({ ...req.body, sku, discountPrice }, req.files || {});
+
+    // ===== Create Product =====
     const product = await Product.create(payload);
-    res.status(201).json({ success: true, message: MSG.CREATED, data: product });
+
+    res.status(201).json({
+      success: true,
+      message: MSG.CREATED,
+      data: {
+        productId: product._id,
+        slug: product.slug,
+        product
+      }
+    });
   } catch (error) {
     console.error("Create Product Error:", error);
+
     // MongoDB Duplicate Key Error
     if (error.code === 11000) {
-      return res.status(400).json({ success: false, message: 'Duplicate key error (Name or SKU)' });
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({
+        success: false,
+        message: `Duplicate ${field}: ${error.keyValue[field]} already exists`
+      });
     }
+
+    // Mongoose Validation Error
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        message: `Validation Error: ${messages.join(', ')}`
+      });
+    }
+
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -268,6 +358,29 @@ export const getProductStats = async (req, res) => {
       Product.countDocuments({ isDeleted: false, status: 'draft' })
     ]);
     res.json({ success: true, data: { total, active, lowStock, draft } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// --------------------------------------------------------------------------
+// GET FEATURED PRODUCTS (For Customer Website)
+// --------------------------------------------------------------------------
+export const getFeaturedProducts = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 8;
+
+    const products = await Product.find({
+      featured: true,
+      status: 'active',
+      isDeleted: false
+    })
+      .populate('category', 'name slug')
+      .populate('brand', 'name slug logo')
+      .sort({ createdAt: -1 })
+      .limit(limit);
+
+    res.json({ success: true, data: products });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

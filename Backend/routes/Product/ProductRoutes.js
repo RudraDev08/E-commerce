@@ -2,6 +2,8 @@ import express from 'express';
 import {
   getProducts,
   getProductById,
+  getProductBySlug,
+  getFeaturedProducts,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -17,11 +19,15 @@ const router = express.Router();
 // Stats
 router.get("/stats", getProductStats);
 
+// Featured Products (Customer Website)
+router.get("/featured", getFeaturedProducts);
+
 // Bulk Actions
 router.post('/bulk-delete', bulkDeleteProducts);
 
 // CRUD
 router.get('/', getProducts);
+router.get('/slug/:slug', getProductBySlug); // Get by slug for customer website
 router.get('/:id', getProductById);
 
 router.post(

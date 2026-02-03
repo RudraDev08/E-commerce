@@ -20,6 +20,9 @@ import ColorManagement from "./page/color/ColorManagement";
 import VariantManagement from "./page/variant/VariantManagement";
 import ProductVariantMapping from "./page/variant/ProductVariantMapping";
 import VariantBuilder from "./page/variant/VariantBuilder";
+import WarehouseManagement from "./components/inventory/WarehouseManagement";
+import StockTransferManagement from "./components/inventory/StockTransferManagement";
+import CycleCountManagement from "./components/inventory/CycleCountManagement";
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -97,6 +100,9 @@ function App() {
 
               {/* inventory */}
               <Route path="/inventory" element={<InventoryMaster />} />
+              <Route path="/inventory/warehouses" element={<WarehouseManagement />} />
+              <Route path="/inventory/transfers" element={<StockTransferManagement />} />
+              <Route path="/inventory/audits" element={<CycleCountManagement />} />
 
               {/* CATEGORY SELECTOR DEMO */}
               <Route path="/category-selector-demo" element={<CategorySelectorDemo />} />

@@ -49,9 +49,12 @@ const productSchema = new mongoose.Schema({
   // Pricing
   price: { type: Number, required: true, min: 0 }, // Selling Price
   basePrice: { type: Number, default: 0, min: 0 }, // MRP / Compare At
+  discount: { type: Number, default: 0, min: 0, max: 100 }, // Discount percentage
+  discountPrice: { type: Number, default: 0, min: 0 }, // Final price after discount
   dateStart: { type: Date },
   dateEnd: { type: Date },
   taxClass: { type: String, default: "standard" },
+  tax: { type: Number, default: 0, min: 0 }, // Tax percentage
 
   // Inventory & Variants
   hasVariants: { type: Boolean, default: false },
@@ -77,10 +80,12 @@ const productSchema = new mongoose.Schema({
   }],
 
   // Metadata / SEO
+  featured: { type: Boolean, default: false, index: true }, // Featured products
   tags: [{ type: String }],
   metaTitle: { type: String, default: "" },
   metaDescription: { type: String, default: "" },
   metaKeywords: { type: String, default: "" },
+  seoUrl: { type: String, default: "" }, // Custom SEO URL if different from slug
 
   // System
   status: {

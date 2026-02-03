@@ -267,7 +267,7 @@ const inventoryLedgerSchema = new mongoose.Schema({
 // PRE-SAVE MIDDLEWARE
 // ========================================================================
 
-inventoryLedgerSchema.pre('save', function (next) {
+inventoryLedgerSchema.pre('save', async function () {
     // Calculate total value
     this.totalValue = Math.abs(this.quantity) * this.unitCost;
 
@@ -276,8 +276,6 @@ inventoryLedgerSchema.pre('save', function (next) {
         this.requiresApproval = true;
         this.approvalStatus = 'PENDING';
     }
-
-    next();
 });
 
 // ========================================================================

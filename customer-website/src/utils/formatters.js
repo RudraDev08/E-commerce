@@ -1,0 +1,96 @@
+/**
+ * Utility functions for formatting data
+ */
+
+// Format currency
+export const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(amount);
+};
+
+// Format date
+export const formatDate = (date) => {
+    return new Intl.DateTimeFormat('en-IN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    }).format(new Date(date));
+};
+
+// Format date with time
+export const formatDateTime = (date) => {
+    return new Intl.DateTimeFormat('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(new Date(date));
+};
+
+// Get image URL
+export const getImageUrl = (imagePath) => {
+    if (!imagePath) return '/placeholder.jpg';
+    if (imagePath.startsWith('http')) return imagePath;
+    const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || 'http://localhost:5000/uploads';
+    return `${uploadsUrl}/${imagePath}`;
+};
+
+// Truncate text
+export const truncateText = (text, maxLength = 100) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+};
+
+// Generate slug from text
+export const generateSlug = (text) => {
+    return text
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/[\s_-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+};
+
+// Calculate discount percentage
+export const calculateDiscount = (originalPrice, salePrice) => {
+    if (!originalPrice || !salePrice || originalPrice <= salePrice) return 0;
+    return Math.round(((originalPrice - salePrice) / originalPrice) * 100);
+};
+
+// Check if product is in stock
+export const isInStock = (stock) => {
+    return stock > 0;
+};
+
+// Get stock status
+export const getStockStatus = (stock) => {
+    if (stock === 0) return 'Out of Stock';
+    if (stock < 5) return 'Low Stock';
+    return 'In Stock';
+};
+
+// Get stock badge color
+export const getStockBadgeColor = (stock) => {
+    if (stock === 0) return 'red';
+    if (stock < 5) return 'orange';
+    return 'green';
+};
+
+export default {
+    formatCurrency,
+    formatDate,
+    formatDateTime,
+    getImageUrl,
+    truncateText,
+    generateSlug,
+    calculateDiscount,
+    isInStock,
+    getStockStatus,
+    getStockBadgeColor
+};

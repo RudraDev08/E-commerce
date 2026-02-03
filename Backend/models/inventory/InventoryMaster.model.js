@@ -32,7 +32,7 @@ const inventoryMasterSchema = new mongoose.Schema({
         ref: 'ProductVariant',
         required: [true, 'Variant ID is required'],
         unique: true,
-        index: true,
+        // index: true, // Redundant with unique: true
         immutable: true // Cannot be changed after creation
     },
 
@@ -50,7 +50,7 @@ const inventoryMasterSchema = new mongoose.Schema({
         unique: true,
         uppercase: true,
         trim: true,
-        index: true,
+        // index: true, // Redundant with unique: true
         immutable: true // SKU never changes
     },
 
@@ -98,6 +98,15 @@ const inventoryMasterSchema = new mongoose.Schema({
         }
     },
 
+    // Track individual reservations
+    reservations: [{
+        cartId: { type: String, required: true },
+        quantity: { type: Number, required: true, min: 1 },
+        reservedAt: { type: Date, default: Date.now },
+        expiresAt: { type: Date, required: true },
+        userId: { type: String }
+    }],
+
     // Virtual field: availableStock = totalStock - reservedStock
     // Calculated in real-time, not stored
 
@@ -133,9 +142,20 @@ const inventoryMasterSchema = new mongoose.Schema({
         index: true
     },
 
+    // ========================================================================
+    // 5.1 MULTI-LOCATION SUPPORT (Phase 3)
+    // ========================================================================
+
+    locations: [{
+        warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', required: true },
+        stock: { type: Number, default: 0, min: 0 },
+        rack: { type: String, trim: true },
+        bin: { type: String, trim: true }
+    }],
+
     locationCode: {
         type: String,
-        default: 'A-01-01', // Aisle-Rack-Bin
+        default: 'A-01-01', // Legacy/Default location
         trim: true
     },
 
@@ -299,6 +319,16 @@ inventoryMasterSchema.pre('save', async function () {
     // 4. Increment version for optimistic locking
     if (this.isModified('totalStock') || this.isModified('reservedStock')) {
         this.version += 1;
+    }
+
+    // 5. Sync totalStock with locations if locations are modified
+    if (this.isModified('locations') && this.locations.length > 0) {
+        const locationTotal = this.locations.reduce((sum, loc) => sum + loc.stock, 0);
+        // If we are explicitly managing locations, the total should match
+        // However, legacy flows might update totalStock directly.
+        // Rule: If locations specific update happened, trust it? 
+        // Safer: Logic in Service should handle this sync. 
+        // Here we just ensure we don't have negative locations
     }
 });
 

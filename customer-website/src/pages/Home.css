@@ -1,0 +1,285 @@
+/* ========================================
+   HOME PAGE STYLES - Zepto Theme
+   ======================================== */
+
+.home-page {
+    min-height: 100vh;
+    padding-bottom: 4rem;
+    background: white;
+}
+
+/* 1. Category Carousel (Top) */
+.category-carousel-section {
+    padding: 2rem 0;
+}
+
+.category-scroll-container {
+    display: flex;
+    gap: 1.5rem;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    scrollbar-width: none;
+}
+
+.category-scroll-container::-webkit-scrollbar {
+    display: none;
+}
+
+.category-carousel-item {
+    min-width: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    text-decoration: none;
+    transition: transform var(--transition-base);
+}
+
+.category-carousel-item:hover {
+    transform: translateY(-5px);
+}
+
+.cat-image-wrapper {
+    width: 100px;
+    height: 100px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-xl);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+}
+
+.cat-image-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 10px;
+}
+
+.cat-name-home {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+    max-width: 100px;
+}
+
+/* 2. Promo Banners */
+.promo-banners-section {
+    padding: 1rem 0 3rem;
+}
+
+.banners-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.promo-banner {
+    border-radius: var(--radius-xl);
+    padding: 2.5rem;
+    position: relative;
+    overflow: hidden;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    transition: transform var(--transition-base);
+}
+
+.promo-banner:hover {
+    transform: scale(1.02);
+}
+
+.banner-1 {
+    background: var(--gradient-banner-1);
+}
+
+.banner-2 {
+    background: var(--gradient-banner-2);
+    color: var(--primary-900);
+    /* Dark text for light background */
+}
+
+.banner-content {
+    position: relative;
+    z-index: 2;
+    max-width: 60%;
+}
+
+.banner-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+}
+
+.banner-subtitle {
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.9;
+}
+
+.banner-btn {
+    display: inline-block;
+    background: black;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-lg);
+    font-weight: 700;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.banner-image {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    width: 40%;
+    object-fit: contain;
+    opacity: 0.9;
+}
+
+/* 3. Product Horizontal Section */
+.product-section {
+    padding: 2rem 0;
+    border-top: 1px solid var(--border-light);
+}
+
+.section-header-home {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.section-title-home {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.see-all-link {
+    color: var(--accent-pink);
+    font-weight: 700;
+    text-decoration: none;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.product-horizontal-list {
+    display: flex;
+    gap: 1.5rem;
+    overflow-x: auto;
+    padding: 0.5rem;
+    scrollbar-width: none;
+}
+
+.product-horizontal-list::-webkit-scrollbar {
+    display: none;
+}
+
+.product-card-home {
+    min-width: 200px;
+    max-width: 200px;
+    background: white;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    position: relative;
+    transition: all var(--transition-base);
+}
+
+.product-card-home:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-200);
+}
+
+.pc-image-wrapper {
+    height: 140px;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pc-image-wrapper img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.pc-details h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-primary);
+}
+
+.pc-weight {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.pc-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pc-price {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.pc-price-old {
+    font-size: 0.8rem;
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+    margin-left: 0.25rem;
+}
+
+.pc-add-btn {
+    border: 1px solid var(--accent-pink);
+    color: var(--accent-pink);
+    background: white;
+    padding: 0.4rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    text-transform: uppercase;
+}
+
+.pc-add-btn:hover {
+    background: var(--accent-light-pink);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .banners-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .promo-banner {
+        min-height: 180px;
+    }
+
+    .banner-title {
+        font-size: 1.5rem;
+    }
+}
