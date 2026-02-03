@@ -9,7 +9,7 @@ const Header = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const { getCartCount } = useCart();
     const { wishlist } = useWishlist();
-    const { isAuthenticated, user, logout } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const navigate = useNavigate();
 
     const handleSearch = (e) => {
@@ -23,25 +23,28 @@ const Header = () => {
     return (
         <header className="header">
             <div className="container header-container">
-                {/* 1. Logo */}
-                <div className="header-logo">
-                    <Link to="/">zepto</Link>
+                {/* Left Section: Logo & Location */}
+                <div className="header-left">
+                    <div className="header-logo">
+                        <Link to="/">zepto</Link>
+                    </div>
+                    <div className="vertical-divider"></div>
+                    <div className="u-location-block">
+                        <div className="u-delivery-time">
+                            10 minutes delivery
+                        </div>
+                        <div className="u-location-selector">
+                            New York, USA <span className="arrow-down">▼</span>
+                        </div>
+                    </div>
                 </div>
 
-                {/* 2. Delivery Info (Mock) */}
-                <div className="delivery-info">
-                    <div className="delivery-time">
-                        <span role="img" aria-label="lightning">⚡</span> 10 minutes
-                    </div>
-                    <div className="delivery-location">
-                        New York, USA (Mock Location) ▼
-                    </div>
-                </div>
-
-                {/* 3. Search Bar */}
-                <div className="search-container">
+                {/* Center Section: Search */}
+                <div className="header-center">
                     <form onSubmit={handleSearch} className="search-input-wrapper">
-                        <span className="search-icon">🔍</span>
+                        <span className="search-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        </span>
                         <input
                             type="text"
                             placeholder="Search for 'milk'"
@@ -52,38 +55,38 @@ const Header = () => {
                     </form>
                 </div>
 
-                {/* 4. User Actions */}
-                <div className="header-actions">
+                {/* Right Section: Icons */}
+                <div className="header-right">
                     {isAuthenticated ? (
-                        <div className="action-item" style={{ cursor: 'pointer' }} onClick={() => navigate('/profile')}>
-                            <span className="action-icon">👤</span>
-                            <span className="action-text">{user?.name?.split(' ')[0] || 'Profile'}</span>
-                        </div>
+                        <Link to="/profile" className="icon-link" aria-label="Profile">
+                            <span className="icon-wrapper">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            </span>
+                            <span className="icon-label">Profile</span>
+                        </Link>
                     ) : (
-                        <Link to="/login" className="action-item">
-                            <span className="action-icon">👤</span>
-                            <span className="action-text">Login</span>
+                        <Link to="/login" className="icon-link" aria-label="Login">
+                            <span className="icon-wrapper">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            </span>
+                            <span className="icon-label">Login</span>
                         </Link>
                     )}
 
-                    <Link to="/wishlist" className="action-item">
-                        <div className="cart-icon-wrapper">
-                            <span className="action-icon">❤️</span>
-                            {wishlist.length > 0 && (
-                                <span className="cart-badge">{wishlist.length}</span>
-                            )}
+                    <Link to="/wishlist" className="icon-link" aria-label="Saved">
+                        <div className="icon-wrapper">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                            {wishlist.length > 0 && <span className="icon-badge">{wishlist.length}</span>}
                         </div>
-                        <span className="action-text">Saved</span>
+                        <span className="icon-label">Saved</span>
                     </Link>
 
-                    <Link to="/cart" className="action-item">
-                        <div className="cart-icon-wrapper">
-                            <span className="action-icon">🛒</span>
-                            {getCartCount() > 0 && (
-                                <span className="cart-badge">{getCartCount()}</span>
-                            )}
+                    <Link to="/cart" className="icon-link" aria-label="Cart">
+                        <div className="icon-wrapper">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                            {getCartCount() > 0 && <span className="icon-badge">{getCartCount()}</span>}
                         </div>
-                        <span className="action-text">Cart</span>
+                        <span className="icon-label">Cart</span>
                     </Link>
                 </div>
             </div>

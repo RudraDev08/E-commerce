@@ -509,21 +509,29 @@ export const softDelete = async (req, res) => {
       });
     }
 
-    // PERFORM HARD DELETE (Permanently remove from DB)
-    const category = await Category.findByIdAndDelete(req.params.id);
+    // PERFORM SOFT DELETE (Set isDeleted flag)
+    const category = await Category.findByIdAndUpdate(
+      req.params.id,
+      {
+        isDeleted: true,
+        status: 'inactive', // Optionally also set inactive
+        deletedAt: new Date(),
+        updatedBy: req.user?.name || 'admin'
+      },
+      { new: true }
+    );
 
     if (!category) {
       return res.status(404).json({
         success: false,
-        message: "Category not found or already deleted"
+        message: "Category not found"
       });
     }
 
-    // Optional: We could also delete associated image files here if needed
-
     res.json({
       success: true,
-      message: "Category permanently deleted from database"
+      message: "Category moved to trash",
+      data: category
     });
   } catch (error) {
     console.error('Delete category error:', error);

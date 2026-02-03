@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getFeaturedCategories, getCategories } from '../api/categoryApi';
+import { getCategories } from '../api/categoryApi';
 import { getFeaturedProducts } from '../api/productApi';
 import { useCart } from '../context/CartContext';
 import { formatCurrency, getImageUrl } from '../utils/formatters';
 import HeroSlider from '../components/home/HeroSlider';
+import CategorySlider from '../components/home/CategorySlider';
 import CountdownTimer from '../components/common/CountdownTimer';
 import './Home.css';
 
@@ -17,12 +18,14 @@ const Home = () => {
         const fetchData = async () => {
             try {
                 // Fetch Categories for Top Carousel
-                const catRes = await getCategories(); // Get all to be safe or featured
-                setCategories(catRes.data.data || []);
+                const catRes = await getCategories();
+                // Show ONLY sub-categories (e.g. Women Clothing, Men Clothing) as requested
+                const subCategories = (catRes.data || []).filter(cat => cat.parentId);
+                setCategories(subCategories);
 
-                // Fetch Featured Products for "Freshly Picked" or similar section
+                // Fetch Featured Products
                 const prodRes = await getFeaturedProducts(10);
-                setFeaturedProducts(prodRes.data.data || []);
+                setFeaturedProducts(prodRes.data || []);
 
             } catch (error) {
                 console.error("Error loading home data:", error);
@@ -74,63 +77,70 @@ const Home = () => {
                 {/* 1. Hero Slider (Main Banner) */}
                 <HeroSlider />
 
-                {/* 2. Category Showcase (Horizontal Scroll) */}
+                {/* 2. Category Showcase (Auto Slider) */}
                 <section className="category-carousel-section">
                     <div className="section-header-home">
                         <h2 className="section-title-home">Shop by Category</h2>
                     </div>
-                    <div className="category-scroll-container">
-                        {categories.map(cat => (
-                            <Link to={`/category/${cat.slug}`} key={cat._id} className="category-carousel-item">
-                                <div className="cat-image-wrapper">
-                                    <img
-                                        src={getImageUrl(cat.image)}
-                                        alt={cat.name}
-                                        onError={(e) => { e.target.src = `https://placehold.co/100x100?text=${cat.name[0]}`; }}
-                                    />
-                                </div>
-                                <span className="cat-name-home">{cat.name}</span>
-                            </Link>
-                        ))}
-                    </div>
+                    <CategorySlider categories={categories} />
                 </section>
 
-                {/* 3. Flash Sale Section (New) */}
-                <section className="product-section" style={{ background: '#fff1f2', margin: '0 -2000px', padding: '2rem 2000px' }}>
-                    <div className="section-header-home">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <h2 className="section-title-home" style={{ color: '#be123c' }}>⚡ Flash Sale</h2>
-                            <CountdownTimer targetDate={new Date(new Date().getTime() + 5 * 60 * 60 * 1000)} /> {/* 5 hours from now */}
+                {/* 3. Flash Sale Section (Modern) */}
+                <section className="flash-sale-section">
+                    <div className="flash-header">
+                        <div className="flash-title-group">
+                            <span className="flash-title">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" /></svg>
+                                Flash Sale
+                            </span>
+                            <div className="flash-timer-badge">
+                                <span>Ends in:</span>
+                                <CountdownTimer targetDate={new Date(new Date().getTime() + 4 * 60 * 60 * 1000 + 59 * 60 * 1000 + 43 * 1000)} />
+                            </div>
                         </div>
-                        <Link to="/products?sale=true" className="see-all-link" style={{ color: '#be123c' }}>See All &gt;</Link>
+                        <Link to="/products?sale=true" className="flash-see-all">See All &gt;</Link>
                     </div>
                     <div className="product-horizontal-list">
-                        {/* Mock Sales Items (Reusing featured for now) */}
                         {featuredProducts.slice(0, 5).map(product => (
                             <HomeProductCard key={`sale-${product._id}`} product={{ ...product, price: product.price * 0.9 }} />
                         ))}
                     </div>
                 </section>
 
-                {/* 2. Promo Banners */}
-                <section className="promo-banners-section">
-                    <div className="banners-grid">
-                        <div className="promo-banner banner-1">
-                            <div className="banner-content">
-                                <h3 className="banner-title">Bursting with Savings!</h3>
-                                <p className="banner-subtitle">Get fresh groceries delivered in <br />10 minutes.</p>
-                                <Link to="/products" className="banner-btn">Order Now</Link>
+                {/* 4. Promotional Cards (Premium Gradients) */}
+                <section className="promo-section">
+                    <div className="promo-grid">
+                        {/* Card 1: Grocery Delivery */}
+                        <Link to="/products" className="promo-card pc-warm">
+                            <div className="pc-blob blob-1"></div>
+                            <div className="pc-blob blob-2"></div>
+
+                            <div className="pc-content-left">
+                                <h3 className="pc-headline">Bursting with <br />Savings!</h3>
+                                <p className="pc-subtext">Get fresh groceries delivered in <br />10 minutes.</p>
+                                <span className="pc-btn">Order Now <span style={{ fontSize: '1.2em' }}>→</span></span>
                             </div>
-                            <img src="https://placehold.co/300x300/ff9966/ffffff?text=Veggies" alt="Promo" className="banner-image" />
-                        </div>
-                        <div className="promo-banner banner-2">
-                            <div className="banner-content">
-                                <div style={{ textTransform: 'uppercase', marginBottom: '0.5rem', fontWeight: '700', letterSpacing: '1px' }}>All New Experience</div>
-                                <h3 className="banner-title" style={{ color: '#621ad4' }}>₹0 Delivery Fee</h3>
-                                <p className="banner-subtitle" style={{ color: '#4c1399' }}>On your first order above ₹199</p>
+                            <div className="pc-content-right">
+                                {/* Using Emoji as 3D asset placeholder for beauty/reliability */}
+                                <span className="pc-big-type" style={{ fontSize: '10rem', transform: 'rotate(-10deg)', filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.1))' }}>🥦</span>
                             </div>
-                            <img src="https://placehold.co/300x300/e0c3fc/ffffff?text=Free" alt="Promo" className="banner-image" />
-                        </div>
+                        </Link>
+
+                        {/* Card 2: Free Delivery */}
+                        <Link to="/products?free_delivery=true" className="promo-card pc-cool">
+                            <div className="pc-blob blob-1" style={{ background: 'rgba(255,255,255,0.2)' }}></div>
+                            <div className="pc-blob blob-2" style={{ background: 'rgba(255,255,255,0.15)' }}></div>
+
+                            <div className="pc-content-left">
+                                <div className="pc-label">ALL NEW EXPERIENCE</div>
+                                <h3 className="pc-headline">₹0 Delivery Fee</h3>
+                                <p className="pc-subtext">On your first order above ₹199</p>
+                                <span className="pc-btn">Start Shopping <span style={{ fontSize: '1.2em' }}>→</span></span>
+                            </div>
+                            <div className="pc-content-right">
+                                <span className="pc-big-type" style={{ fontSize: '10rem', transform: 'rotate(0deg)', filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.1))' }}>🛵</span>
+                            </div>
+                        </Link>
                     </div>
                 </section>
 

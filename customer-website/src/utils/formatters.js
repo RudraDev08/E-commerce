@@ -36,8 +36,21 @@ export const formatDateTime = (date) => {
 export const getImageUrl = (imagePath) => {
     if (!imagePath) return '/placeholder.jpg';
     if (imagePath.startsWith('http')) return imagePath;
+
+    // Normalize path separators (win to unix)
+    const normalizedPath = imagePath.replace(/\\/g, '/');
+
+    // Remove 'uploads/' prefix if present to avoid duplication/nesting
+    // (Since uploadsUrl usually includes /uploads)
+    const cleanPath = normalizedPath.replace(/^uploads\//, '');
+
     const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || 'http://localhost:5000/uploads';
-    return `${uploadsUrl}/${imagePath}`;
+
+    // Ensure clean join
+    const baseUrl = uploadsUrl.endsWith('/') ? uploadsUrl.slice(0, -1) : uploadsUrl;
+    const finalPath = cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath;
+
+    return `${baseUrl}/${finalPath}`;
 };
 
 // Truncate text

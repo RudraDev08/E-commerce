@@ -5,23 +5,25 @@ import './HeroSlider.css';
 const slides = [
     {
         id: 1,
-        image: 'https://placehold.co/981x342/621ad4/ffffff?text=Groceries+in+10+Minutes',
-        mobileImage: 'https://placehold.co/600x400/621ad4/ffffff?text=10+Min+Delivery',
-        title: "Groceries in 10 Minutes",
-        subtitle: "Fresh vegetables, fruits and more delivered to your doorstep.",
-        cta_text: "Shop Now",
-        cta_link: "/products",
-        bg: "linear-gradient(90deg, #2b0a5a 0%, #621ad4 100%)"
+        image: '/images/hero_banner_mega_savings.png',
+        mobileImage: '/images/hero_banner_mega_savings.png',
+        title: "Mega Savings",
+        subtitle: "Up to 50% OFF on household essentials",
+        cta_text: "View Offers",
+        cta_link: "/products?sort=discount",
+        bg: "linear-gradient(135deg, #FF4B6A 0%, #FF2E4D 100%)", /* Requested Gradient */
+        textColor: "#ffffff" /* Using White for better contrast on this deep pink/red */
     },
     {
         id: 2,
-        image: 'https://placehold.co/981x342/ff3269/ffffff?text=Mega+Savings',
-        mobileImage: 'https://placehold.co/600x400/ff3269/ffffff?text=Mega+Sale',
-        title: "Mega Savings",
-        subtitle: "Up to 50% OFF on household essentials.",
-        cta_text: "View Offers",
-        cta_link: "/products?sort=discount",
-        bg: "linear-gradient(90deg, #ff3269 0%, #ff5e62 100%)"
+        image: 'https://placehold.co/981x342/621ad4/ffffff?text=Groceries+in+10+Minutes',
+        mobileImage: 'https://placehold.co/600x400/621ad4/ffffff?text=10+Min+Delivery',
+        title: "Groceries in 10 Mins",
+        subtitle: "Fresh vegetables, fruits and more delivered.",
+        cta_text: "Shop Now",
+        cta_link: "/products",
+        bg: "linear-gradient(135deg, #621ad4 0%, #9333ea 100%)",
+        textColor: "#ffffff"
     },
     {
         id: 3,
@@ -31,7 +33,8 @@ const slides = [
         subtitle: "Premium strawberries and exotic fruits.",
         cta_text: "Buy Now",
         cta_link: "/category/fruits",
-        bg: "linear-gradient(90deg, #10b981 0%, #34d399 100%)"
+        bg: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        textColor: "#ffffff"
     }
 ];
 

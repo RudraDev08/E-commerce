@@ -6,57 +6,78 @@
     background: white;
     border-bottom: 1px solid var(--border-light);
     position: sticky;
-    top: 80px;
-    /* Below header */
+    top: 73px;
+    /* Adjusted for header height */
     z-index: 900;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 .navbar-container {
     display: flex;
     align-items: center;
-    overflow-x: auto;
-    white-space: nowrap;
-    scrollbar-width: none;
-    /* Hide scrollbar Firefox */
-    padding: 0 1rem;
     gap: 2rem;
-}
-
-.navbar-container::-webkit-scrollbar {
-    display: none;
-    /* Hide scrollbar Chrome/Safari */
+    padding: 0 1rem;
 }
 
 .nav-item {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 1rem 0;
+    padding: 1rem 0.5rem;
     text-decoration: none;
     color: var(--text-secondary);
     font-weight: 500;
-    font-size: 0.9375rem;
-    border-bottom: 3px solid transparent;
-    transition: all var(--transition-base);
+    font-size: 0.95rem;
+    position: relative;
+    transition: all 0.2s ease;
 }
 
 .nav-item:hover {
     color: var(--primary-600);
 }
 
+/* Active State with Underline Indicator */
 .nav-item.active {
     color: var(--primary-600);
-    border-bottom-color: var(--primary-600);
+    font-weight: 600;
+}
+
+.nav-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: var(--primary-600);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
 }
 
 .nav-icon {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
+    opacity: 0.8;
 }
 
-.nav-text {
-    text-transform: capitalize;
+.nav-item.active .nav-icon {
+    opacity: 1;
 }
 
-/* Icons for specific categories */
-/* You can map these via class names dynamically */
+/* Responsive */
+@media (max-width: 768px) {
+    .navbar {
+        top: 60px;
+        /* Smaller header on mobile */
+    }
+
+    .navbar-container {
+        justify-content: space-around;
+        gap: 0;
+    }
+
+    .nav-item {
+        flex: 1;
+        justify-content: center;
+        padding: 0.8rem 0;
+    }
+}
