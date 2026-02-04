@@ -12,7 +12,7 @@ import Footer from './components/common/Footer';
 // Pages
 import Home from './pages/Home';
 import ProductListingPage from './pages/ProductListingPage';
-import ProductDetailPageAmazon from './pages/ProductDetailPageAmazon';
+import ProductDetailPage from './pages/ProductDetailPage';
 import CategoryPage from './pages/CategoryPage';
 import BrandPage from './pages/BrandPage';
 import SearchPage from './pages/SearchPage';
@@ -45,7 +45,7 @@ function App() {
                                     {/* Public Pages */}
                                     <Route path="/" element={<Home />} />
                                     <Route path="/products" element={<ProductListingPage />} />
-                                    <Route path="/product/:slug" element={<ProductDetailPageAmazon />} />
+                                    <Route path="/product/:slug" element={<ProductDetailPage />} />
                                     <Route path="/category/:slug" element={<CategoryPage />} />
                                     <Route path="/brand/:slug" element={<BrandPage />} />
                                     <Route path="/search" element={<SearchPage />} />

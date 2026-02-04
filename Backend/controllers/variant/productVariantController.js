@@ -26,6 +26,12 @@ export const createVariant = async (req, res) => {
     // 3. Attempt to Create
     const variant = await ProductVariant.create(req.body);
 
+    // ✅ FIX: Populate references before returning to prevent color disappearing in UI
+    await variant.populate('productId', 'name');
+    await variant.populate('sizeId', 'code name');
+    await variant.populate('colorId', 'name hexCode');
+    await variant.populate('colorParts', 'name hexCode');
+
     // 4. Auto-Create Inventory Record
     try {
       await inventoryService.autoCreateInventoryForVariant(variant, 'SYSTEM');
@@ -82,11 +88,17 @@ export const getVariants = async (req, res) => {
 
 /* UPDATE */
 export const updateVariant = async (req, res) => {
+  // ✅ FIX: Add .populate() to return populated data and prevent color disappearing in UI
   const data = await ProductVariant.findByIdAndUpdate(
     req.params.id,
     req.body,
     { new: true }
-  );
+  )
+    .populate('productId', 'name')
+    .populate('sizeId', 'code name')
+    .populate('colorId', 'name hexCode')
+    .populate('colorParts', 'name hexCode');
+
   res.json({ success: true, data });
 };
 
@@ -111,6 +123,12 @@ export const toggleVariantStatus = async (req, res) => {
   const variant = await ProductVariant.findById(req.params.id);
   variant.status = !variant.status;
   await variant.save();
+
+  // ✅ FIX: Populate references before returning to prevent color disappearing in UI
+  await variant.populate('productId', 'name');
+  await variant.populate('sizeId', 'code name');
+  await variant.populate('colorId', 'name hexCode');
+  await variant.populate('colorParts', 'name hexCode');
 
   res.json({ success: true, data: variant });
 };

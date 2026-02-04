@@ -1,0 +1,607 @@
+/* Product Details Page Styles - Amazon/Samsung Premium Style */
+
+.product-details-container {
+    padding-top: var(--spacing-lg);
+    padding-bottom: var(--spacing-4xl);
+    background-color: white;
+    /* Clean white background like Amazon */
+    min-height: 100vh;
+}
+
+/* Breadcrumbs */
+.breadcrumbs {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.breadcrumbs a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.breadcrumbs a:hover {
+    color: var(--primary-600);
+    text-decoration: underline;
+}
+
+.breadcrumbs .current {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* Main Layout Grid */
+.product-main-grid {
+    display: grid;
+    grid-template-columns: 45% 55%;
+    /* Amazon style: tighter image column, wider text */
+    gap: 4rem;
+    margin-bottom: var(--spacing-4xl);
+    align-items: start;
+}
+
+/* -----------------------------------------------------------------------------
+   GALLERY COMPONENT STYLES 
+----------------------------------------------------------------------------- */
+.gallery-wrapper {
+    display: flex;
+    flex-direction: row-reverse;
+    /* Thumbnails on left for desktop */
+    gap: 1rem;
+    position: sticky;
+    top: 100px;
+    height: fit-content;
+}
+
+.main-viewport {
+    flex: 1;
+    position: relative;
+    border-radius: var(--radius-lg);
+    background: white;
+    cursor: crosshair;
+    /* Indicate zoom availability */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    /* Square aspect ratio standard */
+    overflow: hidden;
+}
+
+.main-display-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: opacity 0.3s ease;
+}
+
+/* Zoom Result - Appears beside or over */
+.zoom-result {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-repeat: no-repeat;
+    /* Zoom level */
+    background-size: 200%;
+    z-index: 10;
+    pointer-events: none;
+    /* Let mouse move events pass through to overlay */
+    background-color: white;
+}
+
+/* Thumbnail Strip - Vertical on Desktop */
+.thumbnails-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 60px;
+    /* Small thumbnails */
+    max-height: 500px;
+    overflow-y: auto;
+    scrollbar-width: none;
+    /* Hide scrollbar */
+}
+
+.thumbnails-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.thumbnail-item {
+    width: 60px;
+    height: 60px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    overflow: hidden;
+    padding: 2px;
+    transition: border-color 0.2s;
+}
+
+.thumbnail-item.active,
+.thumbnail-item:hover {
+    border-color: var(--primary-600);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+.thumbnail-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Mobile Dots (Hidden on Desktop) */
+.mobile-dots {
+    display: none;
+}
+
+/* Lightbox */
+.lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.lightbox-content {
+    position: relative;
+    width: 90%;
+    height: 90%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lightbox-content img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.close-btn {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 3rem;
+    cursor: pointer;
+}
+
+.lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: white;
+    font-size: 4rem;
+    cursor: pointer;
+    padding: 1rem;
+    user-select: none;
+}
+
+.lightbox-nav.prev {
+    left: -60px;
+}
+
+.lightbox-nav.next {
+    right: -60px;
+}
+
+
+/* -----------------------------------------------------------------------------
+   PRODUCT INFO STYLES 
+----------------------------------------------------------------------------- */
+.product-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.product-title {
+    font-size: 2rem;
+    /* Large but not display size */
+    font-weight: 500;
+    line-height: 1.2;
+    color: #0F1111;
+    /* Amazon black */
+}
+
+.brand-visit-link {
+    font-size: 0.9rem;
+    color: var(--primary-600);
+    text-decoration: none;
+    margin-bottom: 0.5rem;
+    display: inline-block;
+}
+
+.brand-visit-link:hover {
+    text-decoration: underline;
+    color: var(--accent-orange);
+    /* Friendly orange hover */
+}
+
+.rating-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--primary-600);
+    border-bottom: 1px solid var(--border-light);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    width: fit-content;
+}
+
+/* Price Section */
+.price-block {
+    margin-bottom: 1.5rem;
+}
+
+.price-main {
+    display: flex;
+    align-items: start;
+    /* Align symbol top */
+    color: #B12704;
+    /* Amazon Price Red */
+}
+
+.price-main .currency {
+    font-size: 1rem;
+    margin-top: 5px;
+}
+
+.price-main .amount {
+    font-size: 1.75rem;
+    font-weight: 500;
+    line-height: 1;
+}
+
+.price-sub {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.mrp-strike {
+    text-decoration: line-through;
+}
+
+/* Attribute Selectors */
+.attributes-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    margin-top: 1rem;
+}
+
+.attr-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.attr-label {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.attr-label span {
+    font-weight: 400;
+    color: var(--text-primary);
+    margin-left: 0.25rem;
+}
+
+/* Variant Options - Clean & Boxy */
+.swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.swatch-color {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    /* Default */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.swatch-color.selected {
+    border: 2px solid var(--primary-600);
+    box-shadow: 0 0 0 2px white inset;
+    /* Inner white ring */
+    transform: scale(1.1);
+}
+
+.swatch-text {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    /* Slightly rounded */
+    background: white;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    min-width: 80px;
+    text-align: center;
+}
+
+.swatch-text:hover {
+    background: var(--bg-secondary);
+    border-color: var(--text-secondary);
+}
+
+.swatch-text.selected {
+    border: 2px solid var(--primary-600);
+    background: #fff;
+    /* Keep white */
+    color: var(--primary-600);
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1px var(--primary-600);
+}
+
+/* Feature Bullets (Amazon style short list) */
+.feature-bullets {
+    margin-top: 1.5rem;
+}
+
+.bullet-item {
+    display: flex;
+    align-items: start;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.bullet-item::before {
+    content: "•";
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+
+/* Stock / ACTIONS CARD (Right side sidebar look optional, but inline here) */
+.action-box {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    background: white;
+    /* Or light gray to stand out */
+}
+
+.stock-status {
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.text-green {
+    color: #007600;
+}
+
+.text-red {
+    color: #B12704;
+}
+
+.delivery-text {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.btn-primary-action,
+.btn-secondary-action {
+    width: 100%;
+    padding: 0.85rem;
+    border-radius: var(--radius-full);
+    border: none;
+    font-weight: 500;
+    font-size: 1rem;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.2s;
+}
+
+.btn-primary-action {
+    background: #FFD814;
+    /* Amazon Yellow */
+    color: #0F1111;
+}
+
+.btn-primary-action:hover {
+    background: #F7CA00;
+}
+
+.btn-secondary-action {
+    background: #FFA41C;
+    /* Amazon Orange */
+    color: #0F1111;
+}
+
+.btn-secondary-action:hover {
+    background: #FA8900;
+}
+
+/* Tabs Section */
+.tabs-container {
+    margin-top: 3rem;
+    border-top: 1px solid var(--border-light);
+    padding-top: 2rem;
+}
+
+.tabs-header {
+    display: flex;
+    gap: 2rem;
+    border-bottom: 2px solid var(--border-light);
+    margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    padding: 0.75rem 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: var(--primary-600);
+}
+
+.tab-btn.active {
+    color: var(--primary-600);
+    border-bottom-color: var(--primary-600);
+}
+
+.tab-content {
+    padding: 1rem 0;
+    line-height: 1.6;
+}
+
+.tab-content h3 {
+    margin-bottom: 1rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+   RESPONSIVE
+----------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .product-main-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
+    /* Gallery goes vertical on mobile */
+    .gallery-wrapper {
+        flex-direction: column;
+        /* Main image top */
+        position: static;
+        width: 100vw;
+        margin-left: -1rem;
+        /* Full bleed hack if container has padding */
+        width: calc(100% + 2rem);
+    }
+
+    .main-viewport {
+        border-radius: 0;
+        aspect-ratio: 4/3;
+        /* Slightly shorter on mobile */
+    }
+
+    .zoom-trigger,
+    .zoom-result {
+        display: none;
+        /* No zoom on mobile via move, use pinch/lightbox */
+    }
+
+    .thumbnails-strip {
+        display: none;
+        /* Hide thumbs on mobile, use dots */
+    }
+
+    .mobile-dots {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        position: absolute;
+        bottom: 12px;
+        left: 0;
+        right: 0;
+        z-index: 5;
+    }
+
+    .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.3);
+        transition: background 0.3s;
+    }
+
+    .dot.active {
+        background: var(--primary-600);
+    }
+
+    /* Sticky Footer Buttons */
+    .action-box {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 900;
+        background: white;
+        border-top: 1px solid var(--border-light);
+        border-radius: 0;
+        margin: 0;
+        padding: 1rem;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: row;
+        /* Horizontal layout */
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .stock-status,
+    .delivery-text {
+        display: none;
+        /* Hide details in sticky footer */
+    }
+
+    .quantity-selector {
+        display: none;
+        /* Hide qty in sticky footer to save space */
+    }
+
+    .action-buttons {
+        flex-direction: row;
+        width: 100%;
+    }
+
+    .btn-primary-action,
+    .btn-secondary-action {
+        flex: 1;
+        padding: 0.75rem;
+        font-size: 0.9rem;
+    }
+}

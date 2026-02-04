@@ -35,55 +35,76 @@ export const CartProvider = ({ children }) => {
     // Calculate totals
     const calculateTotals = (items) => {
         const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const tax = subtotal * 0.18; // 18% GST
+        const tax = subtotal * 0.18; // 18% GST/Tax
         const total = subtotal + tax;
         return { subtotal, tax, total };
     };
 
-    // Add item to cart
-    const addToCart = (product, variant = null, quantity = 1) => {
-        const variantId = variant?._id || null;
-        const price = variant?.price || product.price;
-        const stock = variant?.stock || product.stock;
+    // ========================================================================
+    // 🔧 FIX: CART PAYLOAD CONSISTENCY (CRITICAL)
+    // Cart accepts ONE single payload object
+    // Cart NEVER recomputes price or currency
+    // ========================================================================
+    const addToCart = (cartPayload) => {
+        // Validate required fields
+        if (!cartPayload || typeof cartPayload !== 'object') {
+            throw new Error('Invalid cart payload');
+        }
+
+        const {
+            variantId,
+            productId,
+            name,
+            price,
+            currency,
+            quantity,
+            attributes,
+            sku,
+            image,
+            stock
+        } = cartPayload;
+
+        // Validate required fields
+        if (!variantId || !productId || !price || !currency || !quantity) {
+            throw new Error('Missing required cart fields');
+        }
 
         // Check stock
-        if (stock < quantity) {
+        if (stock && stock < quantity) {
             throw new Error('Insufficient stock');
         }
 
         setCart(prevCart => {
             const existingItemIndex = prevCart.items.findIndex(
-                item => item.productId === product._id && item.variantId === variantId
+                item => item.productId === productId && item.variantId === variantId
             );
 
             let newItems;
             if (existingItemIndex > -1) {
-                // Update quantity
+                // Update quantity for existing item
                 newItems = [...prevCart.items];
                 const newQuantity = newItems[existingItemIndex].quantity + quantity;
 
-                if (newQuantity > stock) {
+                if (stock && newQuantity > stock) {
                     throw new Error('Insufficient stock');
                 }
 
+                // ✅ Update quantity only, keep original price snapshot
                 newItems[existingItemIndex].quantity = newQuantity;
             } else {
-                // Add new item
+                // Add new item - store EXACT payload as snapshot
                 newItems = [
                     ...prevCart.items,
                     {
-                        productId: product._id,
                         variantId,
-                        name: product.name,
-                        slug: product.slug,
-                        variant: variant ? {
-                            size: variant.attributes?.size || '',
-                            color: variant.attributes?.color || ''
-                        } : null,
-                        price,
+                        productId,
+                        name,
+                        price,        // ✅ Price snapshot - NEVER recomputed
+                        currency,     // ✅ Currency snapshot - NEVER recomputed
                         quantity,
-                        image: product.image,
-                        sku: variant?.sku || product.sku,
+                        attributes,   // ✅ Exact attributes from variant
+                        sku,
+                        image,
                         stock
                     }
                 ];
@@ -104,7 +125,7 @@ export const CartProvider = ({ children }) => {
         setCart(prevCart => {
             const newItems = prevCart.items.map(item => {
                 if (item.productId === productId && item.variantId === variantId) {
-                    if (quantity > item.stock) {
+                    if (item.stock && quantity > item.stock) {
                         throw new Error('Insufficient stock');
                     }
                     return { ...item, quantity };

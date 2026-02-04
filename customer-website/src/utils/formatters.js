@@ -3,12 +3,23 @@
  */
 
 // Format currency
-export const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
+// Supports dynamic currency codes from variant data
+export const formatCurrency = (amount, currency = 'INR') => {
+    // Map of currency codes to locales
+    const locales = {
+        'INR': 'en-IN',
+        'USD': 'en-US',
+        'EUR': 'en-DE',
+        'GBP': 'en-GB'
+    };
+
+    const locale = locales[currency] || 'en-US';
+
+    return new Intl.NumberFormat(locale, {
         style: 'currency',
-        currency: 'INR',
+        currency: currency,
         minimumFractionDigits: 0,
-        maximumFractionDigits: 0
+        maximumFractionDigits: 2
     }).format(amount);
 };
 
@@ -41,7 +52,6 @@ export const getImageUrl = (imagePath) => {
     const normalizedPath = imagePath.replace(/\\/g, '/');
 
     // Remove 'uploads/' prefix if present to avoid duplication/nesting
-    // (Since uploadsUrl usually includes /uploads)
     const cleanPath = normalizedPath.replace(/^uploads\//, '');
 
     const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || 'http://localhost:5000/uploads';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getVariantsByProduct } from '../../api/variantApi';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -16,8 +16,10 @@ import './ProductCard.css';
  * - Lazy loading images
  */
 const ProductCard = ({ product }) => {
+    const navigate = useNavigate();
     const [variants, setVariants] = useState([]);
     const [minPrice, setMinPrice] = useState(product.price);
+    const [currency, setCurrency] = useState(product.currency || 'INR');
     const [isLoading, setIsLoading] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
     const { addToCart } = useCart();
@@ -34,13 +36,18 @@ const ProductCard = ({ product }) => {
         try {
             setIsLoading(true);
             const response = await getVariantsByProduct(product._id);
-            const activeVariants = (response.data || []).filter(v => v.status && v.stock > 0);
+            // Handle consistent processing of response data
+            const activeVariants = (response.data?.data || response.data || []).filter(v => v.status && v.stock > 0);
             setVariants(activeVariants);
 
             // Calculate minimum price from active variants
             if (activeVariants.length > 0) {
-                const prices = activeVariants.map(v => v.price);
+                const prices = activeVariants.map(v => v.price || v.sellingPrice);
                 setMinPrice(Math.min(...prices));
+                // Set currency from first variant (assuming standard currency per product)
+                if (activeVariants[0].currency) {
+                    setCurrency(activeVariants[0].currency);
+                }
             }
         } catch (error) {
             console.error('Error loading variants:', error);
@@ -53,9 +60,9 @@ const ProductCard = ({ product }) => {
         e.preventDefault();
         e.stopPropagation();
 
-        if (product.hasVariants && variants.length > 0) {
-            // Redirect to product page for variant selection
-            window.location.href = `/product/${product.slug}`;
+        if (product.hasVariants) {
+            // Navigate to product page for variant selection
+            navigate(`/product/${product.slug}`);
         } else {
             addToCart(product);
         }
@@ -73,18 +80,20 @@ const ProductCard = ({ product }) => {
     };
 
     // Check if product has any stock (including variants)
-    // Show products by default, only hide if explicitly out of stock
     const hasStock = product.hasVariants
-        ? (isLoading || variants.length > 0)
+        ? (variants.length > 0 || isLoading) // Assume stock while loading or if variants exist
         : (product.stock === undefined || product.stock > 0);
 
-    // Only hide if we're sure there's no stock and not loading
-    if (!hasStock && !isLoading && !product.hasVariants && product.stock === 0) {
-        return null;
-    }
-
     const displayPrice = product.hasVariants ? minPrice : product.price;
+    const baseDisplayPrice = product.basePrice || product.compareAtPrice;
+
+    // Use the determined currency
     const displayImage = product.image || (variants[0]?.image) || '';
+
+    // Calculate discount for badge (if applied to base product or min variant price)
+    // Note: complex logic for variant discounts, using simple base vs display for now
+    const showDiscount = baseDisplayPrice > displayPrice;
+    const discountPercent = showDiscount ? Math.round(((baseDisplayPrice - displayPrice) / baseDisplayPrice) * 100) : 0;
 
     return (
         <div className="product-card-modern">
@@ -125,9 +134,9 @@ const ProductCard = ({ product }) => {
                     )}
 
                     {/* Discount Badge */}
-                    {product.basePrice > displayPrice && (
+                    {showDiscount && discountPercent > 0 && (
                         <div className="pc-discount-badge">
-                            {Math.round(((product.basePrice - displayPrice) / product.basePrice) * 100)}% OFF
+                            {discountPercent}% OFF
                         </div>
                     )}
                 </div>
@@ -165,16 +174,16 @@ const ProductCard = ({ product }) => {
                                 <span className="pc-price-label">Starting from</span>
                             )}
                             <span className="pc-price-current">
-                                {formatCurrency(displayPrice)}
+                                {formatCurrency(displayPrice, currency)}
                             </span>
                         </div>
-                        {product.basePrice > displayPrice && (
+                        {showDiscount && (
                             <div className="pc-price-old-row">
                                 <span className="pc-price-old">
-                                    {formatCurrency(product.basePrice)}
+                                    {formatCurrency(baseDisplayPrice, currency)}
                                 </span>
                                 <span className="pc-save-amount">
-                                    Save {formatCurrency(product.basePrice - displayPrice)}
+                                    Save {formatCurrency(baseDisplayPrice - displayPrice, currency)}
                                 </span>
                             </div>
                         )}
@@ -193,14 +202,14 @@ const ProductCard = ({ product }) => {
             <button
                 className="pc-add-to-cart"
                 onClick={handleAddToCart}
-                disabled={!hasStock}
+                disabled={!hasStock && !isLoading}
             >
                 {product.hasVariants ? (
                     <>
                         <span>Select Options</span>
                         <span className="pc-arrow">→</span>
                     </>
-                ) : hasStock ? (
+                ) : (hasStock || isLoading) ? (
                     <>
                         <span>🛒</span>
                         <span>Add to Cart</span>

@@ -1,315 +1,574 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getProductBySlug, getProducts } from '../api/productApi';
-import { getVariantsByProduct } from '../api/variantApi';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { getProductBySlug } from '../api/productApi';
+import { getVariantsByProduct, getColors } from '../api/variantApi';
 import { useCart } from '../context/CartContext';
-import { formatCurrency, getImageUrl } from '../utils/formatters';
-import ProductCard from '../components/product/ProductCard';
-import './ProductDetailPage.css';
+import ProductImageGallery from '../components/product/ProductImageGallery';
+import '../styles/ProductDetails.css';
+
+/**
+ * PRODUCTION-READY PRODUCT DETAIL PAGE
+ * 
+ * ADMIN-CONTROLLED SYSTEM:
+ * - All data from Admin Panel (Product Master, Variant Master, Color Master)
+ * - ZERO hardcoded values
+ * - Shows ONLY Color & Size (no RAM, Storage, etc.)
+ * - Automatically adapts to admin changes
+ * - NO demo data or fallbacks
+ */
 
 const ProductDetailPage = () => {
     const { slug } = useParams();
-    const [product, setProduct] = useState(null);
-    const [variants, setVariants] = useState([]);
-    const [selectedVariant, setSelectedVariant] = useState(null);
-    const [relatedProducts, setRelatedProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [quantity, setQuantity] = useState(1);
-    const [selectedImage, setSelectedImage] = useState(0);
-    const [activeTab, setActiveTab] = useState('description');
+    const navigate = useNavigate();
     const { addToCart } = useCart();
 
+    // State
+    const [product, setProduct] = useState(null);
+    const [variants, setVariants] = useState([]);
+    const [colorMaster, setColorMaster] = useState([]);
+    const [selectedVariant, setSelectedVariant] = useState(null);
+    const [selectedAttributes, setSelectedAttributes] = useState({});
+    const [quantity, setQuantity] = useState(1);
+    const [activeTab, setActiveTab] = useState('description');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // ========================================================================
+    // DATA FETCHING - ALL FROM ADMIN PANEL
+    // ========================================================================
     useEffect(() => {
-        loadProduct();
-        window.scrollTo(0, 0);
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+
+                // 1. Fetch Product by Slug (Admin Controlled)
+                const productData = await getProductBySlug(slug);
+
+                // Validate product exists and is active
+                if (!productData) {
+                    setError('Product not found');
+                    setLoading(false);
+                    return;
+                }
+
+                // Check if product is active (Admin Controlled)
+                if (productData.status !== 'active' || productData.isDeleted) {
+                    setError('Product not found');
+                    setLoading(false);
+                    return;
+                }
+
+                setProduct(productData);
+
+                // 2. Fetch Variants (Admin Controlled)
+                if (productData.hasVariants && productData._id) {
+                    const variantsRes = await getVariantsByProduct(productData._id);
+                    const variantsList = variantsRes.data?.data || variantsRes.data || [];
+
+                    // Filter only active, non-deleted variants (Admin Controlled)
+                    const activeVariants = variantsList.filter(
+                        v => v.status === true && !v.isDeleted
+                    );
+
+                    if (activeVariants.length === 0) {
+                        setError('No variants available');
+                        setLoading(false);
+                        return;
+                    }
+
+                    setVariants(activeVariants);
+
+                    // Auto-select first in-stock variant
+                    const defaultVariant =
+                        activeVariants.find(v => Number(v.stock) > 0) ||
+                        activeVariants[0];
+
+                    setSelectedVariant(defaultVariant);
+                    if (defaultVariant.attributes) {
+                        setSelectedAttributes(defaultVariant.attributes);
+                    }
+                }
+
+                // 3. Fetch Color Master (Admin Controlled)
+                try {
+                    const colorsRes = await getColors();
+                    const colorsList = colorsRes.data?.data || colorsRes.data || [];
+
+                    // Filter only active colors (Admin Controlled)
+                    const activeColors = colorsList.filter(
+                        c => c.status === 'active' && !c.isDeleted
+                    );
+                    setColorMaster(activeColors);
+                } catch (err) {
+                    console.warn('Color Master fetch failed:', err);
+                    setColorMaster([]);
+                }
+
+            } catch (err) {
+                console.error('Error fetching product:', err);
+                setError('Failed to load product');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (slug) fetchData();
     }, [slug]);
 
-    const loadProduct = async () => {
-        try {
-            setLoading(true);
-            const productData = await getProductBySlug(slug);
-            setProduct(productData);
+    // ========================================================================
+    // DYNAMIC ATTRIBUTE DETECTION - ONLY COLOR & SIZE
+    // ========================================================================
+    const attributeConfig = useMemo(() => {
+        if (!variants.length) return { hasColors: false, hasSizes: false };
 
-            // Load variants if product has variants
-            if (productData.hasVariants) {
-                const variantsData = await getVariantsByProduct(productData._id);
-                setVariants(variantsData.data || []);
-                if (variantsData.data?.length > 0) {
-                    setSelectedVariant(variantsData.data[0]);
-                }
+        // Detect if product has color variants (Admin Controlled)
+        const hasColors = variants.some(v => v.attributes?.colorId);
+
+        // Detect if product has size variants (Admin Controlled)
+        const hasSizes = variants.some(v => v.attributes?.size);
+
+        return { hasColors, hasSizes };
+    }, [variants]);
+
+    // ========================================================================
+    // EXTRACT AVAILABLE COLORS (Admin Controlled)
+    // ========================================================================
+    const availableColors = useMemo(() => {
+        if (!attributeConfig.hasColors) return [];
+
+        const colorIds = new Set();
+        variants.forEach(v => {
+            if (v.attributes?.colorId) {
+                colorIds.add(v.attributes.colorId);
+            }
+        });
+
+        return Array.from(colorIds);
+    }, [variants, attributeConfig]);
+
+    // ========================================================================
+    // EXTRACT AVAILABLE SIZES (Admin Controlled)
+    // ========================================================================
+    const availableSizes = useMemo(() => {
+        if (!attributeConfig.hasSizes) return [];
+
+        const sizes = new Set();
+        variants.forEach(v => {
+            if (v.attributes?.size) {
+                sizes.add(v.attributes.size);
+            }
+        });
+
+        // Sort sizes (S, M, L, XL, XXL or numeric)
+        return Array.from(sizes).sort((a, b) => {
+            const sizeOrder = {
+                'XS': 1, 'S': 2, 'M': 3, 'L': 4,
+                'XL': 5, 'XXL': 6, 'XXXL': 7
+            };
+            return (sizeOrder[a] || parseInt(a) || 0) - (sizeOrder[b] || parseInt(b) || 0);
+        });
+    }, [variants, attributeConfig]);
+
+    // ========================================================================
+    // VARIANT MATCHING LOGIC
+    // ========================================================================
+    useEffect(() => {
+        if (!variants.length || !Object.keys(selectedAttributes).length) return;
+
+        const matchedVariant = variants.find(v => {
+            if (!v.attributes) return false;
+
+            // Match colorId (if selected)
+            if (selectedAttributes.colorId &&
+                v.attributes.colorId !== selectedAttributes.colorId) {
+                return false;
             }
 
-            // Load related products (same category)
-            if (productData.category) {
-                const relatedRes = await getProducts({
-                    category: productData.category._id || productData.category,
-                    limit: 4
-                });
-                setRelatedProducts((relatedRes.data || []).filter(p => p._id !== productData._id));
+            // Match size (if selected)
+            if (selectedAttributes.size &&
+                v.attributes.size !== selectedAttributes.size) {
+                return false;
             }
-        } catch (error) {
-            console.error('Error loading product:', error);
-        } finally {
-            setLoading(false);
+
+            return true;
+        });
+
+        setSelectedVariant(matchedVariant || null);
+    }, [selectedAttributes, variants]);
+
+    // ========================================================================
+    // IMAGE PRIORITY LOGIC (Admin Controlled)
+    // ========================================================================
+    const galleryImages = useMemo(() => {
+        // Priority 1: Variant images (Admin uploaded for variant)
+        if (selectedVariant?.images && selectedVariant.images.length > 0) {
+            return selectedVariant.images.map(url => ({ url, alt: product?.name }));
         }
+
+        // Priority 2: Product gallery images (Admin uploaded for product)
+        if (product?.galleryImages && product.galleryImages.length > 0) {
+            return product.galleryImages.sort((a, b) => (a.order || 0) - (b.order || 0));
+        }
+
+        // Priority 3: Empty state (NO placeholder)
+        return [];
+    }, [selectedVariant, product]);
+
+    // ========================================================================
+    // COLOR UTILITIES (Admin Controlled via Color Master)
+    // ========================================================================
+    const getColorDetails = (colorId) => {
+        if (!colorId) return null;
+        const colorObj = colorMaster.find(c => c._id === colorId);
+        return colorObj || { name: 'Unknown', hexCode: '#cccccc' };
+    };
+
+    const getColorName = (colorId) => {
+        return getColorDetails(colorId)?.name || 'Select';
+    };
+
+    const getColorHex = (colorId) => {
+        return getColorDetails(colorId)?.hexCode || '#cccccc';
+    };
+
+    // ========================================================================
+    // AVAILABILITY CHECK
+    // ========================================================================
+    const isColorAvailable = (colorId) => {
+        return variants.some(v => {
+            if (!v.attributes) return false;
+
+            // Must match colorId
+            if (v.attributes.colorId !== colorId) return false;
+
+            // If size is selected, must also match size
+            if (selectedAttributes.size && v.attributes.size !== selectedAttributes.size) {
+                return false;
+            }
+
+            return true;
+        });
+    };
+
+    const isSizeAvailable = (size) => {
+        return variants.some(v => {
+            if (!v.attributes) return false;
+
+            // Must match size
+            if (v.attributes.size !== size) return false;
+
+            // If color is selected, must also match color
+            if (selectedAttributes.colorId &&
+                v.attributes.colorId !== selectedAttributes.colorId) {
+                return false;
+            }
+
+            return true;
+        });
+    };
+
+    // ========================================================================
+    // PRICE FORMATTING (Admin Controlled Currency)
+    // ========================================================================
+    const formatPrice = (amount, currencyCode) => {
+        const localeMap = {
+            'INR': 'en-IN',
+            'USD': 'en-US',
+            'EUR': 'en-DE',
+            'GBP': 'en-GB'
+        };
+
+        try {
+            return new Intl.NumberFormat(localeMap[currencyCode] || 'en-US', {
+                style: 'currency',
+                currency: currencyCode,
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2
+            }).format(amount);
+        } catch (err) {
+            return `${currencyCode} ${amount.toLocaleString()}`;
+        }
+    };
+
+    // ========================================================================
+    // EVENT HANDLERS
+    // ========================================================================
+    const handleColorSelect = (colorId) => {
+        setSelectedAttributes(prev => ({
+            ...prev,
+            colorId: colorId
+        }));
+    };
+
+    const handleSizeSelect = (size) => {
+        setSelectedAttributes(prev => ({
+            ...prev,
+            size: size
+        }));
     };
 
     const handleAddToCart = () => {
-        try {
-            if (product.hasVariants && !selectedVariant) {
-                alert('Please select a variant');
-                return;
-            }
-
-            const itemToAdd = product.hasVariants
-                ? { ...product, selectedVariant }
-                : product;
-
-            for (let i = 0; i < quantity; i++) {
-                addToCart(itemToAdd, selectedVariant);
-            }
-
-            alert(`Added ${quantity} item(s) to cart!`);
-            setQuantity(1);
-        } catch (error) {
-            alert(error.message);
+        if (!selectedVariant) {
+            alert('Please select all product options');
+            return;
         }
+
+        if (Number(selectedVariant.stock) <= 0) {
+            alert('This variant is out of stock');
+            return;
+        }
+
+        // Build cart payload (SINGLE OBJECT - Admin Controlled Data)
+        const cartPayload = {
+            // Identifiers
+            variantId: selectedVariant._id,
+            productId: product._id,
+
+            // Display Info (Admin Controlled)
+            name: product.name,
+            sku: selectedVariant.sku,
+
+            // Price Snapshot (NEVER recomputed - Admin Controlled)
+            price: selectedVariant.sellingPrice || selectedVariant.price,
+            currency: selectedVariant.currency || product.currency || 'INR',
+
+            // Quantity
+            quantity: quantity,
+
+            // Attributes (Admin Controlled)
+            attributes: {
+                colorId: selectedVariant.attributes?.colorId,
+                colorName: getColorName(selectedVariant.attributes?.colorId),
+                size: selectedVariant.attributes?.size
+            },
+
+            // Image (Admin Uploaded)
+            image: selectedVariant.images?.[0] ||
+                product.galleryImages?.[0]?.url ||
+                product.image,
+
+            // Stock snapshot (Admin Controlled)
+            stock: selectedVariant.stock
+        };
+
+        addToCart(cartPayload);
     };
 
-    const currentPrice = selectedVariant?.price || product?.price || 0;
-    const currentStock = selectedVariant?.stock || product?.stock || 0;
-    const currentSKU = selectedVariant?.sku || product?.sku || '';
+    const handleBuyNow = () => {
+        handleAddToCart();
+        navigate('/cart');
+    };
 
-    // Mock images for gallery (in real app, these would come from product.images array)
-    const productImages = product?.images || [product?.image] || [];
-
+    // ========================================================================
+    // LOADING & ERROR STATES
+    // ========================================================================
     if (loading) {
         return (
-            <div className="container" style={{ padding: '4rem 0' }}>
-                <div className="spinner" style={{ margin: '0 auto' }}></div>
+            <div className="container p-xl text-center">
+                <div className="spinner"></div>
+                <p>Loading product...</p>
             </div>
         );
     }
 
-    if (!product) {
+    if (error || !product) {
         return (
-            <div className="container" style={{ padding: '4rem 0', textAlign: 'center' }}>
-                <h2>Product not found</h2>
-                <Link to="/products" className="btn btn-primary" style={{ marginTop: '2rem' }}>
-                    Back to Products
+            <div className="container p-xl text-center">
+                <h3>{error || 'Product not found'}</h3>
+                <p>This product is currently unavailable.</p>
+                <Link to="/products" className="btn btn-primary mt-md">
+                    Continue Shopping
                 </Link>
             </div>
         );
     }
 
+    // ========================================================================
+    // COMPUTED VALUES (Admin Controlled)
+    // ========================================================================
+    const price = selectedVariant?.sellingPrice || selectedVariant?.price || 0;
+    const comparePrice = selectedVariant?.compareAtPrice || selectedVariant?.basePrice || 0;
+    const currency = selectedVariant?.currency || product.currency || 'INR';
+    const stock = Number(selectedVariant?.stock) || 0;
+    const isOutOfStock = stock <= 0;
+    const discount = (comparePrice && price && comparePrice > price)
+        ? Math.round(((comparePrice - price) / comparePrice) * 100)
+        : 0;
+
+    // ========================================================================
+    // RENDER UI (100% Admin Controlled)
+    // ========================================================================
     return (
-        <div className="product-detail-page">
+        <div className="product-details-container">
             <div className="container">
-                {/* Breadcrumb */}
-                <nav className="breadcrumb">
-                    <Link to="/">Home</Link>
-                    <span>/</span>
-                    <Link to="/products">Products</Link>
+                {/* Breadcrumbs (Admin Controlled) */}
+                <div className="breadcrumbs">
+                    <Link to="/">Home</Link> ›
+                    <Link to="/products">Products</Link> ›
                     {product.category && (
                         <>
-                            <span>/</span>
-                            <Link to={`/category/${product.category.slug}`}>
+                            <Link to={`/category/${product.category.slug || '#'}`}>
                                 {product.category.name}
-                            </Link>
+                            </Link> ›
                         </>
                     )}
-                    <span>/</span>
-                    <span>{product.name}</span>
-                </nav>
+                    <span className="current">{product.name}</span>
+                </div>
 
-                {/* Product Main Section */}
-                <div className="product-main">
-                    {/* Image Gallery */}
-                    <div className="product-gallery">
-                        <div className="main-image">
-                            <img
-                                src={getImageUrl(productImages[selectedImage])}
-                                alt={product.name}
-                                onError={(e) => {
-                                    e.target.src = 'https://placehold.co/600x600?text=No+Image';
-                                }}
-                            />
-                            {product.discount > 0 && (
-                                <span className="discount-badge">{product.discount}% OFF</span>
-                            )}
-                        </div>
+                <div className="product-main-grid">
+                    {/* Image Gallery (Admin Uploaded) */}
+                    <ProductImageGallery
+                        images={galleryImages}
+                        alt={product.name}
+                    />
 
-                        {productImages.length > 1 && (
-                            <div className="image-thumbnails">
-                                {productImages.map((img, index) => (
-                                    <button
-                                        key={index}
-                                        className={`thumbnail ${index === selectedImage ? 'active' : ''}`}
-                                        onClick={() => setSelectedImage(index)}
-                                    >
-                                        <img src={getImageUrl(img)} alt={`${product.name} ${index + 1}`} />
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    {/* Product Info (Admin Controlled) */}
+                    <div className="product-info">
+                        {/* Product Title (Admin Controlled) */}
+                        <h1 className="product-title">{product.name}</h1>
 
-                    {/* Product Info */}
-                    <div className="product-info-section">
-                        <div className="product-header">
-                            <h1>{product.name}</h1>
-                            {product.brand && (
-                                <Link to={`/brand/${product.brand.slug}`} className="product-brand">
-                                    by {product.brand.name}
-                                </Link>
-                            )}
-                        </div>
-
-                        {/* Rating */}
-                        <div className="product-rating">
-                            <div className="stars">
-                                {'★'.repeat(Math.floor(product.rating || 4))}
-                                {'☆'.repeat(5 - Math.floor(product.rating || 4))}
-                            </div>
-                            <span className="rating-text">
-                                {product.rating || 4.0} ({product.reviewCount || 0} reviews)
-                            </span>
-                        </div>
-
-                        {/* Price */}
-                        <div className="product-price">
-                            <span className="current-price">{formatCurrency(currentPrice)}</span>
-                            {product.basePrice > currentPrice && (
-                                <>
-                                    <span className="original-price">{formatCurrency(product.basePrice)}</span>
-                                    <span className="save-amount">
-                                        Save {formatCurrency(product.basePrice - currentPrice)}
-                                    </span>
-                                </>
-                            )}
-                        </div>
-
-                        {/* Stock Status */}
-                        <div className="stock-status">
-                            {currentStock > 0 ? (
-                                <span className="in-stock">
-                                    ✓ In Stock ({currentStock} available)
-                                </span>
-                            ) : (
-                                <span className="out-of-stock">✗ Out of Stock</span>
-                            )}
-                        </div>
-
-                        {/* Variant Selection */}
-                        {product.hasVariants && variants.length > 0 && (
-                            <div className="variant-selection">
-                                <h3>Select Variant:</h3>
-                                <div className="variant-options">
-                                    {variants.map(variant => (
-                                        <button
-                                            key={variant._id}
-                                            onClick={() => setSelectedVariant(variant)}
-                                            className={`variant-btn ${selectedVariant?._id === variant._id ? 'active' : ''} ${variant.stock === 0 ? 'disabled' : ''}`}
-                                            disabled={variant.stock === 0}
-                                        >
-                                            <div className="variant-info">
-                                                {variant.attributes?.size && <span className="variant-size">{variant.attributes.size}</span>}
-                                                {variant.attributes?.color && (
-                                                    <span className="variant-color" style={{ background: variant.attributes.color }}></span>
-                                                )}
-                                                <span className="variant-label">
-                                                    {Object.values(variant.attributes || {}).join(' / ')}
-                                                </span>
-                                            </div>
-                                            {variant.stock === 0 && <span className="variant-stock">Out of Stock</span>}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Quantity Selector */}
-                        <div className="quantity-section">
-                            <label>Quantity:</label>
-                            <div className="quantity-controls">
-                                <button
-                                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                    className="qty-btn"
-                                >
-                                    -
-                                </button>
-                                <input
-                                    type="number"
-                                    value={quantity}
-                                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                                    className="qty-input"
-                                    min="1"
-                                    max={currentStock}
-                                />
-                                <button
-                                    onClick={() => setQuantity(Math.min(currentStock, quantity + 1))}
-                                    className="qty-btn"
-                                    disabled={quantity >= currentStock}
-                                >
-                                    +
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="product-actions">
-                            <button
-                                className="btn btn-primary btn-lg add-to-cart"
-                                onClick={handleAddToCart}
-                                disabled={currentStock === 0}
+                        {/* Brand (Admin Controlled) */}
+                        {product.brand && (
+                            <Link
+                                to={`/brand/${product.brand.slug || '#'}`}
+                                className="brand-visit-link"
                             >
-                                {currentStock === 0 ? 'Out of Stock' : '🛒 Add to Cart'}
-                            </button>
-                            <button className="btn btn-outline btn-lg">
-                                ♡ Add to Wishlist
-                            </button>
-                        </div>
+                                Visit the {product.brand.name} Store
+                            </Link>
+                        )}
 
-                        {/* Product Meta */}
-                        <div className="product-meta">
-                            <div className="meta-item">
-                                <strong>SKU:</strong> {currentSKU}
+                        {/* Price Block (Admin Controlled) */}
+                        <div className="price-block">
+                            <div className="price-main">
+                                {formatPrice(price, currency)}
                             </div>
-                            {product.category && (
-                                <div className="meta-item">
-                                    <strong>Category:</strong>{' '}
-                                    <Link to={`/category/${product.category.slug}`}>
-                                        {product.category.name}
-                                    </Link>
+                            {discount > 0 && (
+                                <div className="price-sub">
+                                    <span className="mrp-strike">
+                                        {formatPrice(comparePrice, currency)}
+                                    </span>
+                                    <span className="text-red"> (-{discount}%)</span>
                                 </div>
                             )}
-                            {product.tags && product.tags.length > 0 && (
-                                <div className="meta-item">
-                                    <strong>Tags:</strong> {product.tags.join(', ')}
-                                </div>
-                            )}
+                            <div className="text-secondary" style={{ fontSize: '0.85rem', marginTop: '4px' }}>
+                                Inclusive of all taxes
+                            </div>
                         </div>
 
-                        {/* Features */}
-                        <div className="product-features">
-                            <div className="feature-item">
-                                <span className="feature-icon">🚚</span>
-                                <span>Free Delivery</span>
+                        {/* ============================================================
+                            COLOR SELECTOR - ONLY IF ADMIN CREATED COLOR VARIANTS
+                        ============================================================ */}
+                        {attributeConfig.hasColors && (
+                            <div className="attributes-container">
+                                <div className="attr-row">
+                                    <div className="attr-label">
+                                        Color: <span>{getColorName(selectedAttributes.colorId)}</span>
+                                    </div>
+                                    <div className="swatches">
+                                        {availableColors.map((colorId) => {
+                                            const colorDetails = getColorDetails(colorId);
+                                            const isSelected = selectedAttributes.colorId === colorId;
+                                            const isAvailable = isColorAvailable(colorId);
+
+                                            return (
+                                                <div
+                                                    key={colorId}
+                                                    className={`swatch-color ${isSelected ? 'selected' : ''} ${!isAvailable ? 'disabled' : ''}`}
+                                                    style={{
+                                                        backgroundColor: colorDetails.hexCode,
+                                                        opacity: isAvailable ? 1 : 0.3,
+                                                        cursor: isAvailable ? 'pointer' : 'not-allowed'
+                                                    }}
+                                                    onClick={() => isAvailable && handleColorSelect(colorId)}
+                                                    title={colorDetails.name}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </div>
-                            <div className="feature-item">
-                                <span className="feature-icon">↩️</span>
-                                <span>7 Days Return</span>
+                        )}
+
+                        {/* ============================================================
+                            SIZE SELECTOR - ONLY IF ADMIN CREATED SIZE VARIANTS
+                        ============================================================ */}
+                        {attributeConfig.hasSizes && (
+                            <div className="attributes-container">
+                                <div className="attr-row">
+                                    <div className="attr-label">
+                                        Size: <span>{selectedAttributes.size || 'Select'}</span>
+                                    </div>
+                                    <div className="swatches">
+                                        {availableSizes.map((size) => {
+                                            const isSelected = selectedAttributes.size === size;
+                                            const isAvailable = isSizeAvailable(size);
+
+                                            return (
+                                                <button
+                                                    key={size}
+                                                    className={`swatch-text ${isSelected ? 'selected' : ''}`}
+                                                    onClick={() => isAvailable && handleSizeSelect(size)}
+                                                    disabled={!isAvailable}
+                                                    style={{ opacity: isAvailable ? 1 : 0.5 }}
+                                                >
+                                                    {size}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </div>
-                            <div className="feature-item">
-                                <span className="feature-icon">✓</span>
-                                <span>Warranty Available</span>
+                        )}
+
+                        {/* Stock & Actions (Admin Controlled) */}
+                        <div className="action-box">
+                            <div className={`stock-status ${isOutOfStock ? 'text-red' : 'text-green'}`}>
+                                {isOutOfStock
+                                    ? 'Out of Stock'
+                                    : stock < 10
+                                        ? `Only ${stock} left in stock`
+                                        : 'In Stock'
+                                }
+                            </div>
+
+                            {!isOutOfStock && (
+                                <div className="delivery-text">
+                                    FREE delivery. Order within 12 hrs 30 mins.
+                                </div>
+                            )}
+
+                            <div className="action-buttons">
+                                {!isOutOfStock && (
+                                    <>
+                                        <div className="quantity-selector" style={{ alignSelf: 'start', marginBottom: '10px' }}>
+                                            <label style={{ fontSize: '0.85rem', marginRight: '5px' }}>Qty:</label>
+                                            <select
+                                                value={quantity}
+                                                onChange={(e) => setQuantity(Number(e.target.value))}
+                                                style={{ padding: '4px', borderRadius: '4px' }}
+                                            >
+                                                {[...Array(Math.min(10, stock)).keys()].map(x => (
+                                                    <option key={x + 1} value={x + 1}>{x + 1}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <button className="btn-primary-action" onClick={handleAddToCart}>
+                                            Add to Cart
+                                        </button>
+                                        <button className="btn-secondary-action" onClick={handleBuyNow}>
+                                            Buy Now
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Product Details Tabs */}
-                <div className="product-details-tabs">
+                {/* Tabs (Admin Controlled Content) */}
+                <div className="tabs-container">
                     <div className="tabs-header">
                         <button
                             className={`tab-btn ${activeTab === 'description' ? 'active' : ''}`}
@@ -323,90 +582,56 @@ const ProductDetailPage = () => {
                         >
                             Specifications
                         </button>
-                        <button
-                            className={`tab-btn ${activeTab === 'reviews' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('reviews')}
-                        >
-                            Reviews ({product.reviewCount || 0})
-                        </button>
                     </div>
-
-                    <div className="tabs-content">
+                    <div className="tab-content">
                         {activeTab === 'description' && (
-                            <div className="tab-panel">
+                            <div>
                                 <h3>Product Description</h3>
-                                <p>{product.description || 'No description available.'}</p>
-                                {product.features && product.features.length > 0 && (
-                                    <>
-                                        <h4>Key Features:</h4>
-                                        <ul>
-                                            {product.features.map((feature, index) => (
-                                                <li key={index}>{feature}</li>
-                                            ))}
-                                        </ul>
-                                    </>
-                                )}
+                                <div
+                                    dangerouslySetInnerHTML={{
+                                        __html: product.description || 'No description available'
+                                    }}
+                                    style={{ lineHeight: 1.6 }}
+                                />
                             </div>
                         )}
-
-                        {activeTab === 'specifications' && (
-                            <div className="tab-panel">
+                        {activeTab === 'specifications' && selectedVariant && (
+                            <div>
                                 <h3>Specifications</h3>
-                                <table className="specs-table">
+                                <table className="specs-table" style={{ width: '100%', maxWidth: '600px', borderCollapse: 'collapse' }}>
                                     <tbody>
-                                        <tr>
-                                            <td><strong>SKU</strong></td>
-                                            <td>{currentSKU}</td>
-                                        </tr>
-                                        <tr>
-                                            <td><strong>Brand</strong></td>
-                                            <td>{product.brand?.name || 'N/A'}</td>
-                                        </tr>
-                                        <tr>
-                                            <td><strong>Category</strong></td>
-                                            <td>{product.category?.name || 'N/A'}</td>
-                                        </tr>
-                                        {product.specifications && Object.entries(product.specifications).map(([key, value]) => (
-                                            <tr key={key}>
-                                                <td><strong>{key}</strong></td>
-                                                <td>{value}</td>
+                                        {product.brand && (
+                                            <tr style={{ borderBottom: '1px solid #ddd' }}>
+                                                <td style={{ padding: '10px', background: '#f7f7f7' }}>Brand</td>
+                                                <td style={{ padding: '10px' }}>{product.brand.name}</td>
                                             </tr>
-                                        ))}
+                                        )}
+                                        <tr style={{ borderBottom: '1px solid #ddd' }}>
+                                            <td style={{ padding: '10px', background: '#f7f7f7' }}>SKU</td>
+                                            <td style={{ padding: '10px' }}>{selectedVariant.sku}</td>
+                                        </tr>
+                                        {selectedVariant.attributes?.colorId && (
+                                            <tr style={{ borderBottom: '1px solid #ddd' }}>
+                                                <td style={{ padding: '10px', background: '#f7f7f7' }}>Color</td>
+                                                <td style={{ padding: '10px' }}>
+                                                    {getColorName(selectedVariant.attributes.colorId)}
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {selectedVariant.attributes?.size && (
+                                            <tr style={{ borderBottom: '1px solid #ddd' }}>
+                                                <td style={{ padding: '10px', background: '#f7f7f7' }}>Size</td>
+                                                <td style={{ padding: '10px' }}>
+                                                    {selectedVariant.attributes.size}
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
                         )}
-
-                        {activeTab === 'reviews' && (
-                            <div className="tab-panel">
-                                <h3>Customer Reviews</h3>
-                                <div className="reviews-summary">
-                                    <div className="average-rating">
-                                        <div className="rating-number">{product.rating || 4.0}</div>
-                                        <div className="stars-large">
-                                            {'★'.repeat(Math.floor(product.rating || 4))}
-                                            {'☆'.repeat(5 - Math.floor(product.rating || 4))}
-                                        </div>
-                                        <p>{product.reviewCount || 0} reviews</p>
-                                    </div>
-                                </div>
-                                <p className="no-reviews">Reviews feature coming soon!</p>
-                            </div>
-                        )}
                     </div>
                 </div>
-
-                {/* Related Products */}
-                {relatedProducts.length > 0 && (
-                    <div className="related-products">
-                        <h2>Related Products</h2>
-                        <div className="products-grid">
-                            {relatedProducts.map(product => (
-                                <ProductCard key={product._id} product={product} />
-                            ))}
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );

@@ -23,7 +23,11 @@ export const getProductById = async (id) => {
 // Get product by slug
 export const getProductBySlug = async (slug) => {
     const response = await api.get(`/products/slug/${slug}`);
-    return response.data?.data || null;
+    // Axios interceptor already extracts response.data
+    // Backend returns: { success: true, data: productObject }
+    // After interceptor: { success: true, data: productObject }
+    // So we need response.data (not response.data.data)
+    return response.data || response || null;
 };
 
 // Get products by category
