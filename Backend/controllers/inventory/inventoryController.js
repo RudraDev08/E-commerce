@@ -1,5 +1,5 @@
 import inventoryService from '../../services/inventory.service.js';
-import { validateInventoryMaster, validateStockAdjustment, sanitizeInput } from '../../middlewares/inventory.validation.js';
+import { validateStockAdjustment, sanitizeInput } from '../../middlewares/inventory.validation.js';
 
 class InventoryController {
 
@@ -8,34 +8,10 @@ class InventoryController {
    * Create new inventory master
    */
   async createInventory(req, res, next) {
-    try {
-      const sanitizedData = sanitizeInput(req.body);
-      const validation = validateInventoryMaster(sanitizedData);
-
-      if (!validation.isValid) {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation failed',
-          errors: validation.errors
-        });
-      }
-
-      const inventory = await inventoryService.createInventoryMaster(sanitizedData);
-
-      res.status(201).json({
-        success: true,
-        message: 'Inventory master created successfully',
-        data: inventory
-      });
-    } catch (error) {
-      if (error.code === 11000) {
-        return res.status(409).json({
-          success: false,
-          message: 'Duplicate entry: SKU or Product ID already exists'
-        });
-      }
-      next(error);
-    }
+    return res.status(410).json({
+      success: false,
+      message: 'DEPRECATED: Inventory is now managed directly via Variants. Create or update a Variant to manage stock.'
+    });
   }
 
   /**

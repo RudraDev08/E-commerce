@@ -18,110 +18,38 @@ const MSG = {
 // --------------------------------------------------------------------------
 // HELPERS
 // --------------------------------------------------------------------------
-const parseJSON = (value) => {
-  if (typeof value === 'string') {
+const cleanBody = (body, files) => {
+  let attributes = body.attributes;
+  if (typeof attributes === 'string') {
     try {
-      return JSON.parse(value);
+      attributes = JSON.parse(attributes);
     } catch (e) {
-      return undefined;
+      // If parsing fails, maybe it's not JSON, ignore or set empty
+      attributes = undefined;
     }
   }
-  return value;
-};
-
-const cleanBody = (body, files) => {
-  // Parse JSON strings
-  const attributes = parseJSON(body.attributes);
-  const keyFeatures = parseJSON(body.keyFeatures);
-  const technicalSpecifications = parseJSON(body.technicalSpecifications);
-  const gallery = parseJSON(body.gallery);
-  const videos = parseJSON(body.videos);
-  const badges = parseJSON(body.badges);
-  const tags = parseJSON(body.tags);
-  const searchKeywords = parseJSON(body.searchKeywords);
-  const material = parseJSON(body.material);
-  const subCategories = parseJSON(body.subCategories);
-  const seo = parseJSON(body.seo);
-  const featuredImage = parseJSON(body.featuredImage);
-  const dimensions = parseJSON(body.dimensions);
-  const weight = parseJSON(body.weight);
-  const visibility = parseJSON(body.visibility);
 
   const payload = {
     ...body,
-
-    // Core pricing
-    price: Number(body.price || 0),
+    price: Number(body.price),
     basePrice: Number(body.basePrice || 0),
-    costPrice: Number(body.costPrice || 0),
-    discount: Number(body.discount || 0),
-    tax: Number(body.tax || 18),
-
-    // Legacy stock (will be removed later)
     stock: Number(body.stock || 0),
     minStock: Number(body.minStock || 5),
-
-    // Variant configuration
     hasVariants: body.hasVariants === 'true' || body.hasVariants === true,
-
-    // Featured flag
-    featured: body.featured === 'true' || body.featured === true,
-    isFeatured: body.isFeatured === 'true' || body.isFeatured === true,
-
-    // Display priority
-    displayPriority: Number(body.displayPriority || 0),
-
-    // Version
-    version: Number(body.version || 1),
-
-    // Arrays
-    ...(keyFeatures && { keyFeatures }),
-    ...(technicalSpecifications && { technicalSpecifications }),
-    ...(badges && { badges }),
-    ...(tags && { tags }),
-    ...(searchKeywords && { searchKeywords }),
-    ...(material && { material }),
-    ...(subCategories && { subCategories }),
-    ...(attributes && { attributes }),
-
-    // Objects
-    ...(seo && { seo }),
-    ...(dimensions && { dimensions }),
-    ...(weight && { weight }),
-    ...(visibility && { visibility }),
-
-    // Media - Featured Image
-    ...(featuredImage && { featuredImage }),
-
-    // Legacy image support
+    // Files
     image: files?.image?.[0]?.filename || body.image || "",
-
-    // Gallery
     gallery: [
-      ...(Array.isArray(gallery) ? gallery : (gallery ? [gallery] : [])),
-      ...(files?.gallery ? files.gallery.map(f => ({ url: f.filename, alt: '', sortOrder: 0 })) : [])
-    ],
-
-    // Videos
-    ...(videos && { videos })
+      ...(Array.isArray(body.gallery) ? body.gallery : (body.gallery ? [body.gallery] : [])),
+      ...(files?.gallery ? files.gallery.map(f => f.filename) : [])
+    ]
   };
 
-  // Sanitize ObjectIds (remove null/undefined strings)
-  if (!payload.productType || payload.productType === 'null' || payload.productType === 'undefined') {
-    delete payload.productType;
-  }
-  if (!payload.category || payload.category === 'null' || payload.category === 'undefined') {
-    delete payload.category;
-  }
-  if (!payload.brand || payload.brand === 'null' || payload.brand === 'undefined') {
-    delete payload.brand;
-  }
+  if (attributes) payload.attributes = attributes;
 
-  // Remove empty arrays
-  if (payload.gallery && payload.gallery.length === 0) delete payload.gallery;
-  if (payload.keyFeatures && payload.keyFeatures.length === 0) delete payload.keyFeatures;
-  if (payload.badges && payload.badges.length === 0) delete payload.badges;
-  if (payload.tags && payload.tags.length === 0) delete payload.tags;
+  // Sanitize ObjectIds
+  if (!payload.productType || payload.productType === 'null' || payload.productType === 'undefined') delete payload.productType;
+  if (!payload.category || payload.category === 'null' || payload.category === 'undefined') delete payload.category;
+  if (!payload.brand || payload.brand === 'null' || payload.brand === 'undefined') delete payload.brand;
 
   return payload;
 };
@@ -479,258 +407,6 @@ export const bulkDeleteProducts = async (req, res) => {
 
     await Product.deleteMany({ _id: { $in: ids } });
     res.json({ success: true, message: `${ids.length} products permanently deleted` });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// --------------------------------------------------------------------------
-// SOFT DELETE (Move to Trash)
-// --------------------------------------------------------------------------
-export const softDeleteProduct = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
-
-    await product.softDelete(req.user?.id || 'admin');
-
-    res.json({
-      success: true,
-      message: MSG.DELETED_SOFT,
-      data: { productId: product._id }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// --------------------------------------------------------------------------
-// BULK SOFT DELETE
-// --------------------------------------------------------------------------
-export const bulkSoftDeleteProducts = async (req, res) => {
-  try {
-    const { ids } = req.body;
-    if (!ids || !ids.length) {
-      return res.status(400).json({ success: false, message: "No items selected" });
-    }
-
-    const result = await Product.updateMany(
-      { _id: { $in: ids } },
-      {
-        isDeleted: true,
-        deletedAt: new Date(),
-        deletedBy: req.user?.id || 'admin',
-        status: 'archived'
-      }
-    );
-
-    res.json({
-      success: true,
-      message: `${result.modifiedCount} products moved to trash`,
-      data: { count: result.modifiedCount }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// --------------------------------------------------------------------------
-// PUBLISH PRODUCT
-// --------------------------------------------------------------------------
-export const publishProduct = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
-
-    await product.publish();
-
-    res.json({
-      success: true,
-      message: 'Product published successfully',
-      data: {
-        productId: product._id,
-        publishStatus: product.publishStatus,
-        publishDate: product.publishDate
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// --------------------------------------------------------------------------
-// UNPUBLISH PRODUCT
-// --------------------------------------------------------------------------
-export const unpublishProduct = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
-
-    await product.unpublish();
-
-    res.json({
-      success: true,
-      message: 'Product unpublished successfully',
-      data: {
-        productId: product._id,
-        publishStatus: product.publishStatus
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// --------------------------------------------------------------------------
-// DUPLICATE PRODUCT
-// --------------------------------------------------------------------------
-export const duplicateProduct = async (req, res) => {
-  try {
-    const original = await Product.findById(req.params.id);
-    if (!original) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
-
-    const duplicate = await original.duplicate();
-    await duplicate.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Product duplicated successfully',
-      data: {
-        originalId: original._id,
-        duplicateId: duplicate._id,
-        duplicate
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// --------------------------------------------------------------------------
-// BULK UPDATE STATUS
-// --------------------------------------------------------------------------
-export const bulkUpdateStatus = async (req, res) => {
-  try {
-    const { ids, status } = req.body;
-
-    if (!ids || !ids.length) {
-      return res.status(400).json({ success: false, message: "No items selected" });
-    }
-
-    if (!['active', 'inactive', 'draft', 'archived', 'discontinued'].includes(status)) {
-      return res.status(400).json({ success: false, message: "Invalid status" });
-    }
-
-    const result = await Product.updateMany(
-      { _id: { $in: ids } },
-      { status }
-    );
-
-    res.json({
-      success: true,
-      message: `${result.modifiedCount} products updated to ${status}`,
-      data: { count: result.modifiedCount, status }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// --------------------------------------------------------------------------
-// BULK UPDATE PUBLISH STATUS
-// --------------------------------------------------------------------------
-export const bulkUpdatePublishStatus = async (req, res) => {
-  try {
-    const { ids, publishStatus } = req.body;
-
-    if (!ids || !ids.length) {
-      return res.status(400).json({ success: false, message: "No items selected" });
-    }
-
-    if (!['draft', 'published', 'scheduled', 'archived'].includes(publishStatus)) {
-      return res.status(400).json({ success: false, message: "Invalid publish status" });
-    }
-
-    const updateData = { publishStatus };
-    if (publishStatus === 'published') {
-      updateData.publishDate = new Date();
-    }
-
-    const result = await Product.updateMany(
-      { _id: { $in: ids } },
-      updateData
-    );
-
-    res.json({
-      success: true,
-      message: `${result.modifiedCount} products ${publishStatus}`,
-      data: { count: result.modifiedCount, publishStatus }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// --------------------------------------------------------------------------
-// GET PRODUCTS BY PUBLISH STATUS
-// --------------------------------------------------------------------------
-export const getProductsByPublishStatus = async (req, res) => {
-  try {
-    const { publishStatus } = req.params;
-    const { page = 1, limit = 20 } = req.query;
-
-    const query = {
-      publishStatus,
-      isDeleted: false
-    };
-
-    const products = await Product.find(query)
-      .populate('category', 'name slug')
-      .populate('brand', 'name slug logo')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Product.countDocuments(query);
-
-    res.json({
-      success: true,
-      data: products,
-      pagination: {
-        total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// --------------------------------------------------------------------------
-// SEARCH PRODUCTS (Enhanced with Full-Text Search)
-// --------------------------------------------------------------------------
-export const searchProducts = async (req, res) => {
-  try {
-    const { q, page = 1, limit = 20 } = req.query;
-
-    if (!q || q.trim() === '') {
-      return res.status(400).json({ success: false, message: "Search query is required" });
-    }
-
-    const products = await Product.search(q)
-      .populate('category', 'name slug')
-      .populate('brand', 'name slug logo')
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    res.json({
-      success: true,
-      data: products,
-      query: q,
-      count: products.length
-    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

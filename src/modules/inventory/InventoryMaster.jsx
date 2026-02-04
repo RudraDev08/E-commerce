@@ -1,13 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Toaster, toast } from 'react-hot-toast';
-import { StatCard } from '../../components/inventory/StatCard';
-import { InventoryValueBanner } from '../../components/inventory/InventoryValueBanner';
-import InventoryTable from '../../components/inventory/InventoryTable';
-import UpdateStockModal from '../../components/inventory/UpdateStockModal';
-import InventoryLedgerModal from '../../components/inventory/InventoryLedgerModal';
-import BulkUpdateModal from '../../components/inventory/BulkUpdateModal';
+import { StatCard } from './StatCard';
+import { InventoryValueBanner } from './InventoryValueBanner';
+import InventoryTable from './InventoryTable';
+import UpdateStockModal from './UpdateStockModal';
+import InventoryLedgerModal from './InventoryLedgerModal';
+import BulkUpdateModal from './BulkUpdateModal';
 
 // Icons
 const SortIcon = () => (
@@ -104,26 +103,29 @@ const InventoryMaster = () => {
       if (lowStockOnly) params.append('lowStock', 'true');
       if (warehouseFilter) params.append('warehouseId', warehouseFilter);
 
-      // Simulate slight delay for smooth UI (as per design prompt's "micro-interaction")
-      // const delay = new Promise(resolve => setTimeout(resolve, 300));
-
       const response = await axios.get(`${API_BASE}?${params}`);
 
-      // await delay;
-
       if (response.data.success) {
-        setInventories(response.data.data);
-        setTotalPages(response.data.pagination.totalPages);
-        setTotalItems(response.data.pagination.total);
+        const inventoryData = response.data.data || [];
+        setInventories(inventoryData);
+        setTotalPages(response.data.pagination?.totalPages || 1);
+        setTotalItems(response.data.pagination?.total || 0);
 
-        // Notify if there are out of stock items on initial load
-        if (response.data.data.some(i => i.stockStatus === 'out_of_stock')) {
+        // Only show out of stock alert if we have data
+        if (inventoryData.length > 0 && inventoryData.some(i => i.stockStatus === 'out_of_stock')) {
           toast.error('Critical: Some items are OUT OF STOCK!', { id: 'out-of-stock-alert' });
         }
       }
     } catch (err) {
-      console.error(err);
-      toast.error('Failed to load inventory data');
+      console.error('Inventory fetch error:', err);
+      // Only show error toast for actual errors, not empty data
+      if (err.response?.status !== 404 && err.response?.data?.total !== 0) {
+        toast.error('Failed to load inventory data');
+      }
+      // Set empty state on error
+      setInventories([]);
+      setTotalPages(1);
+      setTotalItems(0);
     } finally {
       setLoading(false);
     }
@@ -136,7 +138,17 @@ const InventoryMaster = () => {
         setStats(response.data.data);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Stats fetch error:', err);
+      // Set default empty stats instead of showing error
+      setStats({
+        totalVariants: 0,
+        inStock: 0,
+        lowStock: 0,
+        outOfStock: 0,
+        totalInventoryValue: 0,
+        totalStock: 0,
+        totalReserved: 0
+      });
     }
   };
 

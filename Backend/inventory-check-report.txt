@@ -1,0 +1,57 @@
+﻿≡ƒöì Connecting to MongoDB...
+node : (node:3876) [MONGOOSE] Warning: Duplicate schema 
+index on {"stock":1} found. This is often due to 
+declaring an index using both "index: true" and 
+"schema.index()". Please remove the duplicate index 
+definition.
+At line:1 char:1
++ node scripts/checkInventory.js 2>&1 | Out-File 
+-FilePath inventory-ch ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:3876)  
+   [MO...dex definition.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-warnings ...` to show where the 
+warning was created)
+(node:3876) [MONGOOSE] Warning: Duplicate schema index on 
+{"batchId":1} found. This is often due to declaring an 
+index using both "index: true" and "schema.index()". 
+Please remove the duplicate index definition.
+Γ£à Connected to MongoDB
+
+============================================================
+≡ƒôª CHECKING VARIANTS
+============================================================
+Total Variants: 0
+Active Variants: 0
+Deleted Variants: 0
+
+
+
+============================================================
+≡ƒôè CHECKING INVENTORY LEDGER
+============================================================
+Total Ledger Entries: 0
+
+ΓÜá∩╕Å  No inventory ledger entries found!
+   This means no stock movements have been recorded.
+
+
+============================================================
+≡ƒôê STOCK SUMMARY
+============================================================
+
+
+============================================================
+≡ƒÆí RECOMMENDATIONS
+============================================================
+Γ¥î No variants found! You need to:
+   1. Create products in Product Master
+   2. Create variants in Variant Builder
+
+============================================================
+Γ£à Inventory check complete!
+============================================================
+
+≡ƒöî Disconnected from MongoDB

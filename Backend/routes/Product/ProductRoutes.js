@@ -9,26 +9,66 @@ import {
   deleteProduct,
   restoreProduct,
   bulkDeleteProducts,
-  getProductStats
+  getProductStats,
+  // New enhanced methods
+  softDeleteProduct,
+  bulkSoftDeleteProducts,
+  publishProduct,
+  unpublishProduct,
+  duplicateProduct,
+  bulkUpdateStatus,
+  bulkUpdatePublishStatus,
+  getProductsByPublishStatus,
+  searchProducts
 } from '../../controllers/Product/ProductController.js';
 
 import { upload } from "../../config/multer.js";
 
 const router = express.Router();
 
-// Stats
+// --------------------------------------------------------------------------
+// STATS & ANALYTICS
+// --------------------------------------------------------------------------
 router.get("/stats", getProductStats);
 
-// Featured Products (Customer Website)
+// --------------------------------------------------------------------------
+// SEARCH
+// --------------------------------------------------------------------------
+router.get("/search", searchProducts); // GET /api/products/search?q=keyword
+
+// --------------------------------------------------------------------------
+// FEATURED PRODUCTS (Customer Website)
+// --------------------------------------------------------------------------
 router.get("/featured", getFeaturedProducts);
 
-// Bulk Actions
-router.post('/bulk-delete', bulkDeleteProducts);
+// --------------------------------------------------------------------------
+// PUBLISH STATUS ROUTES
+// --------------------------------------------------------------------------
+router.get("/publish-status/:publishStatus", getProductsByPublishStatus); // GET /api/products/publish-status/published
 
-// CRUD
-router.get('/', getProducts);
-router.get('/slug/:slug', getProductBySlug); // Get by slug for customer website
-router.get('/:id', getProductById);
+// --------------------------------------------------------------------------
+// BULK ACTIONS
+// --------------------------------------------------------------------------
+router.post('/bulk-delete', bulkDeleteProducts); // Hard delete
+router.post('/bulk-soft-delete', bulkSoftDeleteProducts); // Soft delete (move to trash)
+router.post('/bulk-update-status', bulkUpdateStatus); // Update status (active, inactive, etc.)
+router.post('/bulk-update-publish-status', bulkUpdatePublishStatus); // Update publish status
+
+// --------------------------------------------------------------------------
+// SINGLE PRODUCT ACTIONS
+// --------------------------------------------------------------------------
+router.patch('/:id/publish', publishProduct); // Publish product
+router.patch('/:id/unpublish', unpublishProduct); // Unpublish product
+router.post('/:id/duplicate', duplicateProduct); // Duplicate product
+router.patch('/:id/soft-delete', softDeleteProduct); // Soft delete (move to trash)
+router.patch('/:id/restore', restoreProduct); // Restore from trash
+
+// --------------------------------------------------------------------------
+// CRUD OPERATIONS
+// --------------------------------------------------------------------------
+router.get('/', getProducts); // GET all with filters, pagination, search
+router.get('/slug/:slug', getProductBySlug); // GET by slug (for customer website)
+router.get('/:id', getProductById); // GET single by ID
 
 router.post(
   '/',
@@ -48,7 +88,6 @@ router.put(
   updateProduct
 );
 
-router.delete('/:id', deleteProduct);
-router.patch('/:id/restore', restoreProduct);
+router.delete('/:id', deleteProduct); // Hard delete
 
 export default router;

@@ -148,16 +148,100 @@ const InventoryTable = ({ inventories, onUpdateStock, onViewLedger, formatNumber
 
         {/* Empty State */}
         {inventories.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="p-4 bg-gray-50 rounded-full mb-4">
-              <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-              </svg>
+          <div className="flex flex-col items-center justify-center py-20 px-6 text-center bg-gradient-to-br from-gray-50 to-white">
+            {/* Icon */}
+            <div className="relative mb-6">
+              <div className="absolute inset-0 bg-purple-100 rounded-full blur-2xl opacity-50"></div>
+              <div className="relative p-6 bg-white rounded-full shadow-lg border-2 border-purple-100">
+                <svg className="w-16 h-16 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+              </div>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-1">No inventory records found</h3>
-            <p className="text-gray-500 text-sm max-w-sm">
-              Try adjusting your search or create a new product variant to get started.
+
+            {/* Title */}
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">
+              No Inventory to Display
+            </h3>
+
+            {/* Description */}
+            <p className="text-gray-600 text-base max-w-md mb-8 leading-relaxed">
+              Your inventory is empty because no product variants exist yet.
+              Follow these steps to get started:
             </p>
+
+            {/* Steps */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mb-8">
+              {/* Step 1 */}
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                  <span className="text-2xl font-bold text-blue-600">1</span>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Create Products</h4>
+                <p className="text-sm text-gray-600">
+                  Go to <span className="font-medium text-purple-600">Product Master</span> and add your products
+                </p>
+              </div>
+
+              {/* Step 2 */}
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                  <span className="text-2xl font-bold text-purple-600">2</span>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Build Variants</h4>
+                <p className="text-sm text-gray-600">
+                  Use <span className="font-medium text-purple-600">Variant Builder</span> to create size/color options
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4 mx-auto">
+                  <span className="text-2xl font-bold text-green-600">3</span>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Manage Stock</h4>
+                <p className="text-sm text-gray-600">
+                  Return here to update stock levels and track inventory
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-4">
+              <a
+                href="/product-master"
+                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Create Product
+              </a>
+              <a
+                href="/variant-builder"
+                className="inline-flex items-center px-6 py-3 bg-white text-purple-600 font-medium rounded-lg border-2 border-purple-600 hover:bg-purple-50 transition-all shadow-sm hover:shadow-md"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                </svg>
+                Build Variants
+              </a>
+            </div>
+
+            {/* Help Text */}
+            <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-100 max-w-2xl">
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-left">
+                  <p className="text-sm font-medium text-blue-900 mb-1">Need Help?</p>
+                  <p className="text-sm text-blue-700">
+                    Inventory is automatically created when you add variants. Each variant (e.g., "Red T-Shirt - Size M") gets its own inventory record.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -27,16 +27,11 @@ const inventoryLedgerSchema = new mongoose.Schema({
     // 1. REFERENCE LINKS
     // ========================================================================
 
-    inventoryId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'InventoryMaster',
-        required: true,
-        index: true
-    },
+
 
     variantId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'ProductVariant',
+        ref: 'Variant',
         required: true,
         index: true
     },

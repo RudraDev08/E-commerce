@@ -1,28 +1,28 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Toaster } from "react-hot-toast";
-import ProfessionalAside from "./components/aside/SimpleAside";
-import AdminHeader from "./components/header/Header";
-import Dashboard from "./page/Dashboard";
-import CountryPage from "./page/CountryPage";
-import StatePage from "./page/StatePage";
-import CityPage from "./page/CityPage";
-import PincodeTable from "./components/tables/PincodeTable";
-import BrandList from "./components/Brands/BrandList";
+import ProfessionalAside from "../components/aside/SimpleAside";
+import AdminHeader from "../components/header/Header";
+import Dashboard from "../modules/dashboard/Dashboard";
+import CountryPage from "../page/CountryPage";
+import StatePage from "../page/StatePage";
+import CityPage from "../page/CityPage";
+import PincodeTable from "../components/tables/PincodeTable";
+import BrandList from "../modules/brands/BrandList";
 
-import Product from "./components/Product/Products";
-import InventoryMaster from "./page/inventory/InventoryMaster";
-import VariantTable from "./page/VariantBuilder"
-import CategorySelectorDemo from "./page/CategorySelectorDemo";
-import CategoryManagement from "./page/category/CategoryManagement";
-import SizeManagement from "./page/size/SizeManagement";
-import ColorManagement from "./page/color/ColorManagement";
-import VariantManagement from "./page/variant/VariantManagement";
-import ProductVariantMapping from "./page/variant/ProductVariantMapping";
-import VariantBuilder from "./page/variant/VariantBuilder";
-import WarehouseManagement from "./components/inventory/WarehouseManagement";
-import StockTransferManagement from "./components/inventory/StockTransferManagement";
-import CycleCountManagement from "./components/inventory/CycleCountManagement";
+import Product from "../modules/products/Products";
+import InventoryMaster from "../modules/inventory/InventoryMaster";
+import VariantTable from "../page/VariantBuilder";
+import CategorySelectorDemo from "../page/CategorySelectorDemo";
+import CategoryManagement from "../modules/categories/CategoryManagement";
+import SizeManagement from "../page/size/SizeManagement";
+import ColorManagement from "../page/color/ColorManagement";
+import VariantManagement from "../modules/variants/VariantManagement";
+import ProductVariantMapping from "../modules/variants/ProductVariantMapping";
+import VariantBuilder from "../modules/variants/VariantBuilder";
+import WarehouseManagement from "../modules/inventory/WarehouseManagement";
+import StockTransferManagement from "../modules/inventory/StockTransferManagement";
+import CycleCountManagement from "../modules/inventory/CycleCountManagement";
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);

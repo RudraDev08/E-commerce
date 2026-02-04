@@ -1,6 +1,5 @@
-
 import CycleCount from '../models/inventory/CycleCount.model.js';
-import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
+import Variant from '../models/Variant.model.js';
 import inventoryService from './inventory.service.js';
 import mongoose from 'mongoose';
 
@@ -18,18 +17,22 @@ class CycleCountService {
             const countNumber = `CC-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
 
             // 2. Fetch inventory for that warehouse to create snapshot
-            // For now, let's assume we count all items in that warehouse
-            const inventories = await InventoryMaster.find({
-                'locations.warehouseId': data.warehouse
+            // ARCHITECTURE UPDATE: InventoryMaster is removed. Stock is on Variant.
+            // Assuming simplified warehouse model where Variant.stock is the total stock (likely Default Warehouse).
+            // Future: Variant might have 'locations' array if multi-warehouse is strictly needed.
+            // For now, we take Variant.stock as the system of record.
+
+            const variants = await Variant.find({
+                isDeleted: false,
+                status: true
             }).session(session);
 
-            const items = inventories.map(inv => {
-                const loc = inv.locations.find(l => l.warehouseId.toString() === data.warehouse.toString());
+            const items = variants.map(v => {
                 return {
-                    inventory: inv._id,
-                    variant: inv.variantId,
-                    sku: inv.sku,
-                    systemQuantity: loc ? loc.stock : 0,
+                    inventory: v._id, // Use Variant ID as inventory reference since Master is gone
+                    variant: v._id,
+                    sku: v.sku,
+                    systemQuantity: v.stock || 0,
                     countedQuantity: 0,
                     variance: 0,
                     status: 'PENDING'

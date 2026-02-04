@@ -1,6 +1,5 @@
-
-import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
 import Warehouse from '../models/inventory/Warehouse.model.js';
+import Variant from '../models/Variant.model.js';
 
 class WarehouseService {
 

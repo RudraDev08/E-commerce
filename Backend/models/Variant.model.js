@@ -47,6 +47,22 @@ const variantSchema = new mongoose.Schema(
         },
 
         // ====================================================================
+        // COLORWAY STRATEGY (For multi-color variants)
+        // ====================================================================
+        colorwayName: {
+            type: String,
+            trim: true,
+            required: false
+            // Example: "Chicago", "Panda", "Triple Black"
+        },
+
+        colorParts: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Color'
+            // Array of colors composing the colorway
+        }],
+
+        // ====================================================================
         // LEGACY ATTRIBUTES (For backward compatibility)
         // Will be deprecated in favor of sizeId/colorId
         // ====================================================================
@@ -216,16 +232,8 @@ const variantSchema = new mongoose.Schema(
 // INDEXES (Critical for Performance)
 // ========================================================================
 
-// Compound unique index: Prevent duplicate variants
-// FORMULA: productId + sizeId + colorId = UNIQUE
-variantSchema.index(
-    { productId: 1, sizeId: 1, colorId: 1 },
-    {
-        unique: true,
-        partialFilterExpression: { isDeleted: false }
-        // Only enforce uniqueness for non-deleted variants
-    }
-);
+// Compound Index for Lookup Performance (Non-Unique)
+variantSchema.index({ productId: 1, sizeId: 1, colorId: 1 });
 
 // Performance indexes
 variantSchema.index({ productId: 1, status: 1, isDeleted: 1 });
@@ -330,6 +338,10 @@ variantSchema.methods.softDelete = function (userId) {
     this.deletedAt = new Date();
     this.deletedBy = userId;
     this.status = false; // Also deactivate
+
+    // Rename SKU to free up the code for reuse
+    this.sku = `${this.sku}-DEL-${Date.now()}`;
+
     return this.save();
 };
 

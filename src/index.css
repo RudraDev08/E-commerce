@@ -120,6 +120,17 @@ body {
     display: none;
 }
 
+/* SCROLLBAR UI ENHANCEMENT: Hide scrollbar but keep functionality */
+.scrollbar-hide {
+    /* Firefox */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
 /* SCROLLBAR UI ENHANCEMENT: Dark theme scrollbar */
 .scrollbar-dark {
     /* Firefox */

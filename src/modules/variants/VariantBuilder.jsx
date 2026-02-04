@@ -12,7 +12,7 @@ import {
     XMarkIcon,
     LockClosedIcon
 } from '@heroicons/react/24/outline';
-import { productAPI, sizeAPI, colorAPI, variantAPI } from '../../api/api';
+import { productAPI, sizeAPI, colorAPI, variantAPI } from '../../Api/api';
 import toast, { Toaster } from 'react-hot-toast';
 import ProductSelectDropdown from '../../components/Shared/Dropdowns/ProductSelectDropdown';
 import SizeMultiSelectDropdown from '../../components/Shared/Dropdowns/SizeMultiSelectDropdown';
@@ -119,18 +119,7 @@ const VariantBuilder = () => {
                     status: (v.status === true || v.status === 'active') ? 'active' : 'inactive'
                 };
             });
-            // 🔍 DEBUGGING: Log the final mapped state
-            console.group('🎨 VARIANT DEBUGGER');
-            console.log('1. Loaded Colors:', loadedColors);
-            console.log('2. Raw API Response:', varRes.data.data);
-            console.log('3. Mapped Variants:', existingArgs.map(v => ({
-                sku: v.sku,
-                colorIdType: typeof v.colorId,
-                colorIdVal: v.colorId,
-                displayColor: v.displayColorName,
-                displayHex: v.displayHex
-            })));
-            console.groupEnd();
+
 
             setVariants(existingArgs);
         } catch (error) {
@@ -327,11 +316,22 @@ const VariantBuilder = () => {
                 const payload = {
                     productId: product._id,
                     variants: newItems.map(v => {
+                        const attributes = {
+                            size: v.sizeCode
+                        };
+
+                        // LEGACY: Support old reports/search (Requested by Requirement 7)
+                        if (v.displayColorName) {
+                            attributes.color = v.displayColorName;
+                        }
+
+                        // STRICT: Follow variantAttributes.js rules for modern logic
+                        if (!v.isColorway) {
+                            attributes.colorId = v.colorId;
+                        }
+
                         const base = {
-                            attributes: {
-                                size: v.sizeCode,
-                                color: v.displayColorName // Fallback for legacy search
-                            },
+                            attributes,
                             sizeId: v.sizeId,
                             sku: v.sku,
                             price: Number(v.price) || 0,
@@ -350,7 +350,17 @@ const VariantBuilder = () => {
                         return base;
                     })
                 };
-                await variantAPI.create(payload);
+                const res = await variantAPI.create(payload);
+                if (res.data?.stats) {
+                    const { created, skipped } = res.data.stats;
+                    if (created > 0 && skipped > 0) {
+                        toast(`Saved ${created} variants (${skipped} skipped as duplicates)`, { icon: '⚠️' });
+                    } else if (created > 0) {
+                        toast.success(`Created ${created} variants`);
+                    } else {
+                        toast('No new variants created (duplicates)', { icon: 'info' });
+                    }
+                }
             }
 
             // Update Edited
@@ -365,7 +375,10 @@ const VariantBuilder = () => {
                 ));
             }
 
-            toast.success('All changes saved!');
+            if (newItems.length === 0 && editedItems.length > 0) {
+                toast.success('Updates saved successfully');
+            }
+
             fetchAllData();
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save changes');

@@ -26,8 +26,8 @@ const stockTransferSchema = new mongoose.Schema({
         required: true
     },
     items: [{
-        inventory: { type: mongoose.Schema.Types.ObjectId, ref: 'InventoryMaster', required: true },
-        variant: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductVariant', required: true },
+        inventory: { type: mongoose.Schema.Types.ObjectId, ref: 'Variant', required: true },
+        variant: { type: mongoose.Schema.Types.ObjectId, ref: 'Variant', required: true },
         sku: { type: String, required: true },
         quantity: { type: Number, required: true, min: 1 }
     }],

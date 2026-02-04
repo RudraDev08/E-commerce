@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import ProductCard from '../../components/Product/ProductCard';
-import ProductTable from '../../components/Product/ProductTable';
-import ProductFilters from '../../components/Product/ProductFilters';
-import ProductSelectionBar from '../../components/Product/ProductSelectionBar';
-import AddProductModal from '../../components/Product/AddProduct';
+import ProductCard from './ProductCard';
+import ProductTable from './ProductTable';
+import ProductFilters from './ProductFilters';
+import ProductSelectionBar from './ProductSelectionBar';
+import EnhancedProductForm from './EnhancedProductForm';
 import productApi from '../../Api/Product/productApi';
 
 const Products = () => {
@@ -156,7 +156,7 @@ const Products = () => {
         )}
       </div>
 
-      <AddProductModal
+      <EnhancedProductForm
         isOpen={isModalOpen}
         onClose={handleModalClose}
         initialData={editingProduct}

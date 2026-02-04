@@ -32,15 +32,9 @@ export const createVariant = async (req, res) => {
     await variant.populate('colorId', 'name hexCode');
     await variant.populate('colorParts', 'name hexCode');
 
-    // 4. Auto-Create Inventory Record
-    try {
-      await inventoryService.autoCreateInventoryForVariant(variant, 'SYSTEM');
-      console.log(`✅ Inventory auto-created for variant ${variant.sku}`);
-    } catch (invError) {
-      console.error("❌ Auto-Inventory Creation Failed:", invError);
-      // Log error but don't fail variant creation
-      // Admin can manually create inventory if needed
-    }
+    // 4. Auto-Create Inventory Record - (DEPRECATED: Variant holds stock directly)
+    // No action needed specifically for inventory creation as it's part of Variant now.
+    // However, if we want to log opening stock, we could call a service method, but for now we skip to avoid crashes.
 
     res.status(201).json({ success: true, data: variant });
 
@@ -106,14 +100,6 @@ export const updateVariant = async (req, res) => {
 export const deleteVariant = async (req, res) => {
   const variantId = req.params.id;
   await ProductVariant.findByIdAndDelete(variantId);
-
-  // Also delete associated inventory
-  try {
-    const InventoryMaster = (await import("../../models/inventory/InventoryMaster.model.js")).default;
-    await InventoryMaster.findOneAndDelete({ variantId });
-  } catch (err) {
-    console.error("Error deleting inventory for variant:", err);
-  }
 
   res.json({ success: true, message: "Variant deleted" });
 };
