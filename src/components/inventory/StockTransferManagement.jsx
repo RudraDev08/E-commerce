@@ -104,7 +104,7 @@ const StockTransferManagement = () => {
                 items: formData.items.map(i => ({
                     variant: i.variant,
                     sku: i.sku,
-                    quantity: parseInt(i.quantity)
+                    quantity: Number(i.quantity) || 1 // Ensure valid number
                 })),
                 notes: formData.notes
             };
@@ -162,9 +162,11 @@ const StockTransferManagement = () => {
         setVariants([]);
     };
 
-    const updateItemQty = (index, qty) => {
+    const updateItemQty = (index, val) => {
+        const qty = val === "" ? "" : parseInt(val);
         const newItems = [...formData.items];
-        newItems[index].quantity = qty;
+        // Prevent NaN in state, default to "" if invalid input to allow typing
+        newItems[index].quantity = isNaN(qty) ? "" : qty;
         setFormData({ ...formData, items: newItems });
     };
 

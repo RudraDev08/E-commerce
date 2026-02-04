@@ -152,7 +152,11 @@ export const getProductById = async (req, res) => {
 export const getProductBySlug = async (req, res) => {
   try {
     const product = await Product.findOne({ slug: req.params.slug, isDeleted: false })
-      .populate('category', 'name slug')
+      .populate({
+        path: 'category',
+        select: 'name slug parentId',
+        populate: { path: 'parentId', select: 'name slug' }
+      })
       .populate('brand', 'name slug logo')
       .populate('productType', 'name');
 

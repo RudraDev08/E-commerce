@@ -12,7 +12,9 @@ export const getVariants = async (params = {}) => {
 
 // Get variants by product ID
 export const getVariantsByProduct = async (productId) => {
-    return await api.get(`/variants/product/${productId}`);
+    return await api.get('/variants', {
+        params: { productId }
+    });
 };
 
 // Get variant by ID
