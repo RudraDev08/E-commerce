@@ -1,122 +1,166 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { formatCurrency, getImageUrl } from '../../utils/formatters';
 import './VariantList.css';
 
 /**
- * VariantList Component - Amazon Style
- * Displays ALL variants horizontally with images and prices
- * Shows: Image, Attributes (Color, Storage), Price
+ * VariantList Component - Matrix Style (Color x Size)
+ * 
+ * Implements strict architecture:
+ * - Color Selector
+ * - Size Selector (Combined RAM/Storage)
+ * - NO Stock Display (Inventory check on Add to Cart)
+ * - Uses variant.color and variant.size (populated)
  */
 const VariantList = ({ variants, selectedVariant, onVariantSelect, productName }) => {
     if (!variants || variants.length === 0) {
         return null;
     }
 
-    // Group variants by primary attribute (e.g., Color)
-    const getPrimaryAttribute = (variant) => {
-        const attrs = variant.attributes || {};
-        return attrs.color || attrs.storage || attrs.size || Object.values(attrs)[0] || 'Default';
+    // 1. Extract Unique Colors
+    const colors = useMemo(() => {
+        const unique = new Map();
+        variants.forEach(v => {
+            if (v.color) {
+                unique.set(v.color._id || v.color, v.color);
+            }
+        });
+        return Array.from(unique.values());
+    }, [variants]);
+
+    // 2. Extract Unique Sizes
+    const sizes = useMemo(() => {
+        const unique = new Map();
+        variants.forEach(v => {
+            if (v.size) {
+                unique.set(v.size._id || v.size, v.size);
+            }
+        });
+        return Array.from(unique.values());
+    }, [variants]);
+
+    // 3. Helpers to find matches
+    const getVariant = (colorId, sizeId) => {
+        return variants.find(v =>
+            (v.color._id === colorId || v.color === colorId) &&
+            (v.size._id === sizeId || v.size === sizeId)
+        );
     };
 
-    const getSecondaryAttribute = (variant) => {
-        const attrs = variant.attributes || {};
-        // Return the attribute that's NOT the primary one
-        if (attrs.storage && attrs.color) return attrs.storage;
-        if (attrs.size && attrs.color) return attrs.size;
-        if (attrs.ram && (attrs.color || attrs.storage)) return attrs.ram;
-        return Object.values(attrs)[1] || '';
+    const handleColorClick = (color) => {
+        // Find best size match for this color (keep current size if possible)
+        const currentSizeId = selectedVariant?.size?._id || selectedVariant?.size;
+        let target = getVariant(color._id, currentSizeId);
+
+        // If not available in current size, pick first available size for this color
+        if (!target) {
+            target = variants.find(v => v.color._id === color._id || v.color === color._id);
+        }
+
+        if (target) onVariantSelect(target);
     };
+
+    const handleSizeClick = (size) => {
+        // Find best color match for this size (keep current color)
+        const currentColorId = selectedVariant?.color?._id || selectedVariant?.color;
+        let target = getVariant(currentColorId, size._id);
+
+        // If not available in current color, pick first available
+        if (!target) {
+            target = variants.find(v => v.size._id === size._id || v.size === size._id);
+        }
+
+        if (target) onVariantSelect(target);
+    };
+
+    if (colors.length === 0 && sizes.length === 0) return null;
 
     return (
-        <div className="variant-list-amazon">
-            {/* Color/Primary Attribute Selector */}
-            <div className="variant-section">
-                <h4 className="variant-section-title">
-                    Colour: <span className="selected-value">{getPrimaryAttribute(selectedVariant || variants[0])}</span>
-                </h4>
+        <div className="variant-list-matrix space-y-6">
 
-                <div className="variant-options-scroll">
-                    {variants.map((variant) => {
-                        const isSelected = selectedVariant?._id === variant._id;
-                        const isOutOfStock = variant.stock === 0;
-                        const primaryAttr = getPrimaryAttribute(variant);
-                        const secondaryAttr = getSecondaryAttribute(variant);
+            {/* COLOR SELECTOR */}
+            {colors.length > 0 && (
+                <div className="variant-section">
+                    <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                        <span className="text-slate-500">Color:</span>
+                        <span className="text-slate-900">{selectedVariant?.color?.name || 'Select'}</span>
+                    </h4>
+                    <div className="flex flex-wrap gap-3">
+                        {colors.map(color => {
+                            const isSelected = (selectedVariant?.color?._id || selectedVariant?.color) === color._id;
+                            // Check if color has ANY valid variants
+                            const hasVariants = variants.some(v => v.color._id === color._id || v.color === color._id);
 
-                        return (
-                            <button
-                                key={variant._id}
-                                className={`variant-option-card ${isSelected ? 'selected' : ''} ${isOutOfStock ? 'out-of-stock' : ''}`}
-                                onClick={() => !isOutOfStock && onVariantSelect(variant)}
-                                disabled={isOutOfStock}
-                            >
-                                {/* Variant Image */}
-                                <div className="variant-image-container">
-                                    <img
-                                        src={getImageUrl(variant.image || variant.images?.[0])}
-                                        alt={`${productName} - ${primaryAttr}`}
-                                        className="variant-image"
-                                        onError={(e) => {
-                                            e.target.src = 'https://placehold.co/100x100?text=No+Image';
-                                        }}
+                            if (!hasVariants) return null;
+
+                            return (
+                                <button
+                                    key={color._id}
+                                    onClick={() => handleColorClick(color)}
+                                    className={`
+                                        group relative p-1 rounded-full border-2 transition-all
+                                        ${isSelected
+                                            ? 'border-indigo-600 ring-2 ring-indigo-100'
+                                            : 'border-slate-200 hover:border-slate-300'
+                                        }
+                                    `}
+                                    title={color.name}
+                                >
+                                    <div
+                                        className="w-8 h-8 rounded-full shadow-sm"
+                                        style={{ backgroundColor: color.hexCode || '#ccc' }}
                                     />
-                                    {isOutOfStock && (
-                                        <div className="out-of-stock-overlay">
-                                            Out of Stock
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Variant Info */}
-                                <div className="variant-info">
-                                    <div className="variant-price">
-                                        {formatCurrency(variant.price)}
-                                    </div>
-                                    {secondaryAttr && (
-                                        <div className="variant-attribute">
-                                            {secondaryAttr}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Selection Indicator */}
-                                {isSelected && (
-                                    <div className="selected-indicator">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                            <polyline points="20 6 9 17 4 12"></polyline>
-                                        </svg>
-                                    </div>
-                                )}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* Selected Variant Details */}
-            {selectedVariant && (
-                <div className="selected-variant-details">
-                    <div className="detail-row">
-                        <span className="detail-label">Price:</span>
-                        <span className="detail-value price">{formatCurrency(selectedVariant.price)}</span>
+                                </button>
+                            );
+                        })}
                     </div>
-                    <div className="detail-row">
-                        <span className="detail-label">Stock:</span>
-                        {selectedVariant.stock > 10 ? (
-                            <span className="detail-value in-stock">✓ In Stock</span>
-                        ) : selectedVariant.stock > 0 ? (
-                            <span className="detail-value low-stock">Only {selectedVariant.stock} left</span>
-                        ) : (
-                            <span className="detail-value out-of-stock">Out of Stock</span>
-                        )}
-                    </div>
-                    {selectedVariant.sku && (
-                        <div className="detail-row">
-                            <span className="detail-label">SKU:</span>
-                            <code className="detail-value sku">{selectedVariant.sku}</code>
-                        </div>
-                    )}
                 </div>
             )}
+
+            {/* SIZE SELECTOR */}
+            {sizes.length > 0 && (
+                <div className="variant-section">
+                    <h4 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                        <span className="text-slate-500">Configuration:</span>
+                        <span className="text-slate-900">{selectedVariant?.size?.name || 'Select'}</span>
+                    </h4>
+                    <div className="flex flex-wrap gap-3">
+                        {sizes.map(size => {
+                            const isSelected = (selectedVariant?.size?._id || selectedVariant?.size) === size._id;
+                            // Check compatibility with selected color
+                            const currentColorId = selectedVariant?.color?._id || selectedVariant?.color;
+                            const isAvailableForColor = getVariant(currentColorId, size._id);
+
+                            // Check if size exists at all
+                            const exists = variants.some(v => v.size._id === size._id || v.size === size._id);
+                            if (!exists) return null;
+
+                            return (
+                                <button
+                                    key={size._id}
+                                    onClick={() => handleSizeClick(size)}
+                                    className={`
+                                        px-4 py-2 text-sm font-bold rounded-lg border-2 transition-all
+                                        ${isSelected
+                                            ? 'bg-indigo-50 border-indigo-600 text-indigo-700'
+                                            : !isAvailableForColor
+                                                ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed opacity-60 dashed-border'
+                                                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                                        }
+                                    `}
+                                    disabled={!isAvailableForColor}
+                                    title={!isAvailableForColor ? `Not available in ${selectedVariant?.color?.name}` : size.name}
+                                >
+                                    {size.name}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            <style>{`
+                .dashed-border { border-style: dashed; }
+            `}</style>
         </div>
     );
 };

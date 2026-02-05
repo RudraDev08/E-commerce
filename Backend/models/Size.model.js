@@ -30,6 +30,20 @@ const sizeSchema = new mongoose.Schema(
             trim: true,
             maxlength: [50, 'Size value cannot exceed 50 characters']
         },
+        // NEW: Structured Dimensions for Electronics
+        ram: {
+            type: Number, // e.g. 8, 12, 16
+            default: 0
+        },
+        storage: {
+            type: Number, // e.g. 128, 256, 512, 1024
+            default: 0
+        },
+        storageUnit: {
+            type: String,
+            enum: ['MB', 'GB', 'TB'],
+            default: 'GB'
+        },
         applicableCategories: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Category'
@@ -90,7 +104,7 @@ sizeSchema.index({ priority: 1 });
 sizeSchema.virtual('productCount', {
     ref: 'Variant',
     localField: '_id',
-    foreignField: 'sizeId',
+    foreignField: 'size',
     count: true
 });
 

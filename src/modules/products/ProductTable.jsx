@@ -103,28 +103,19 @@ const ProductTableRow = ({ product, isSelected, onSelect, onEdit, onDelete }) =>
         </div>
       </td>
 
-      {/* Inventory */}
+      {/* Configurations */}
       <td className="px-4 py-4 text-center">
-        {product.hasVariants ? (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-600 border border-purple-100 uppercase tracking-wide">
-            Variants
-          </span>
-        ) : (
-          <div className={`
-            inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase tracking-wider
-            ${product.stock > 10
-              ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-              : product.stock > 0
-                ? 'bg-amber-50 text-amber-600 border-amber-100'
-                : 'bg-rose-50 text-rose-600 border-rose-100'
-            }
-          `}>
-            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 
-              ${product.stock > 10 ? 'bg-emerald-500' : product.stock > 0 ? 'bg-amber-500' : 'bg-rose-500'}
-             `}></span>
-            {product.stock > 0 ? `${product.stock} Units` : 'Out of Stock'}
-          </div>
-        )}
+        <div className="flex flex-col items-center gap-1">
+          {product.hasVariants ? (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-tight">
+              {product.variantCount || 0} Variants
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200 uppercase tracking-tight">
+              Single
+            </span>
+          )}
+        </div>
       </td>
 
       {/* Status */}
@@ -199,7 +190,7 @@ const ProductTable = ({ products, selectedProducts, onSelect, onSelectAll, onEdi
               <th className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500">Class</th>
               <th className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500">Brand</th>
               <th className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 text-right">Value</th>
-              <th className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 text-center">Stock</th>
+              <th className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 text-center">Config</th>
               <th className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 text-center">Status</th>
               <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 text-right">Actions</th>
             </tr>

@@ -17,7 +17,7 @@ import CategorySelectorDemo from "../page/CategorySelectorDemo";
 import CategoryManagement from "../modules/categories/CategoryManagement";
 import SizeManagement from "../page/size/SizeManagement";
 import ColorManagement from "../page/color/ColorManagement";
-import VariantManagement from "../modules/variants/VariantManagement";
+
 import ProductVariantMapping from "../modules/variants/ProductVariantMapping";
 import VariantBuilder from "../modules/variants/VariantBuilder";
 import WarehouseManagement from "../modules/inventory/WarehouseManagement";
@@ -110,7 +110,7 @@ function App() {
               {/* SIZE & COLOR MANAGEMENT */}
               <Route path="/size-management" element={<SizeManagement />} />
               <Route path="/color-management" element={<ColorManagement />} />
-              <Route path="/variant-management" element={<VariantManagement />} />
+
 
               {/* VARIANT MAPPING */}
               <Route path="/variant-mapping" element={<ProductVariantMapping />} />

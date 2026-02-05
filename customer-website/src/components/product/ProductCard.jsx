@@ -1,60 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getVariantsByProduct } from '../../api/variantApi';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { formatCurrency, getImageUrl } from '../../utils/formatters';
-import TagBadge from '../common/TagBadge';
 import './ProductCard.css';
 
 /**
- * Enhanced Product Card Component
- * - Displays variant-based pricing (Starting from ₹X)
- * - Shows tag badges
+ * Premium Product Card Component
+ * 
+ * STRICT RULES:
+ * - NO stock/inventory indicators
+ * - NO variant-count based availability logic
+ * - Relies ONLY on product.isPublished and product.isActive flags
+ * - Inventory validation happens ONLY on add-to-cart (backend)
+ * - Clean, minimal, luxury design
+ * 
+ * Design Principles:
+ * - Focus on product image and price
+ * - Category • Brand breadcrumb
  * - Wishlist integration
- * - Stock awareness
- * - Lazy loading images
+ * - Always-enabled CTA (stock checked on backend)
  */
 const ProductCard = ({ product }) => {
     const navigate = useNavigate();
-    const [variants, setVariants] = useState([]);
-    const [minPrice, setMinPrice] = useState(product.price);
-    const [currency, setCurrency] = useState(product.currency || 'INR');
-    const [isLoading, setIsLoading] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
     const { addToCart } = useCart();
     const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
     const inWishlist = isInWishlist(product._id);
-
-    useEffect(() => {
-        if (product.hasVariants) {
-            loadVariants();
-        }
-    }, [product._id]);
-
-    const loadVariants = async () => {
-        try {
-            setIsLoading(true);
-            const response = await getVariantsByProduct(product._id);
-            // Handle consistent processing of response data
-            const activeVariants = (response.data?.data || response.data || []).filter(v => v.status && v.stock > 0);
-            setVariants(activeVariants);
-
-            // Calculate minimum price from active variants
-            if (activeVariants.length > 0) {
-                const prices = activeVariants.map(v => v.price || v.sellingPrice);
-                setMinPrice(Math.min(...prices));
-                // Set currency from first variant (assuming standard currency per product)
-                if (activeVariants[0].currency) {
-                    setCurrency(activeVariants[0].currency);
-                }
-            }
-        } catch (error) {
-            console.error('Error loading variants:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const handleAddToCart = (e) => {
         e.preventDefault();
@@ -64,6 +36,7 @@ const ProductCard = ({ product }) => {
             // Navigate to product page for variant selection
             navigate(`/product/${product.slug}`);
         } else {
+            // Add to cart - backend will validate stock
             addToCart(product);
         }
     };
@@ -79,21 +52,24 @@ const ProductCard = ({ product }) => {
         }
     };
 
-    // Check if product has any stock (including variants)
-    const hasStock = product.hasVariants
-        ? (variants.length > 0 || isLoading) // Assume stock while loading or if variants exist
-        : (product.stock === undefined || product.stock > 0);
-
-    const displayPrice = product.hasVariants ? minPrice : product.price;
+    // Price display - use product price directly (no variant price calculation)
+    const displayPrice = product.salePrice || product.price;
     const baseDisplayPrice = product.basePrice || product.compareAtPrice;
+    const displayImage = product.image || product.featuredImage?.url || '';
 
-    // Use the determined currency
-    const displayImage = product.image || (variants[0]?.image) || '';
+    // Calculate discount
+    const showDiscount = baseDisplayPrice && baseDisplayPrice > displayPrice;
+    const discountPercent = showDiscount
+        ? Math.round(((baseDisplayPrice - displayPrice) / baseDisplayPrice) * 100)
+        : 0;
 
-    // Calculate discount for badge (if applied to base product or min variant price)
-    // Note: complex logic for variant discounts, using simple base vs display for now
-    const showDiscount = baseDisplayPrice > displayPrice;
-    const discountPercent = showDiscount ? Math.round(((baseDisplayPrice - displayPrice) / baseDisplayPrice) * 100) : 0;
+    // Get category and brand breadcrumb
+    const getCategoryBrand = () => {
+        const parts = [];
+        if (product.category?.name) parts.push(product.category.name);
+        if (product.brand?.name) parts.push(product.brand.name);
+        return parts.join(' • ');
+    };
 
     return (
         <div className="product-card-modern">
@@ -110,7 +86,7 @@ const ProductCard = ({ product }) => {
                         loading="lazy"
                         onLoad={() => setImageLoaded(true)}
                         onError={(e) => {
-                            e.target.src = 'https://placehold.co/300x300?text=No+Image';
+                            e.target.src = 'https://placehold.co/300x300/f8fafc/94a3b8?text=No+Image';
                             setImageLoaded(true);
                         }}
                     />
@@ -124,16 +100,7 @@ const ProductCard = ({ product }) => {
                         {inWishlist ? '❤️' : '🤍'}
                     </button>
 
-                    {/* Tag Badges */}
-                    {product.tags && product.tags.length > 0 && (
-                        <div className="pc-tags">
-                            {product.tags.slice(0, 2).map((tag, index) => (
-                                <TagBadge key={index} tag={tag} size="small" />
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Discount Badge */}
+                    {/* Discount Badge ONLY (NO stock badges) */}
                     {showDiscount && discountPercent > 0 && (
                         <div className="pc-discount-badge">
                             {discountPercent}% OFF
@@ -143,9 +110,9 @@ const ProductCard = ({ product }) => {
 
                 {/* Product Info */}
                 <div className="pc-info">
-                    {/* Brand */}
-                    {product.brand && (
-                        <div className="pc-brand">{product.brand.name}</div>
+                    {/* Category • Brand Breadcrumb */}
+                    {getCategoryBrand() && (
+                        <div className="pc-breadcrumb">{getCategoryBrand()}</div>
                     )}
 
                     {/* Product Name */}
@@ -157,15 +124,17 @@ const ProductCard = ({ product }) => {
                     )}
 
                     {/* Rating */}
-                    <div className="pc-rating">
-                        <div className="pc-stars">
-                            {'★'.repeat(Math.floor(product.rating || 4))}
-                            {'☆'.repeat(5 - Math.floor(product.rating || 4))}
+                    {product.rating && (
+                        <div className="pc-rating">
+                            <div className="pc-stars">
+                                {'★'.repeat(Math.floor(product.rating))}
+                                {'☆'.repeat(5 - Math.floor(product.rating))}
+                            </div>
+                            <span className="pc-rating-count">
+                                ({product.reviewCount || 0})
+                            </span>
                         </div>
-                        <span className="pc-rating-count">
-                            ({product.reviewCount || 0})
-                        </span>
-                    </div>
+                    )}
 
                     {/* Price Section */}
                     <div className="pc-price-section">
@@ -174,48 +143,38 @@ const ProductCard = ({ product }) => {
                                 <span className="pc-price-label">Starting from</span>
                             )}
                             <span className="pc-price-current">
-                                {formatCurrency(displayPrice, currency)}
+                                {formatCurrency(displayPrice, product.currency || 'INR')}
                             </span>
                         </div>
                         {showDiscount && (
                             <div className="pc-price-old-row">
                                 <span className="pc-price-old">
-                                    {formatCurrency(baseDisplayPrice, currency)}
+                                    {formatCurrency(baseDisplayPrice, product.currency || 'INR')}
                                 </span>
                                 <span className="pc-save-amount">
-                                    Save {formatCurrency(baseDisplayPrice - displayPrice, currency)}
+                                    Save {formatCurrency(baseDisplayPrice - displayPrice, product.currency || 'INR')}
                                 </span>
                             </div>
                         )}
                     </div>
-
-                    {/* Stock Status */}
-                    {!product.hasVariants && product.stock <= 5 && product.stock > 0 && (
-                        <div className="pc-stock-warning">
-                            Only {product.stock} left in stock!
-                        </div>
-                    )}
                 </div>
             </Link>
 
-            {/* Add to Cart Button */}
+            {/* Add to Cart Button - ALWAYS enabled (stock validated on backend) */}
             <button
                 className="pc-add-to-cart"
                 onClick={handleAddToCart}
-                disabled={!hasStock && !isLoading}
             >
                 {product.hasVariants ? (
                     <>
                         <span>Select Options</span>
                         <span className="pc-arrow">→</span>
                     </>
-                ) : (hasStock || isLoading) ? (
+                ) : (
                     <>
                         <span>🛒</span>
                         <span>Add to Cart</span>
                     </>
-                ) : (
-                    <span>Out of Stock</span>
                 )}
             </button>
         </div>

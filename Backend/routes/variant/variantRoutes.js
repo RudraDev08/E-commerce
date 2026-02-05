@@ -7,15 +7,27 @@ import {
   updateVariant,
   deleteVariant,
 } from "../../controllers/variant/variantController.js";
+import { upload } from "../../config/multer.js";
 
 const router = express.Router();
 
 /* CRUD ROUTES */
-router.post("/", createVariants);                   // CREATE (bulk)
-router.get("/", getAllVariants);                    // READ ALL
-router.get("/product/:productId", getVariantsByProduct); // READ BY PRODUCT
-router.get("/:id", getVariantById);                 // READ ONE
-router.put("/:id", updateVariant);                  // UPDATE
-router.delete("/:id", deleteVariant);               // DELETE
+// CREATE (bulk) - Support multiple images per variant
+router.post("/", upload.array('images', 10), createVariants);
+
+// READ ALL
+router.get("/", getAllVariants);
+
+// READ BY PRODUCT
+router.get("/product/:productId", getVariantsByProduct);
+
+// READ ONE
+router.get("/:id", getVariantById);
+
+// UPDATE - Support image updates
+router.put("/:id", upload.array('images', 10), updateVariant);
+
+// DELETE
+router.delete("/:id", deleteVariant);
 
 export default router;

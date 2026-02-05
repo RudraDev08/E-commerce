@@ -40,9 +40,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
     basePrice: '',
     currency: 'USD',
     taxClass: 'standard',
-    stock: '',
-    minStock: 5,
-    stockStatus: 'in_stock',
+    // Stock removed - managed by Inventory Master
     hasVariants: false,
     image: null,
     imagePreview: null,
@@ -91,9 +89,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
         basePrice: initialData.basePrice || '',
         currency: initialData.currency || 'USD',
         taxClass: initialData.taxClass || 'standard',
-        stock: initialData.stock || '',
-        minStock: initialData.minStock || 5,
-        stockStatus: initialData.stockStatus || 'in_stock',
+        // Stock removed - managed by Inventory Master
         hasVariants: initialData.hasVariants || false,
         variantType: initialData.variantType || 'SINGLE_COLOR',
         image: initialData.image || null,
@@ -115,7 +111,8 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
       name: '', sku: '', category: '', brand: '', productType: '',
       description: '', shortDescription: '',
       price: '', basePrice: '', currency: 'USD', taxClass: 'standard',
-      stock: '', minStock: 5, stockStatus: 'in_stock', hasVariants: false, variantType: 'SINGLE_COLOR',
+      // Stock removed - managed by Inventory Master
+      hasVariants: false, variantType: 'SINGLE_COLOR',
       image: null, imagePreview: null,
       gallery: [], galleryPreviews: [],
       tags: '', metaTitle: '', metaDescription: '', status: 'active'
@@ -166,7 +163,7 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
     if (!formData.category) return "Category is required";
     if (!formData.brand) return "Brand is required";
     if (Number(formData.price) < 0) return "Price cannot be negative";
-    if (!formData.hasVariants && Number(formData.stock) < 0) return "Stock cannot be negative";
+    // Stock validation removed - managed by Inventory Master
     return null;
   };
 
@@ -457,36 +454,15 @@ const AddProductModal = ({ isOpen, onClose, onProductAdded, initialData }) => {
                   )}
 
                   {!formData.hasVariants && (
-                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm grid grid-cols-2 gap-6">
-                      <div>
-                        <label className="label">Current Stock <span className="text-red-500">*</span></label>
-                        <input
-                          type="number"
-                          value={formData.stock}
-                          onChange={(e) => handleChange('stock', e.target.value)}
-                          className="input-field font-mono font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="label">Low Stock Threshold</label>
-                        <input
-                          type="number"
-                          value={formData.minStock}
-                          onChange={(e) => handleChange('minStock', e.target.value)}
-                          className="input-field font-mono"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="label">Stock Status</label>
-                        <select
-                          value={formData.stockStatus}
-                          onChange={(e) => handleChange('stockStatus', e.target.value)}
-                          className="input-field"
-                        >
-                          <option value="in_stock">In Stock</option>
-                          <option value="out_of_stock">Out of Stock</option>
-                          <option value="pre_order">Pre-Order</option>
-                        </select>
+                    <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl">
+                      <div className="flex items-start gap-3">
+                        <InformationCircleIcon className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="font-bold text-amber-900 mb-1">Stock Management</h4>
+                          <p className="text-sm text-amber-700">
+                            For products without variants, manage stock in the <strong>Inventory Master</strong> module after creating the product.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   )}

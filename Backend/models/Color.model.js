@@ -96,7 +96,7 @@ colorSchema.index({ priority: 1 });
 colorSchema.virtual('productCount', {
     ref: 'Variant',
     localField: '_id',
-    foreignField: 'colorId',
+    foreignField: 'color',
     count: true
 });
 

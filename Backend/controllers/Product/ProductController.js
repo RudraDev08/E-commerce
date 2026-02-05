@@ -1,6 +1,8 @@
 import Product from '../../models/Product/ProductSchema.js';
 import Category from '../../models/Category/CategorySchema.js';
 import Brand from '../../models/Brands/BrandsSchema.js';
+import Variant from '../../models/variant/variantSchema.js';
+import InventoryMaster from '../../models/inventory/InventoryMaster.model.js';
 import slugify from 'slugify';
 
 // --------------------------------------------------------------------------
@@ -269,11 +271,8 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Price must be a positive number' });
     }
 
-    // ===== VALIDATION 3: Stock Validation =====
-    const stock = Number(req.body.stock || 0);
-    if (isNaN(stock) || stock < 0) {
-      return res.status(400).json({ success: false, message: 'Stock must be a positive number' });
-    }
+    // Note: Stock is managed via Variant -> InventoryMaster auto-creation.
+    // No manual 'stock' field needed on Product level anymore.
 
     // ===== VALIDATION 4: Category & Brand Existence =====
     const [categoryExists, brandExists] = await Promise.all([
@@ -318,6 +317,7 @@ export const createProduct = async (req, res) => {
 
     // ===== Prepare Payload =====
     const payload = cleanBody({ ...req.body, sku, discountPrice }, req.files || {});
+    delete payload.stock; // Ensure stock doesn't leak into Product document
 
     // ===== Create Product =====
     const product = await Product.create(payload);
@@ -425,6 +425,13 @@ export const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
+
+    // CASCADE HARD DELETE: Variants
+    await Variant.deleteMany({ product: product._id });
+
+    // CASCADE HARD DELETE: Inventory
+    await InventoryMaster.deleteMany({ productId: product._id });
+
     res.json({ success: true, message: 'Product permanently deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -453,13 +460,12 @@ export const restoreProduct = async (req, res) => {
 // --------------------------------------------------------------------------
 export const getProductStats = async (req, res) => {
   try {
-    const [total, active, lowStock, draft] = await Promise.all([
+    const [total, active, draft] = await Promise.all([
       Product.countDocuments({ isDeleted: false }),
       Product.countDocuments({ isDeleted: false, status: 'active' }),
-      Product.countDocuments({ isDeleted: false, stock: { $lte: 5 } }),
       Product.countDocuments({ isDeleted: false, status: 'draft' })
     ]);
-    res.json({ success: true, data: { total, active, lowStock, draft } });
+    res.json({ success: true, data: { total, active, draft } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -497,6 +503,13 @@ export const bulkDeleteProducts = async (req, res) => {
     if (!ids || !ids.length) return res.status(400).json({ success: false, message: "No items selected" });
 
     await Product.deleteMany({ _id: { $in: ids } });
+
+    // CASCADE BULK HARD DELETE: Variants
+    await Variant.deleteMany({ product: { $in: ids } });
+
+    // CASCADE BULK HARD DELETE: Inventory
+    await InventoryMaster.deleteMany({ productId: { $in: ids } });
+
     res.json({ success: true, message: `${ids.length} products permanently deleted` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -512,6 +525,30 @@ export const softDeleteProduct = async (req, res) => {
     if (!product) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
 
     await product.softDelete(req.user?.id || 'admin');
+
+    // CASCADE: Delete Variants
+    await Variant.updateMany(
+      { product: product._id },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          status: false // inactive
+        }
+      }
+    );
+
+    // CASCADE: Delete Inventory
+    await InventoryMaster.updateMany(
+      { productId: product._id },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          status: 'DISCONTINUED'
+        }
+      }
+    );
 
     res.json({
       success: true,
@@ -540,6 +577,30 @@ export const bulkSoftDeleteProducts = async (req, res) => {
         deletedAt: new Date(),
         deletedBy: req.user?.id || 'admin',
         status: 'archived'
+      }
+    );
+
+    // CASCADE BULK: Delete Variants
+    await Variant.updateMany(
+      { product: { $in: ids } },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          status: false
+        }
+      }
+    );
+
+    // CASCADE BULK: Delete Inventory
+    await InventoryMaster.updateMany(
+      { productId: { $in: ids } },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          status: 'DISCONTINUED'
+        }
       }
     );
 

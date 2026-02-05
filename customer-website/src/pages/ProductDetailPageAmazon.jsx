@@ -80,10 +80,7 @@ const ProductDetailPageAmazon = () => {
                 return;
             }
 
-            if (currentStock === 0) {
-                alert('This product is out of stock');
-                return;
-            }
+            // Inventory check happens at Cart/Checkout level
 
             const itemToAdd = product.hasVariants
                 ? { ...product, selectedVariant }
@@ -129,7 +126,16 @@ const ProductDetailPageAmazon = () => {
     const currentPrice = selectedVariant?.price || product?.price || 0;
     const currentStock = selectedVariant?.stock || product?.stock || 0;
     const currentSKU = selectedVariant?.sku || product?.sku || '';
-    const currentImages = selectedVariant?.images || product?.images || [product?.image] || [];
+    // STRICT PRIORITY: Variant > Product Gallery > Product Image
+    const getDisplayImages = () => {
+        if (selectedVariant?.images && selectedVariant.images.length > 0) return selectedVariant.images;
+        if (product?.gallery && product.gallery.length > 0) return product.gallery;
+        if (product?.images && product.images.length > 0) return product.images;
+        if (product?.image) return [{ url: product.image }];
+        return [];
+    };
+
+    const currentImages = getDisplayImages();
     const currentMRP = currentPrice * 1.1; // Mock MRP (10% higher)
     const currentDiscount = Math.round(((currentMRP - currentPrice) / currentMRP) * 100);
 
@@ -401,19 +407,6 @@ const ProductDetailPageAmazon = () => {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Stock Warning */}
-                            {currentStock > 0 && currentStock <= 10 && (
-                                <div className="stock-warning-amazon">
-                                    ⚠️ Only {currentStock} left in stock - order soon
-                                </div>
-                            )}
-
-                            {currentStock === 0 && (
-                                <div className="out-of-stock-amazon">
-                                    ❌ Currently out of stock
-                                </div>
-                            )}
                         </div>
 
                         <div className="divider-amazon"></div>
@@ -426,10 +419,9 @@ const ProductDetailPageAmazon = () => {
                                 <select
                                     value={quantity}
                                     onChange={(e) => setQuantity(parseInt(e.target.value))}
-                                    disabled={currentStock === 0}
                                 >
-                                    {[...Array(Math.min(currentStock, 10))].map((_, i) => (
-                                        <option key={i + 1} value={i + 1}>{i + 1}</option>
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                        <option key={num} value={num}>{num}</option>
                                     ))}
                                 </select>
                             </div>
@@ -438,7 +430,6 @@ const ProductDetailPageAmazon = () => {
                             <button
                                 className="btn-add-to-cart-amazon"
                                 onClick={handleAddToCart}
-                                disabled={currentStock === 0}
                             >
                                 🛒 Add to Cart
                             </button>
@@ -447,7 +438,6 @@ const ProductDetailPageAmazon = () => {
                             <button
                                 className="btn-buy-now-amazon"
                                 onClick={handleBuyNow}
-                                disabled={currentStock === 0}
                             >
                                 ⚡ Buy Now
                             </button>

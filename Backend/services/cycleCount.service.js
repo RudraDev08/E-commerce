@@ -1,5 +1,5 @@
 import CycleCount from '../models/inventory/CycleCount.model.js';
-import Variant from '../models/Variant/VariantSchema.js';
+import Variant from '../models/variant/variantSchema.js';
 import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
 import inventoryService from './inventory.service.js';
 import mongoose from 'mongoose';

@@ -1,4 +1,7 @@
-import Variant from "../../models/Variant/VariantSchema.js";
+import Variant from "../../models/variant/variantSchema.js";
+import Product from "../../models/Product/ProductSchema.js";
+import Size from "../../models/Size.model.js";
+import Color from "../../models/Color.model.js";
 
 /* ---------------- CREATE (MULTIPLE VARIANTS) ---------------- */
 export const createVariants = async (req, res) => {
@@ -14,6 +17,15 @@ export const createVariants = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid payload: productId and variants array required",
+      });
+    }
+
+    // CHECK: Is Product deleted?
+    const parentProduct = await Product.findById(productId);
+    if (!parentProduct || parentProduct.isDeleted) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot create variants for a deleted or non-existent product",
       });
     }
 
@@ -82,6 +94,10 @@ export const createVariants = async (req, res) => {
 
       // Prepare for insertion
       const attributes = v.attributes || {};
+
+      // Handle images if provided
+      const images = v.images || [];
+
       validPayload.push({
         product: productId,    // Schema field: product
         size: v.sizeId || null, // Schema field: size
@@ -90,9 +106,10 @@ export const createVariants = async (req, res) => {
         colorParts: v.colorParts || [],
         sku: v.sku,
         price: Number(v.price) || 0,
-        stock: Number(v.stock) || 0,
+        // stock: REMOVED - Managed by Inventory Master
         status: v.status === true || v.status === 'active',
-        attributes: attributes
+        attributes: attributes,
+        images: images  // Add images array
       });
     }
 
@@ -132,8 +149,9 @@ export const createVariants = async (req, res) => {
         const inventoryService = (await import('../../services/inventory.service.js')).default;
 
         // Parallel execution for speed
-        await Promise.all(createdDocs.map(variant =>
-          inventoryService._getOrCreateInventory(variant._id)
+        // Initialize inventory with 0 stock - stock is managed by Inventory Master only
+        await Promise.all(validPayload.map((v, index) =>
+          inventoryService._getOrCreateInventory(createdDocs[index]._id, null, 0)
         ));
 
         console.log(`[Variant] Auto-created inventory for ${createdDocs.length} variants`);
@@ -166,7 +184,14 @@ export const createVariants = async (req, res) => {
 /* ---------------- GET ALL VARIANTS ---------------- */
 export const getAllVariants = async (req, res) => {
   try {
-    const variants = await Variant.find()
+    const { productId } = req.query;
+    let query = { isDeleted: { $ne: true } };
+
+    if (productId) {
+      query.product = productId;
+    }
+
+    const variants = await Variant.find(query)
       .populate("product", "name sku")
       .populate("size", "name code")
       .populate("color", "name hexCode");
@@ -191,7 +216,7 @@ export const getVariantsByProduct = async (req, res) => {
 
     const variants = await Variant.find({
       product: productId, // Schema field: product
-      isDeleted: false
+      isDeleted: { $ne: true }
     })
       .populate("size", "name code") // Schema field: size
       .populate("color", "name hexCode") // Schema field: color
@@ -244,9 +269,35 @@ export const updateVariant = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    // Prevent updating critical identity fields effectively changing the variant entirely?
-    // Usually, we allow updating Price, Stock, Status, SKU.
-    // If updating sizeId/colorId, uniqueness check might fail.
+    // Handle uploaded images
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map((file, index) => ({
+        url: file.filename,
+        alt: updates.alt || `Variant image ${index + 1}`,
+        sortOrder: index
+      }));
+
+      // Merge with existing images if preserving them
+      const variant = await Variant.findById(id);
+      if (variant) {
+        // Option 1: Replace all images
+        updates.images = newImages;
+
+        // Option 2: Append to existing (uncomment if needed)
+        // updates.images = [...(variant.images || []), ...newImages];
+      } else {
+        updates.images = newImages;
+      }
+    }
+
+    // Parse images from body if sent as JSON string (for existing images)
+    if (updates.images && typeof updates.images === 'string') {
+      try {
+        updates.images = JSON.parse(updates.images);
+      } catch (e) {
+        // If parsing fails, leave as is
+      }
+    }
 
     const updated = await Variant.findByIdAndUpdate(
       id,
@@ -265,6 +316,7 @@ export const updateVariant = async (req, res) => {
 
     res.json({
       success: true,
+      message: "Variant updated successfully",
       data: updated,
     });
   } catch (error) {
@@ -281,29 +333,26 @@ export const deleteVariant = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Soft delete implementation preferred
     const variant = await Variant.findById(id);
     if (!variant) {
       return res.status(404).json({ success: false, message: "Variant not found" });
     }
 
-    await variant.softDelete(req.user?._id); // Assuming method exists on model
+    await variant.softDelete(req.user?._id);
+
+    // CASCADE: Soft Delete Inventory
+    const inventoryService = (await import('../../services/inventory.service.js')).default;
+    await inventoryService.softDeleteInventory(variant._id, req.user?._id || 'admin');
 
     res.json({
       success: true,
-      message: "Variant deleted successfully",
+      message: "Variant and associated inventory deleted successfully",
     });
   } catch (error) {
-    // Fallback to hard delete if softDelete fails or needed
-    try {
-      await Variant.findByIdAndDelete(req.params.id);
-      res.json({ success: true, message: "Variant deleted (Hard)" });
-    } catch (innerError) {
-      res.status(500).json({
-        success: false,
-        message: "Failed to delete variant",
-        error: innerError.message,
-      });
-    }
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete variant",
+      error: error.message,
+    });
   }
 };

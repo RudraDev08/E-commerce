@@ -25,6 +25,7 @@ import warehouseRoutes from "./routes/inventory/warehouse.routes.js";
 import stockTransferRoutes from "./routes/inventory/stockTransfer.routes.js";
 import binLocationRoutes from "./routes/inventory/binLocation.routes.js";
 import cycleCountRoutes from "./routes/inventory/cycleCount.routes.js";
+import uploadRoutes from "./routes/uploadRoutes.js";
 
 const app = express();
 
@@ -83,6 +84,7 @@ app.use("/api/warehouses", warehouseRoutes);
 app.use("/api/stock-transfers", stockTransferRoutes);
 app.use("/api/bin-locations", binLocationRoutes);
 app.use("/api/cycle-counts", cycleCountRoutes);
+app.use("/api/upload", uploadRoutes);
 /* ================= HEALTH ================= */
 
 app.get("/health", (req, res) => {

@@ -17,7 +17,7 @@ const Products = () => {
 
   const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
   const [filters, setFilters] = useState({
-    search: '', category: 'all', brand: 'all', stockStatus: 'all', sort: 'newest'
+    search: '', category: 'all', brand: 'all', sort: 'newest'
   });
 
   // --- API: Fetch Products ---

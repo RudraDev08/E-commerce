@@ -1,6 +1,6 @@
 import Order from '../../models/Order/OrderSchema.js';
 import Product from '../../models/Product/ProductSchema.js';
-// import Inventory from '../../models/Inventory/InventorySchema.js'; // Will implement inventory deduction later
+import inventoryService from '../../services/inventory.service.js';
 
 // Helper: Generate Order ID (ORD-YYYYMMDD-XXXX)
 const generateOrderId = async () => {
@@ -40,14 +40,14 @@ export const createOrder = async (req, res) => {
             return res.status(400).json({ success: false, message: "No items in order" });
         }
 
-        // 2. Validate Stock (Simplistic version for now)
+        // 2. Validate & Reserve Stock (via Inventory Master)
         for (const item of items) {
-            const product = await Product.findById(item.productId);
-            if (!product) {
-                throw new Error(`Product not found: ${item.name}`);
+            if (!item.variantId) {
+                throw new Error(`Variant ID missing for ${item.name}`);
             }
-            if (product.stock < item.quantity) {
-                throw new Error(`Insufficient stock for ${product.name}`);
+            const inventory = await inventoryService.getInventoryByVariantId(item.variantId);
+            if (!inventory || inventory.availableStock < item.quantity) {
+                throw new Error(`Insufficient stock for ${item.name}. Available: ${inventory?.availableStock || 0}`);
             }
         }
 
@@ -96,12 +96,18 @@ export const createOrder = async (req, res) => {
         // 5. Save Order
         const savedOrder = await newOrder.save();
 
-        // 6. Update Stock (Simple decrement)
-        // In a real system, use transactions and dedicated inventory collection
+        // 6. Deduct Stock from Inventory Master
         for (const item of items) {
-            await Product.findByIdAndUpdate(item.productId, {
-                $inc: { stock: -item.quantity }
-            });
+            try {
+                await inventoryService.deductStockForOrder(
+                    item.variantId,
+                    item.quantity,
+                    savedOrder.orderId
+                );
+            } catch (invError) {
+                console.error(`[Order] Failed to deduct inventory for order ${savedOrder.orderId}:`, invError);
+                // In production, you might want to rollback the order creation or flag it
+            }
         }
 
         res.status(201).json({

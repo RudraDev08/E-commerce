@@ -1,6 +1,6 @@
 import InventoryLedger from '../models/inventory/InventoryLedger.model.js';
 import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
-import Variant from '../models/Variant/VariantSchema.js';
+import Variant from '../models/variant/variantSchema.js';
 import mongoose from 'mongoose';
 
 /**
@@ -30,7 +30,7 @@ class InventoryService {
     return InventoryLedger.create([entryData], options);
   }
 
-  async _getOrCreateInventory(variantId, session = null) {
+  async _getOrCreateInventory(variantId, session = null, initialStock = 0) {
     let inventory = await InventoryMaster.findOne({ variantId }).session(session);
 
     // Auto-create if missing (Self-Healing)
@@ -40,12 +40,27 @@ class InventoryService {
 
       inventory = new InventoryMaster({
         variantId: variant._id,
-        productId: variant.product._id, // Updated to match populated field name
+        productId: variant.product._id,
         sku: variant.sku,
-        totalStock: 0,
+        totalStock: initialStock || 0,
         reservedStock: 0
       });
       await inventory.save({ session });
+
+      if (initialStock > 0) {
+        await this._createLedgerEntry({
+          variantId: variant._id,
+          productId: variant.product._id,
+          sku: variant.sku,
+          transactionType: 'STOCK_IN',
+          quantity: initialStock,
+          stockBefore: { total: 0, reserved: 0, available: 0 },
+          stockAfter: { total: initialStock, reserved: 0, available: initialStock },
+          reason: 'OPENING_STOCK',
+          notes: 'Auto-created during variant setup',
+          performedBy: 'SYSTEM'
+        });
+      }
     }
     return inventory;
   }
@@ -291,8 +306,7 @@ class InventoryService {
 
   async deductStockForOrder(variantId, quantity, orderId) {
     try {
-      const inventory = await InventoryMaster.findOne({ variantId });
-      if (!inventory) throw new Error('Inventory not found');
+      const inventory = await this._getOrCreateInventory(variantId);
 
       if (inventory.totalStock < quantity) {
         throw new Error(`Insufficient stock. Available: ${inventory.totalStock}, Required: ${quantity}`);
@@ -421,11 +435,9 @@ class InventoryService {
     }
   }
 
-  async releaseReservedStock(productId, quantity) {
-    const variantId = productId;
+  async releaseReservedStock(variantId, quantity, referenceId = 'UNKNOWN', performedBy = 'SYSTEM') {
     try {
-      const inventory = await InventoryMaster.findOne({ variantId });
-      if (!inventory) throw new Error('Inventory not found');
+      const inventory = await this._getOrCreateInventory(variantId);
 
       const stockBefore = { total: inventory.totalStock, reserved: inventory.reservedStock, available: inventory.totalStock - inventory.reservedStock };
 
@@ -482,6 +494,13 @@ class InventoryService {
       query.status = 'LOW_STOCK';
     }
 
+    // Filter out deleted by default
+    if (filters.isDeleted === 'true') {
+      query.isDeleted = true;
+    } else if (filters.isDeleted !== 'all') {
+      query.isDeleted = { $ne: true };
+    }
+
     const inventories = await InventoryMaster.find(query)
       .skip(skip)
       .limit(limit)
@@ -508,7 +527,7 @@ class InventoryService {
 
   async getInventoryByProductId(productId) {
     // Find all variants for product, then get inventory
-    return InventoryMaster.find({ productId });
+    return InventoryMaster.find({ productId, isDeleted: { $ne: true } });
   }
 
   async getInventoryLedger(productId, filters) {
@@ -521,7 +540,10 @@ class InventoryService {
   }
 
   async getLowStockItems() {
-    return InventoryMaster.find({ status: { $in: ['LOW_STOCK', 'OUT_OF_STOCK'] } })
+    return InventoryMaster.find({
+      status: { $in: ['LOW_STOCK', 'OUT_OF_STOCK'] },
+      isDeleted: { $ne: true }
+    })
       .populate('variantId')
       .populate('productId');
   }
@@ -533,6 +555,9 @@ class InventoryService {
   async getInventoryStats() {
     // Aggregation on InventoryMaster
     const stats = await InventoryMaster.aggregate([
+      {
+        $match: { isDeleted: { $ne: true } }
+      },
       {
         $group: {
           _id: null,
@@ -571,7 +596,7 @@ class InventoryService {
   // ========================================================================
 
   async getInventoryByVariantId(variantId) {
-    const inventory = await InventoryMaster.findOne({ variantId })
+    const inventory = await InventoryMaster.findOne({ variantId, isDeleted: { $ne: true } })
       .populate({
         path: 'variantId',
         select: 'attributes size color price mrp images colorwayName colorParts',
@@ -588,7 +613,7 @@ class InventoryService {
   }
 
   async getOutOfStockItems() {
-    return InventoryMaster.find({ status: 'OUT_OF_STOCK' })
+    return InventoryMaster.find({ status: 'OUT_OF_STOCK', isDeleted: { $ne: true } })
       .populate({
         path: 'variantId',
         populate: [
@@ -601,13 +626,13 @@ class InventoryService {
   }
 
   async softDeleteInventory(variantId, deletedBy) {
-    // InventoryMaster doesn't have isDeleted flag in Schema!
-    // But we can set status to DISCONTINUED
     const inventory = await InventoryMaster.findOne({ variantId });
     if (!inventory) throw new Error('Inventory not found');
 
     inventory.status = 'DISCONTINUED';
-    inventory.save();
+    inventory.isDeleted = true;
+    inventory.deletedAt = new Date();
+    await inventory.save();
     return inventory;
   }
 
@@ -615,12 +640,15 @@ class InventoryService {
     const inventory = await InventoryMaster.findOne({ variantId });
     if (!inventory) throw new Error('Inventory not found');
 
+    inventory.isDeleted = false;
+    inventory.deletedAt = null;
+
     // Recalculate status
     if (inventory.totalStock === 0) inventory.status = 'OUT_OF_STOCK';
     else if (inventory.totalStock <= inventory.lowStockThreshold) inventory.status = 'LOW_STOCK';
     else inventory.status = 'IN_STOCK';
 
-    inventory.save();
+    await inventory.save();
     return inventory;
   }
 }

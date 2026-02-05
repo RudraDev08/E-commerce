@@ -1,4 +1,4 @@
-import ProductVariant from "../../models/Variant/VariantSchema.js";
+import ProductVariant from "../../models/variant/variantSchema.js";
 import inventoryService from "../../services/inventory.service.js";
 
 /* CREATE */
@@ -71,7 +71,7 @@ export const getVariants = async (req, res) => {
   const { productId, status } = req.query;
 
   let query = {};
-  if (productId) query.productId = productId;
+  if (productId) query.product = productId;
   if (status !== undefined) query.status = status;
 
   const data = await ProductVariant

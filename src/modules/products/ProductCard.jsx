@@ -101,12 +101,12 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
             uppercase 
             tracking-wider 
             backdrop-blur-md
-            ${product.stock > 0
-              ? 'bg-emerald-500/10 text-emerald-700'
-              : 'bg-rose-500/10 text-rose-700'
+            ${product.status === 'active'
+              ? 'bg-blue-500/10 text-blue-700'
+              : 'bg-slate-500/10 text-slate-700'
             }
           `}>
-            {product.stock > 0 ? (product.stock < 10 ? 'Low Stock' : 'In Stock') : 'Out of Stock'}
+            {product.status || 'Draft'}
           </span>
         </div>
       </div>

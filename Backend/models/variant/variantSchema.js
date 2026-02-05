@@ -64,11 +64,35 @@ const variantSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    // Soft Delete Implementation
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    deletedAt: {
+      type: Date,
+      default: null
+    }
   },
   { timestamps: true }
 );
 
 // Prevent duplicate variants for the same product
 variantSchema.index({ product: 1, size: 1, color: 1 }, { unique: true });
+
+// METHODS
+variantSchema.methods.softDelete = function () {
+  this.isDeleted = true;
+  this.deletedAt = new Date();
+  return this.save();
+};
+
+variantSchema.methods.restore = function () {
+  this.isDeleted = false;
+  this.deletedAt = null;
+  return this.save();
+};
 
 export default mongoose.model("Variant", variantSchema);

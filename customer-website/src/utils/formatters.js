@@ -46,6 +46,13 @@ export const formatDateTime = (date) => {
 // Get image URL
 export const getImageUrl = (imagePath) => {
     if (!imagePath) return '/placeholder.jpg';
+
+    // Handle object input (e.g. { url: '...' })
+    if (typeof imagePath === 'object' && imagePath.url) {
+        imagePath = imagePath.url;
+    }
+
+    if (typeof imagePath !== 'string') return '/placeholder.jpg';
     if (imagePath.startsWith('http')) return imagePath;
 
     // Normalize path separators (win to unix)

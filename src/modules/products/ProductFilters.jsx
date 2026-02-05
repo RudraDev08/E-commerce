@@ -1,22 +1,22 @@
 import React from 'react';
 import { FiSearch, FiLayers, FiGrid, FiList, FiChevronDown, FiFilter } from 'react-icons/fi';
 
-const ProductFilters = ({ 
-  filters, 
-  onFilterChange, 
-  categories = [], 
-  brands = [], 
+const ProductFilters = ({
+  filters,
+  onFilterChange,
+  categories = [],
+  brands = [],
   viewMode,
-  onViewModeChange 
+  onViewModeChange
 }) => {
-  
+
   // Helper for consistent Select styling
   const selectClasses = "w-full pl-4 pr-10 py-3 bg-slate-50 border-2 border-transparent rounded-xl font-bold text-slate-900 outline-none focus:bg-white focus:border-slate-900 focus:ring-4 focus:ring-slate-900/5 transition-all appearance-none cursor-pointer";
 
   return (
     <div className="bg-white border border-slate-200 rounded-[2rem] p-8 shadow-xl shadow-slate-200/50 mb-10">
       <div className="flex flex-col space-y-6">
-        
+
         {/* Top Row: Search and View Toggle */}
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex-1 min-w-[300px] relative group">
@@ -47,8 +47,8 @@ const ProductFilters = ({
         </div>
 
         {/* Bottom Row: Filters Engine */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center pt-4 border-t border-slate-100">
-          
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-center pt-4 border-t border-slate-100">
+
           {/* Classification */}
           <div className="relative">
             <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] absolute -top-2.5 left-4 bg-white px-2 z-10">Classification</label>
@@ -77,20 +77,7 @@ const ProductFilters = ({
             <FiChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
 
-          {/* Status */}
-          <div className="relative">
-            <label className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] absolute -top-2.5 left-4 bg-white px-2 z-10">Vault Status</label>
-            <select
-              value={filters.stockStatus}
-              onChange={(e) => onFilterChange('stockStatus', e.target.value)}
-              className={selectClasses}
-            >
-              <option value="all">Inventory: All</option>
-              <option value="in-stock">Available</option>
-              <option value="out-of-stock">Depleted</option>
-            </select>
-            <FiChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
+
 
           {/* Sorting */}
           <div className="relative">

@@ -10,9 +10,12 @@ import {
     SwatchIcon,
     TagIcon,
     XMarkIcon,
-    LockClosedIcon
+    LockClosedIcon,
+    PhotoIcon,
+    CloudArrowUpIcon
 } from '@heroicons/react/24/outline';
 import { productAPI, sizeAPI, colorAPI, variantAPI } from '../../Api/api';
+import { uploadAPI } from '../../api/uploadApi';
 import toast, { Toaster } from 'react-hot-toast';
 import ProductSelectDropdown from '../../components/Shared/Dropdowns/ProductSelectDropdown';
 import SizeMultiSelectDropdown from '../../components/Shared/Dropdowns/SizeMultiSelectDropdown';
@@ -130,6 +133,7 @@ const VariantBuilder = () => {
 
                     // Unified UI Fields
                     sizeCode,
+                    size: typeof v.size === 'object' ? v.size : null, // Pass full object for UI rendering
                     sizeId, // Ensure we have the ID for updates
                     colorId, // Ensure we have the ID for updates (Single Color Mode)
 
@@ -140,7 +144,7 @@ const VariantBuilder = () => {
                     displayPalette,  // Used if Colorway
 
                     price: Number(v.price) || 0,
-                    stock: Number(v.stock) || 0,
+                    // stock: REMOVED - Managed by Inventory Master
                     status: (v.status === true || v.status === 'active') ? 'active' : 'inactive'
                 };
             });
@@ -183,7 +187,19 @@ const VariantBuilder = () => {
 
         // Generator Loop
         selectedSizes.forEach(size => {
-            const sizeCode = size.code.replace(/[^a-zA-Z0-9]/g, '');
+            // STRICT VALIDATION: Skip invalid sizes
+            if (!size.ram || !size.storage) {
+                console.warn(`Skipping invalid size: ${size.name}`);
+                skipped++;
+                return;
+            }
+
+            // NEW SKU LOGIC: Use RAM/Storage if available (e.g. 12-256), else fallback to Code
+            let sizePart = size.code.replace(/[^a-zA-Z0-9]/g, '');
+            if (size.ram && size.storage) {
+                sizePart = `${size.ram}-${size.storage}`;
+            }
+
             const genPrice = Number(product.basePrice || product.price || 0);
 
             if (isColorwayMode) {
@@ -226,9 +242,10 @@ const VariantBuilder = () => {
                     displayPalette: colorwayPalette.map(c => c.hexCode),
 
                     // Biz Data
-                    sku: `${baseSku}-${sizeCode}-${colorwayCode}`,
+                    sku: `${baseSku}-${sizePart}-${colorwayCode}`,
                     price: genPrice,
-                    stock: 0,
+                    images: [], // New Image Field
+                    // stock: REMOVED - Managed by Inventory Master
                     status: 'active',
                     isNew: true,
                     isEdited: true
@@ -267,9 +284,10 @@ const VariantBuilder = () => {
                         displayColorName: color.name,
                         displayHex: color.hexCode,
 
-                        sku: `${baseSku}-${sizeCode}-${colorCode}`,
+                        sku: `${baseSku}-${sizePart}-${colorCode}`,
                         price: genPrice,
-                        stock: 0,
+                        images: [], // New Image Field
+                        // stock: REMOVED - Managed by Inventory Master
                         status: 'active',
                         isNew: true,
                         isEdited: true
@@ -360,7 +378,7 @@ const VariantBuilder = () => {
                             sizeId: v.sizeId,
                             sku: v.sku,
                             price: Number(v.price) || 0,
-                            stock: Number(v.stock) || 0,
+                            // stock: REMOVED - Managed by Inventory Master
                             status: v.status === 'active'
                         };
 
@@ -393,7 +411,7 @@ const VariantBuilder = () => {
                 await Promise.all(editedItems.map(v =>
                     variantAPI.update(v._id, {
                         price: Number(v.price),
-                        stock: Number(v.stock),
+                        // stock: REMOVED - Managed by Inventory Master
                         sku: v.sku,
                         status: v.status === 'active'
                     })
@@ -416,15 +434,27 @@ const VariantBuilder = () => {
     const stats = useMemo(() => {
         return {
             total: variants.length,
-            new: variants.filter(v => v.isNew).length,
-            stock: variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)
+            new: variants.filter(v => v.isNew).length
+            // stock: REMOVED - Check Inventory Master for stock info
         };
     }, [variants]);
 
-    const filteredVariants = variants.filter(v => {
-        if (filter === 'new') return v.isNew;
-        return v.sku.toLowerCase().includes(searchTerm.toLowerCase());
-    });
+    const filteredVariants = useMemo(() => {
+        return variants.filter(v => {
+            // 1. Status Filter
+            if (filter === 'new' && !v.isNew) return false;
+
+            // 2. Search Filter (Debounced-ish via state)
+            if (!searchTerm) return true;
+
+            const term = searchTerm.toLowerCase();
+            const skuMatch = v.sku?.toLowerCase().includes(term);
+            const colorMatch = v.displayColorName?.toLowerCase().includes(term);
+            const sizeMatch = v.sizeCode?.toLowerCase().includes(term);
+
+            return skuMatch || colorMatch || sizeMatch;
+        });
+    }, [variants, filter, searchTerm]);
 
     const getImageUrl = (image) => {
         if (!image) return null;
@@ -458,6 +488,40 @@ const VariantBuilder = () => {
     const mainImage = product.image || product.images?.[0];
     const productImageUrl = getImageUrl(mainImage);
     const isColorwayMode = product.variantType === 'COLORWAY';
+
+    const handleImageUpload = async (variantId, files) => {
+        if (!files || files.length === 0) return;
+
+        const toastId = toast.loading('Uploading images...');
+        try {
+            const res = await uploadAPI.uploadMultiple(files);
+            const uploadedImages = res.data.data.map(img => ({
+                url: img.url,
+                alt: img.filename,
+                sortOrder: 0
+            }));
+
+            const currentVariant = variants.find(v => v._id === variantId);
+            const currentImages = currentVariant.images || [];
+
+            updateVariant(variantId, 'images', [...currentImages, ...uploadedImages]);
+
+            toast.success('Images uploaded!', { id: toastId });
+        } catch (error) {
+            console.error(error);
+            toast.error('Upload failed', { id: toastId });
+        }
+    };
+
+    const handleRemoveImage = (variantId, imgIndex) => {
+        if (!window.confirm('Remove this image?')) return;
+
+        const currentVariant = variants.find(v => v._id === variantId);
+        const currentImages = [...(currentVariant.images || [])];
+        currentImages.splice(imgIndex, 1);
+
+        updateVariant(variantId, 'images', currentImages);
+    };
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20 font-sans">
@@ -776,9 +840,10 @@ const VariantBuilder = () => {
                             <thead>
                                 <tr className="border-b border-slate-200 bg-slate-50/50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                     <th className="px-6 py-5">Variant Identity</th>
+                                    <th className="px-6 py-5 w-64">Images</th>
                                     <th className="px-6 py-5 w-64">SKU Code</th>
                                     <th className="px-6 py-5 w-40">Price (₹)</th>
-                                    <th className="px-6 py-5 w-32">Stock</th>
+                                    {/* Stock column removed - managed by Inventory Master */}
                                     <th className="px-6 py-5 w-24 text-center">Active</th>
                                     <th className="px-6 py-5 w-16"></th>
                                 </tr>
@@ -837,8 +902,11 @@ const VariantBuilder = () => {
                                                     {/* Text Info */}
                                                     <div className="flex flex-col gap-1">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="font-extrabold text-slate-900 text-xl tracking-tight">
-                                                                {variant.sizeCode}
+                                                            <span className="font-extrabold text-slate-900 text-lg tracking-tight">
+                                                                {variant.size && variant.size.ram && variant.size.storage
+                                                                    ? `${variant.size.ram}GB / ${variant.size.storage}${variant.size.storageUnit || 'GB'}`
+                                                                    : variant.sizeCode.includes('/') ? variant.sizeCode : 'INVALID CONFIG'
+                                                                }
                                                             </span>
                                                             {!variant.isNew && (
                                                                 <div className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-400 border border-slate-200" title="Attributes Locked">
@@ -849,9 +917,49 @@ const VariantBuilder = () => {
                                                         <span className="text-sm font-semibold text-slate-500">
                                                             {variant.displayColorName}
                                                         </span>
+                                                        {(!variant.sizeCode?.includes('/') && !variant.isNew && !(variant.size?.ram)) && (
+                                                            <span className="text-[10px] text-red-500 font-bold uppercase bg-red-50 px-1 rounded">Invalid Size</span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </td>
+
+                                            {/* IMAGES COLUMN */}
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                    {(variant.images || []).map((img, imgIdx) => (
+                                                        <div key={imgIdx} className="relative group w-12 h-12 rounded-md border border-slate-200 overflow-hidden bg-white">
+                                                            <img
+                                                                src={getImageUrl(img)}
+                                                                alt="Variant"
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => e.target.style.display = 'none'}
+                                                            />
+                                                            <button
+                                                                onClick={() => handleRemoveImage(variant._id, imgIdx)}
+                                                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
+                                                            >
+                                                                <XMarkIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors border border-indigo-200">
+                                                    <CloudArrowUpIcon className="w-3.5 h-3.5" />
+                                                    Upload
+                                                    <input
+                                                        type="file"
+                                                        multiple
+                                                        accept="image/*"
+                                                        className="hidden"
+                                                        onChange={(e) => handleImageUpload(variant._id, e.target.files)}
+                                                    />
+                                                </label>
+                                            </td>
+
+
+
+                                            {/* SKU */}
 
                                             {/* 2. SKU COLUMN */}
                                             <td className="px-6 py-5">
@@ -880,21 +988,9 @@ const VariantBuilder = () => {
                                                 </div>
                                             </td>
 
-                                            {/* 4. STOCK COLUMN */}
-                                            <td className="px-6 py-5">
-                                                <input
-                                                    type="number"
-                                                    value={variant.stock}
-                                                    onChange={(e) => updateVariant(variant._id, 'stock', e.target.value)}
-                                                    className={`w-full border text-sm font-bold rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 transition-all shadow-sm ${Number(variant.stock) <= 0
-                                                        ? 'bg-red-50 border-red-200 text-red-600 focus:border-red-500 focus:ring-red-500'
-                                                        : 'bg-white border-slate-200 text-slate-900 focus:border-blue-500 focus:ring-blue-500'
-                                                        }`}
-                                                    placeholder="0"
-                                                />
-                                            </td>
+                                            {/* Stock column removed - managed by Inventory Master */}
 
-                                            {/* 5. STATUS COLUMN */}
+                                            {/* 4. STATUS COLUMN */}
                                             <td className="px-6 py-5">
                                                 <div className="flex justify-center">
                                                     <button
