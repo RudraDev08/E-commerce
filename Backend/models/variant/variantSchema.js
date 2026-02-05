@@ -8,18 +8,21 @@ const variantSchema = new mongoose.Schema(
       required: true,
     },
 
-    attributes: {
-      type: Object,
+    // structured attributes
+    size: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Size",
       required: true,
-      /*
-        Example:
-        {
-          color: "Black",
-          ram: "8GB",
-          storage: "128GB"
-        }
-      */
+      index: true
     },
+    color: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Color", // Assuming Color model exists
+      required: true,
+      index: true
+    },
+    material: { type: String },
+    style: { type: String },
 
     sku: {
       type: String,
@@ -30,12 +33,32 @@ const variantSchema = new mongoose.Schema(
     price: {
       type: Number,
       required: true,
+      min: 0
+    },
+    mrp: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+    costPrice: {
+      type: Number,
+      min: 0,
+      default: 0
     },
 
-    stock: {
-      type: Number,
-      default: 0,
+    // Variant Specific Media
+    images: [{
+      url: { type: String, required: true },
+      alt: { type: String },
+      sortOrder: { type: Number, default: 0 }
+    }],
+
+    isDefault: {
+      type: Boolean,
+      default: false
     },
+
+    // Stock is strictly managed by Inventory Service (InventoryMaster)
 
     status: {
       type: Boolean,
@@ -44,5 +67,8 @@ const variantSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Prevent duplicate variants for the same product
+variantSchema.index({ product: 1, size: 1, color: 1 }, { unique: true });
 
 export default mongoose.model("Variant", variantSchema);

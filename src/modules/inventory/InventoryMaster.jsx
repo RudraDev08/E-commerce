@@ -112,7 +112,7 @@ const InventoryMaster = () => {
         setTotalItems(response.data.pagination?.total || 0);
 
         // Only show out of stock alert if we have data
-        if (inventoryData.length > 0 && inventoryData.some(i => i.stockStatus === 'out_of_stock')) {
+        if (inventoryData.length > 0 && inventoryData.some(i => (i.status === 'OUT_OF_STOCK' || i.status === 'out_of_stock'))) {
           toast.error('Critical: Some items are OUT OF STOCK!', { id: 'out-of-stock-alert' });
         }
       }

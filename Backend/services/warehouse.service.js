@@ -1,5 +1,5 @@
 import Warehouse from '../models/inventory/Warehouse.model.js';
-import Variant from '../models/Variant.model.js';
+import Variant from '../models/Variant/VariantSchema.js';
 
 class WarehouseService {
 

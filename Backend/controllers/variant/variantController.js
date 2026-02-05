@@ -1,4 +1,4 @@
-import Variant from "../../models/Variant.model.js";
+import Variant from "../../models/Variant/VariantSchema.js";
 
 /* ---------------- CREATE (MULTIPLE VARIANTS) ---------------- */
 export const createVariants = async (req, res) => {
@@ -46,10 +46,15 @@ export const createVariants = async (req, res) => {
     // DUPLICATE PREVENTION STRATEGY
     // Fetch existing ACTIVE variants to prevent logical duplicates
     // ====================================================================
+    // ====================================================================
+    // DUPLICATE PREVENTION STRATEGY
+    // Fetch existing ACTIVE variants to prevent logical duplicates
+    // ====================================================================
+    // FIX: Match Schema Fields (product, size, color)
     const existingVariants = await Variant.find({
-      productId: productId,
+      product: productId,
       isDeleted: false
-    }).select('sizeId colorId colorwayName');
+    }).select('size color colorwayName');
 
     const validPayload = [];
     let skippedCount = 0;
@@ -57,11 +62,11 @@ export const createVariants = async (req, res) => {
     for (const v of variants) {
       // Check for duplicate combination
       const isDuplicate = existingVariants.some(existing => {
-        const sameSize = String(existing.sizeId) === String(v.sizeId);
+        const sameSize = String(existing.size) === String(v.sizeId);
 
         // Single Color Check
         if (v.colorId) {
-          return sameSize && String(existing.colorId) === String(v.colorId);
+          return sameSize && String(existing.color) === String(v.colorId);
         }
         // Colorway Check
         if (v.colorwayName) {
@@ -78,9 +83,9 @@ export const createVariants = async (req, res) => {
       // Prepare for insertion
       const attributes = v.attributes || {};
       validPayload.push({
-        productId: productId,
-        sizeId: v.sizeId || null,
-        colorId: v.colorId || null,
+        product: productId,    // Schema field: product
+        size: v.sizeId || null, // Schema field: size
+        color: v.colorId || null, // Schema field: color
         colorwayName: v.colorwayName || null,
         colorParts: v.colorParts || [],
         sku: v.sku,
@@ -114,6 +119,30 @@ export const createVariants = async (req, res) => {
       }
     }
 
+    // ====================================================================
+    // POST-CREATION HOOK: AUTO-CREATE INVENTORY
+    // ====================================================================
+    if (createdDocs.length > 0) {
+      try {
+        // Dynamically import to avoid circular dependency issues if any, 
+        // though standard import at top is preferred if clean.
+        // We'll use the imported 'inventoryService' if available, otherwise strict import here
+        // But better to add import at top. We will assume user adds import at top.
+        // Actually, let's just loop and call the service.
+        const inventoryService = (await import('../../services/inventory.service.js')).default;
+
+        // Parallel execution for speed
+        await Promise.all(createdDocs.map(variant =>
+          inventoryService._getOrCreateInventory(variant._id)
+        ));
+
+        console.log(`[Variant] Auto-created inventory for ${createdDocs.length} variants`);
+      } catch (invError) {
+        console.error('[Variant] Failed to auto-create inventory:', invError);
+        // We do NOT fail the request, as this can be healed later
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: `Created ${createdDocs.length} variants (${skippedCount} skipped)`,
@@ -138,10 +167,9 @@ export const createVariants = async (req, res) => {
 export const getAllVariants = async (req, res) => {
   try {
     const variants = await Variant.find()
-      .populate("productId", "name sku")
-      .populate("sizeId", "name code")
-      .populate("colorId", "name hexCode")
-      .populate("colorParts", "name hexCode");
+      .populate("product", "name sku")
+      .populate("size", "name code")
+      .populate("color", "name hexCode");
 
     res.json({
       success: true,
@@ -162,17 +190,16 @@ export const getVariantsByProduct = async (req, res) => {
     const { productId } = req.params;
 
     const variants = await Variant.find({
-      productId: productId,
-      isDeleted: false // Hide soft-deleted
+      product: productId, // Schema field: product
+      isDeleted: false
     })
-      .populate("sizeId", "name code")
-      .populate("colorId", "name hexCode")
-      .populate("colorParts", "name hexCode")
-      .sort({ "attributes.size": 1, "attributes.color": 1 }); // Rough sort
+      .populate("size", "name code") // Schema field: size
+      .populate("color", "name hexCode") // Schema field: color
+      .sort({ "attributes.size": 1, "attributes.color": 1 });
 
     res.json({
       success: true,
-      data: variants, // Return directly (frontend expects data array)
+      data: variants,
     });
   } catch (error) {
     res.status(500).json({
@@ -187,10 +214,9 @@ export const getVariantsByProduct = async (req, res) => {
 export const getVariantById = async (req, res) => {
   try {
     const variant = await Variant.findById(req.params.id)
-      .populate("productId", "name")
-      .populate("sizeId")
-      .populate("colorId")
-      .populate("colorParts");
+      .populate("product", "name")
+      .populate("size")
+      .populate("color");
 
     if (!variant) {
       return res.status(404).json({
@@ -227,9 +253,8 @@ export const updateVariant = async (req, res) => {
       updates,
       { new: true, runValidators: true }
     )
-      .populate("sizeId")
-      .populate("colorId")
-      .populate("colorParts");
+      .populate("size")
+      .populate("color");
 
     if (!updated) {
       return res.status(404).json({

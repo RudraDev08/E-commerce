@@ -128,7 +128,7 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
 
     const fetchCategories = async () => {
         try {
-            const response = await categoryApi.getAllCategories();
+            const response = await categoryApi.getAll();
             // Handle response structure: response.data.data
             const categoryData = response.data?.data || response.data || [];
             setCategories(Array.isArray(categoryData) ? categoryData : []);
@@ -141,7 +141,7 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
 
     const fetchBrands = async () => {
         try {
-            const response = await brandApi.getAllBrands();
+            const response = await brandApi.getAll();
             // Handle response structure: response.data.data
             const brandData = response.data?.data || response.data || [];
             setBrands(Array.isArray(brandData) ? brandData : []);
@@ -156,10 +156,20 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
         setFormData({
             ...formData,
             ...data,
+            // Handle populated fields (extract IDs)
+            category: data.category?._id || data.category || '',
+            brand: data.brand?._id || data.brand || '',
+            subCategories: Array.isArray(data.subCategories)
+                ? data.subCategories.map(cat => cat._id || cat)
+                : [],
+            // Deconstruct complex objects to avoid overwriting with merged data if structure differs
             seo: data.seo || formData.seo,
             visibility: data.visibility || formData.visibility,
             dimensions: data.dimensions || formData.dimensions,
-            weight: data.weight || formData.weight
+            weight: data.weight || formData.weight,
+            // Handle Gallery
+            gallery: data.gallery || [],
+            galleryPreviews: data.gallery?.map(img => img.url) || []
         });
     };
 
@@ -241,6 +251,12 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
             formDataToSend.append('category', formData.category);
             formDataToSend.append('brand', formData.brand);
             formDataToSend.append('status', formData.status);
+            if (formData.version) formDataToSend.append('version', formData.version);
+
+            // Handle Subcategories
+            if (formData.subCategories && formData.subCategories.length > 0) {
+                formDataToSend.append('subCategories', JSON.stringify(formData.subCategories));
+            }
 
             // Pricing
             formDataToSend.append('price', formData.price);
@@ -271,19 +287,39 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
             formDataToSend.append('material', JSON.stringify(formData.material));
 
             // Images
-            if (formData.image) {
+            if (formData.image instanceof File) {
+                formDataToSend.append('image', formData.image);
+            }
+            // If it's a string, it means it's an existing image. 
+            // We generally don't need to send it back as 'image' field for file uploads, 
+            // but we might need to send it if the backend logic for 'image' field expects a string for legacy preservation.
+            // However, our updated backend logic in ProductController.js specifically checks for `files.image` or `body.image`.
+            // If we send `body.image` as the existing filename/URL, the backend will verify it.
+            else if (typeof formData.image === 'string' && formData.image.trim() !== '') {
                 formDataToSend.append('image', formData.image);
             }
 
-            formData.gallery.forEach(file => {
-                formDataToSend.append('gallery', file);
+            // Handle Gallery: Split into existing (JSON) and new (Files)
+            const existingGallery = [];
+
+            formData.gallery.forEach(item => {
+                if (item instanceof File) {
+                    formDataToSend.append('gallery', item); // New file
+                } else {
+                    existingGallery.push(item); // Existing DB object
+                }
             });
 
-            const response = initialData
-                ? await productApi.updateProduct(initialData._id, formDataToSend)
-                : await productApi.createProduct(formDataToSend);
+            // Send existing gallery items as JSON
+            if (existingGallery.length > 0) {
+                formDataToSend.append('gallery', JSON.stringify(existingGallery));
+            }
 
-            toast.success(response.message || 'Product saved successfully!');
+            const response = initialData
+                ? await productApi.update(initialData._id, formDataToSend)
+                : await productApi.create(formDataToSend);
+
+            toast.success(response.data?.message || 'Product saved successfully!');
             onProductAdded?.();
             onClose();
         } catch (error) {

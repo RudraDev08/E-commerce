@@ -1,5 +1,6 @@
 import CycleCount from '../models/inventory/CycleCount.model.js';
-import Variant from '../models/Variant.model.js';
+import Variant from '../models/Variant/VariantSchema.js';
+import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
 import inventoryService from './inventory.service.js';
 import mongoose from 'mongoose';
 
@@ -16,28 +17,27 @@ class CycleCountService {
             const count = await CycleCount.countDocuments();
             const countNumber = `CC-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
 
-            // 2. Fetch inventory for that warehouse to create snapshot
-            // ARCHITECTURE UPDATE: InventoryMaster is removed. Stock is on Variant.
-            // Assuming simplified warehouse model where Variant.stock is the total stock (likely Default Warehouse).
-            // Future: Variant might have 'locations' array if multi-warehouse is strictly needed.
-            // For now, we take Variant.stock as the system of record.
+            // 2. Fetch inventory snapshot from InventoryMaster
+            // ARCHITECTURE UPDATE: InventoryMaster is the Single Source of Truth
 
-            const variants = await Variant.find({
-                isDeleted: false,
-                status: true
+            const inventories = await InventoryMaster.find({
+                // potential filter by warehouse if added later
             }).session(session);
 
-            const items = variants.map(v => {
+            const items = inventories.map(inv => {
                 return {
-                    inventory: v._id, // Use Variant ID as inventory reference since Master is gone
-                    variant: v._id,
-                    sku: v.sku,
-                    systemQuantity: v.stock || 0,
+                    inventory: inv._id, // Inventory ID
+                    variant: inv.variantId,
+                    sku: inv.sku,
+                    systemQuantity: inv.totalStock || 0,
                     countedQuantity: 0,
                     variance: 0,
                     status: 'PENDING'
                 };
             });
+
+            // Note: If variants exist without inventory records, they are implicitly 0 and won't be counted here unless we left-join. 
+            // For now, counting tracked inventory is sufficient.
 
             const cycleCount = new CycleCount({
                 countNumber,

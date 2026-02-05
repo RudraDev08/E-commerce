@@ -68,16 +68,17 @@ export const variantAPI = {
 
 // Inventory APIs
 export const inventoryAPI = {
-    getAll: (params) => api.get('/inventory/inventory-master', { params }),
-    getById: (id) => api.get(`/inventory/inventory-master/${id}`),
-    create: (data) => api.post('/inventory/inventory-master', data),
-    update: (id, data) => api.put(`/inventory/inventory-master/${id}`, data),
-    adjustStock: (data) => api.patch('/inventory/inventory-master/adjust', data),
-    getStats: () => api.get('/inventory/inventory-master/stats'),
-    getLowStock: () => api.get('/inventory/inventory-master/low-stock'),
-    // Bulk update
-    bulkUpdate: (data) => api.patch('/inventory/inventory-master/bulk-update', data),
-    getLedger: (productId, params) => api.get(`/inventory/inventory-ledger/${productId}`, { params }),
+    getAll: (params) => api.get('/inventory', { params }),
+    // Note: getById in controller is getInventoryByVariantId
+    getById: (variantId) => api.get(`/inventory/${variantId}`),
+    // Create is not exposed via REST, handled internally
+    // updateStock endpoint: /:variantId/update-stock
+    updateStock: (variantId, data) => api.put(`/inventory/${variantId}/update-stock`, data),
+    getStats: () => api.get('/inventory/stats'),
+    getLowStock: () => api.get('/inventory/low-stock'),
+    getOutOfStock: () => api.get('/inventory/out-of-stock'), // Added missing
+    bulkUpdate: (data) => api.post('/inventory/bulk-update', data), // Changed PATCH to POST as per route
+    getLedger: (variantId, params) => api.get(`/inventory/${variantId}/ledger`, { params }),
 };
 
 export default api;

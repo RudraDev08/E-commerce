@@ -203,8 +203,8 @@ export const DescriptionsTab = ({ formData, onChange, onArrayAdd, onArrayUpdate,
 // ============================================================================
 export const PricingTab = ({ formData, onChange }) => {
     const calculatedDiscountPrice = formData.basePrice && formData.discount
-        ? formData.basePrice * (1 - formData.discount / 100)
-        : formData.price;
+        ? Number(formData.basePrice) * (1 - Number(formData.discount) / 100)
+        : Number(formData.price) || 0;
 
     return (
         <div className="space-y-6">
@@ -302,12 +302,12 @@ export const PricingTab = ({ formData, onChange }) => {
                     <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                             <span className="text-gray-600">Base Price (MRP):</span>
-                            <span className="font-medium">₹{parseFloat(formData.basePrice).toFixed(2)}</span>
+                            <span className="font-medium">₹{parseFloat(formData.basePrice || 0).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-gray-600">Discount ({formData.discount}%):</span>
+                            <span className="text-gray-600">Discount ({formData.discount || 0}%):</span>
                             <span className="font-medium text-red-600">
-                                -₹{(formData.basePrice * formData.discount / 100).toFixed(2)}
+                                -₹{(Number(formData.basePrice || 0) * Number(formData.discount || 0) / 100).toFixed(2)}
                             </span>
                         </div>
                         <div className="flex justify-between border-t border-indigo-200 pt-2">
@@ -320,8 +320,8 @@ export const PricingTab = ({ formData, onChange }) => {
                             <div className="flex justify-between text-green-600">
                                 <span>Profit Margin:</span>
                                 <span className="font-medium">
-                                    ₹{(calculatedDiscountPrice - formData.costPrice).toFixed(2)} (
-                                    {((calculatedDiscountPrice - formData.costPrice) / calculatedDiscountPrice * 100).toFixed(1)}%)
+                                    ₹{(calculatedDiscountPrice - Number(formData.costPrice || 0)).toFixed(2)} (
+                                    {((calculatedDiscountPrice - Number(formData.costPrice || 0)) / calculatedDiscountPrice * 100).toFixed(1)}%)
                                 </span>
                             </div>
                         )}

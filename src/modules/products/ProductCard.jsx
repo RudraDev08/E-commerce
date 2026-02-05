@@ -140,7 +140,7 @@ const ProductCard = ({ product, isSelected, onSelect, disabled }) => {
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Price</span>
             <span className="text-lg font-black text-slate-900">
-              ${Number(product.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{Number(product.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 

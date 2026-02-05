@@ -68,6 +68,8 @@ const VariantBuilder = () => {
 
             // Map existing variants to UI structure
             // -----------------------------------------------------
+            // Map existing variants to UI structure
+            // -----------------------------------------------------
             const existingArgs = (varRes.data.data || []).map(v => {
                 // Determine if this is a legacy variant (single) or new colorway
                 const isColorway = !!v.colorwayName || (v.colorParts && v.colorParts.length > 0);
@@ -76,6 +78,7 @@ const VariantBuilder = () => {
                 let displayColorName = 'N/A';
                 let displayHex = null; // Single Hex
                 let displayPalette = []; // Array of Hexes
+                let colorId = null;
 
                 if (isColorway) {
                     displayColorName = v.colorwayName || 'Custom Colorway';
@@ -85,19 +88,39 @@ const VariantBuilder = () => {
                     }
                 } else {
                     // Single Color
-                    // After populate, colorId is an object: { _id, name, hexCode }
-                    // Before populate, colorId is a string
-                    if (v.colorId && typeof v.colorId === 'object') {
+                    // Schema uses 'color' field (populated object or ID)
+                    // We need to robustly handle: v.color (object/ID), v.colorId (legacy/frontend-prop)
+                    const colorObj = v.color || v.colorId;
+
+                    if (colorObj && typeof colorObj === 'object') {
                         // Populated - use directly
-                        displayColorName = v.colorId.name || v.attributes?.color || 'N/A';
-                        displayHex = v.colorId.hexCode || '#eee';
+                        displayColorName = colorObj.name || v.attributes?.color || 'N/A';
+                        displayHex = colorObj.hexCode || '#eee';
+                        colorId = colorObj._id;
                     } else {
-                        // Not populated - fallback to matching from loadedColors
-                        const cId = v.colorId || (typeof v.color === 'string' ? v.color : v.color?._id);
+                        // Not populated (ID string or missing)
+                        const cId = colorObj || (typeof v.color === 'string' ? v.color : v.color?._id);
                         const matchedColor = loadedColors.find(c => c._id === cId);
                         displayColorName = v.attributes?.color || matchedColor?.name || 'N/A';
                         displayHex = matchedColor?.hexCode || '#eee';
+                        colorId = cId;
                     }
+                }
+
+                // Size Logic
+                // Schema uses 'size' field (populated object or ID)
+                let sizeCode = 'N/A';
+                let sizeId = null;
+                const sizeObj = v.size || v.sizeId;
+
+                if (sizeObj && typeof sizeObj === 'object') {
+                    sizeCode = sizeObj.code || sizeObj.name || 'N/A';
+                    sizeId = sizeObj._id;
+                } else {
+                    const sId = sizeObj;
+                    const matchedSize = loadedSizes.find(s => s._id === sId);
+                    sizeCode = matchedSize?.code || matchedSize?.name || v.attributes?.size || 'N/A';
+                    sizeId = sId;
                 }
 
                 return {
@@ -106,7 +129,9 @@ const VariantBuilder = () => {
                     isEdited: false,
 
                     // Unified UI Fields
-                    sizeCode: v.attributes?.size || v.size?.code || 'N/A',
+                    sizeCode,
+                    sizeId, // Ensure we have the ID for updates
+                    colorId, // Ensure we have the ID for updates (Single Color Mode)
 
                     // Render Hints
                     isColorway,

@@ -1,4 +1,4 @@
-import ProductVariant from "../../models/variant/productVariantSchema.js";
+import ProductVariant from "../../models/Variant/VariantSchema.js";
 import inventoryService from "../../services/inventory.service.js";
 
 /* CREATE */
@@ -6,35 +6,39 @@ import inventoryService from "../../services/inventory.service.js";
 export const createVariant = async (req, res) => {
   try {
     // 1. Destructure to safely check fields before saving
-    const { productId, attributes, price, sku } = req.body;
+    const { productId, size, color, price, sku, mrp, isDefault } = req.body;
 
-    // 2. Manual Validation (Optional but recommended)
-    if (!productId || !sku || price === undefined) {
+    // 2. Manual Validation
+    if (!productId || !sku || price === undefined || !size || !color) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: productId, sku, and price are mandatory."
-      });
-    }
-
-    if (!attributes || Object.keys(attributes).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Attributes cannot be empty. Please select options like Size or Color."
+        message: "Missing required fields: productId, sku, price, size, and color are mandatory."
       });
     }
 
     // 3. Attempt to Create
-    const variant = await ProductVariant.create(req.body);
+    // Convert productId -> product for schema consistency if needed, allowed by Mongoose loose matching
+    const variantData = {
+      product: productId,
+      size,
+      color,
+      price,
+      sku,
+      mrp: mrp || 0,
+      isDefault: isDefault || false,
+      ...req.body
+    };
 
-    // ✅ FIX: Populate references before returning to prevent color disappearing in UI
-    await variant.populate('productId', 'name');
-    await variant.populate('sizeId', 'code name');
-    await variant.populate('colorId', 'name hexCode');
-    await variant.populate('colorParts', 'name hexCode');
+    const variant = await ProductVariant.create(variantData);
 
-    // 4. Auto-Create Inventory Record - (DEPRECATED: Variant holds stock directly)
-    // No action needed specifically for inventory creation as it's part of Variant now.
-    // However, if we want to log opening stock, we could call a service method, but for now we skip to avoid crashes.
+    // ✅ FIX: Populate references correctly
+    await variant.populate('product', 'name');
+    await variant.populate('size', 'code name');
+    await variant.populate('color', 'name hexCode');
+
+    // 4. Inventory Creation
+    // Inventory is managed strictly by the Inventory Service. 
+    // Listeners/Triggers should handle stock record creation based on Variant Created events.
 
     res.status(201).json({ success: true, data: variant });
 
@@ -72,10 +76,9 @@ export const getVariants = async (req, res) => {
 
   const data = await ProductVariant
     .find(query)
-    .populate("productId", "name")
-    .populate("sizeId", "code name")           // Populate size details
-    .populate("colorId", "name hexCode")       // Populate single color (for SINGLE_COLOR variants)
-    .populate("colorParts", "name hexCode");   // Populate colorway palette (for COLORWAY variants)
+    .populate("product", "name")
+    .populate("size", "code name")
+    .populate("color", "name hexCode");
 
   res.json({ success: true, data });
 };
@@ -88,10 +91,9 @@ export const updateVariant = async (req, res) => {
     req.body,
     { new: true }
   )
-    .populate('productId', 'name')
-    .populate('sizeId', 'code name')
-    .populate('colorId', 'name hexCode')
-    .populate('colorParts', 'name hexCode');
+    .populate('product', 'name')
+    .populate('size', 'code name')
+    .populate('color', 'name hexCode');
 
   res.json({ success: true, data });
 };
@@ -111,10 +113,10 @@ export const toggleVariantStatus = async (req, res) => {
   await variant.save();
 
   // ✅ FIX: Populate references before returning to prevent color disappearing in UI
-  await variant.populate('productId', 'name');
-  await variant.populate('sizeId', 'code name');
-  await variant.populate('colorId', 'name hexCode');
-  await variant.populate('colorParts', 'name hexCode');
+  // ✅ FIX: Populate references
+  await variant.populate('product', 'name');
+  await variant.populate('size', 'code name');
+  await variant.populate('color', 'name hexCode');
 
   res.json({ success: true, data: variant });
 };

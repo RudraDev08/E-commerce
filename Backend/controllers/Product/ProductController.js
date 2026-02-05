@@ -57,9 +57,9 @@ const cleanBody = (body, files) => {
     discount: Number(body.discount || 0),
     tax: Number(body.tax || 18),
 
-    // Legacy stock (will be removed later)
-    stock: Number(body.stock || 0),
-    minStock: Number(body.minStock || 5),
+    // Legacy stock (REMOVED)
+    // stock: Number(body.stock || 0),
+    // minStock: Number(body.minStock || 5),
 
     // Variant configuration
     hasVariants: body.hasVariants === 'true' || body.hasVariants === true,
@@ -91,10 +91,15 @@ const cleanBody = (body, files) => {
     ...(visibility && { visibility }),
 
     // Media - Featured Image
+    // Only update featuredImage if it was provided in body (JSON edit) or files (upload)
     ...(featuredImage && { featuredImage }),
 
     // Legacy image support
-    image: files?.image?.[0]?.filename || body.image || "",
+    // IMPORTANT: Only update 'image' if a new file is uploaded or explicitly provided in body
+    // If files.image exists, use it.
+    // If body.image exists (e.g. keeping existing string), use it.
+    // If neither, DO NOT include 'image' key so Mongoose doesn't unset it (unless we want to support explicit removal, which usually requires a separate flag like removeImage)
+    ...((files?.image?.[0]?.filename || body.image) && { image: files?.image?.[0]?.filename || body.image }),
 
     // Gallery
     gallery: [
@@ -165,21 +170,22 @@ export const getProducts = async (req, res) => {
     if (brand && brand !== 'all') query.brand = brand;
     if (status && status !== 'all') query.status = status;
 
-    // Stock
-    if (stockStatus === 'in_stock') query.stock = { $gt: 0 };
-    if (stockStatus === 'out_of_stock') query.stock = 0;
+    // Stock - Removed from Product Service (Use Inventory Service)
+    // if (stockStatus === 'in_stock') query.stock = { $gt: 0 };
+    // if (stockStatus === 'out_of_stock') query.stock = 0;
 
     // Sort
     let sortOption = { createdAt: -1 };
     if (sort === 'price-asc') sortOption = { price: 1 };
     if (sort === 'price-desc') sortOption = { price: -1 };
     if (sort === 'name-asc') sortOption = { name: 1 };
-    if (sort === 'stock-asc') sortOption = { stock: 1 };
+    // if (sort === 'stock-asc') sortOption = { stock: 1 };
 
     const products = await Product.find(query)
       .populate('category', 'name slug')
       .populate('brand', 'name slug logo')
       .populate('productType', 'name')
+      .populate('variantCount')
       .sort(sortOption)
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -365,6 +371,19 @@ export const updateProduct = async (req, res) => {
   try {
     console.log("Update Payload Body:", req.body); // Debug Log
     console.log("Update Payload Files:", req.files ? Object.keys(req.files) : "No files");
+
+    // Optimistic Concurrency Control
+    if (req.body.version) {
+      const currentProduct = await Product.findById(req.params.id);
+      if (currentProduct && currentProduct.version !== Number(req.body.version)) {
+        return res.status(409).json({
+          success: false,
+          message: 'Conflict: Product has been modified by another user. Please reload.',
+          currentVersion: currentProduct.version,
+          yourVersion: Number(req.body.version)
+        });
+      }
+    }
 
     const payload = cleanBody(req.body, req.files || {});
 

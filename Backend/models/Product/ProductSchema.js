@@ -347,13 +347,16 @@ const productSchema = new mongoose.Schema({
     default: 'SINGLE_COLOR'
   },
 
-  // Legacy fields (kept for compatibility)
+  // Legacy stock (REMOVED - Managed by Inventory Service)
+  /*
+  stock: { type: Number, default: 0 },
   minStock: { type: Number, default: 5 },
   stockStatus: {
     type: String,
     enum: ['in_stock', 'out_of_stock', 'pre_order'],
     default: 'in_stock'
   },
+  */
 
   // ====================================================================
   // 11. CLASSIFICATION
@@ -463,13 +466,13 @@ productSchema.index({
 productSchema.virtual('variants', {
   ref: 'Variant',
   localField: '_id',
-  foreignField: 'productId'
+  foreignField: 'product'
 });
 
 productSchema.virtual('variantCount', {
   ref: 'Variant',
   localField: '_id',
-  foreignField: 'productId',
+  foreignField: 'product',
   count: true
 });
 

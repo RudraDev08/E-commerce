@@ -3,6 +3,7 @@ import React from 'react';
 
 const InventoryTable = ({ inventories, onUpdateStock, onViewLedger, formatNumber }) => {
   const getStockStatusBadge = (status) => {
+    const s = String(status || '').toLowerCase();
     const badges = {
       in_stock: { bg: 'bg-green-50', text: 'text-green-600', dot: 'bg-green-500', label: 'In Stock' },
       low_stock: { bg: 'bg-orange-50', text: 'text-orange-600', dot: 'bg-orange-500', label: 'Low Stock' },
@@ -11,7 +12,7 @@ const InventoryTable = ({ inventories, onUpdateStock, onViewLedger, formatNumber
     };
 
     // Fallback to out_of_stock if status is unknown or undefined
-    const badge = badges[status] || badges.out_of_stock;
+    const badge = badges[s] || badges[s.replace(' ', '_')] || badges.out_of_stock;
 
     return (
       <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
@@ -63,12 +64,20 @@ const InventoryTable = ({ inventories, onUpdateStock, onViewLedger, formatNumber
                 <td className="px-6 py-4">
                   <div>
                     <div className="text-[15px] font-semibold text-gray-900 leading-snug">
-                      {inventory.productName || inventory.productId?.name || 'Unknown Product'}
+                      {inventory.productId?.name || inventory.productName || 'Unknown Product'}
                     </div>
                     <div className="text-[13px] text-gray-600 mt-1">
-                      {inventory.variantAttributes?.size && `Size: ${inventory.variantAttributes.size}`}
-                      {inventory.variantAttributes?.color && `  •  Color: ${inventory.variantAttributes.color}`}
-                      {inventory.variantAttributes?.colorwayName && `  •  ${inventory.variantAttributes.colorwayName}`}
+                      {/* Size Logic: Check populated object or raw ID/String */}
+                      {(inventory.variantId?.size?.name || inventory.variantId?.size?.code || inventory.variantAttributes?.size) &&
+                        `Size: ${inventory.variantId?.size?.name || inventory.variantId?.size?.code || inventory.variantAttributes?.size}`}
+
+                      {/* Color Logic: Check populated object or raw ID/String */}
+                      {(inventory.variantId?.color?.name || inventory.variantAttributes?.color) &&
+                        `  •  Color: ${inventory.variantId?.color?.name || inventory.variantAttributes?.color}`}
+
+                      {/* Colorway Logic */}
+                      {(inventory.variantId?.colorwayName || inventory.variantAttributes?.colorwayName) &&
+                        `  •  ${inventory.variantId?.colorwayName || inventory.variantAttributes?.colorwayName}`}
                     </div>
                   </div>
                 </td>
@@ -104,7 +113,7 @@ const InventoryTable = ({ inventories, onUpdateStock, onViewLedger, formatNumber
                 </td>
 
                 <td className="px-6 py-4 text-center">
-                  {getStockStatusBadge(inventory.stockStatus)}
+                  {getStockStatusBadge(inventory.status)}
                 </td>
 
                 {/* Warehouse Distribution */}
@@ -161,7 +170,7 @@ const InventoryTable = ({ inventories, onUpdateStock, onViewLedger, formatNumber
 
             {/* Title */}
             <h3 className="text-2xl font-bold text-gray-900 mb-3">
-              No Inventory to Display
+              No inventory initialized for variants yet.
             </h3>
 
             {/* Description */}
