@@ -175,6 +175,30 @@ class InventoryController {
     }
 
     /**
+     * GET /api/inventory/product/:productId
+     * Get inventory by product ID
+     */
+    async getInventoryByProductId(req, res) {
+        try {
+            const { productId } = req.params;
+            const inventory = await inventoryService.getInventoryByProductId(productId);
+
+            res.status(200).json({
+                success: true,
+                message: 'Product inventory retrieved successfully',
+                data: inventory
+            });
+        } catch (error) {
+            console.error('Error getting product inventory:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to retrieve product inventory',
+                error: error.message
+            });
+        }
+    }
+
+    /**
      * GET /api/inventory/:variantId/ledger
      * Get inventory ledger for a variant
      */

@@ -132,9 +132,7 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
             // Handle response structure: response.data.data
             const categoryData = response.data?.data || response.data || [];
             setCategories(Array.isArray(categoryData) ? categoryData : []);
-            console.log('Categories loaded:', categoryData.length);
         } catch (error) {
-            console.error('Error fetching categories:', error);
             toast.error('Failed to load categories');
         }
     };
@@ -145,9 +143,7 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
             // Handle response structure: response.data.data
             const brandData = response.data?.data || response.data || [];
             setBrands(Array.isArray(brandData) ? brandData : []);
-            console.log('Brands loaded:', brandData.length);
         } catch (error) {
-            console.error('Error fetching brands:', error);
             toast.error('Failed to load brands');
         }
     };
@@ -323,7 +319,6 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
             onProductAdded?.();
             onClose();
         } catch (error) {
-            console.error('Error saving product:', error);
             toast.error(error.response?.data?.message || 'Failed to save product');
         } finally {
             setLoading(false);

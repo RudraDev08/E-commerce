@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckIcon } from '@heroicons/react/24/solid';
+import { CheckIcon, XMarkIcon } from '@heroicons/react/24/solid';
 import { getImageUrl } from '../../../utils/formatters';
 
 /**
@@ -20,7 +20,7 @@ export const RichVariantCard = ({ attribute, values, selectedValue, onSelect, ch
                     onClick={() => onSelect(val.slug || val.value)}
                     disabled={!isAvailable}
                     className={`rich-variant-card ${isSelected ? 'selected' : ''} ${!isAvailable ? 'disabled' : ''}`}
-                    title={!isAvailable ? 'Not available' : val.value}
+                    title={!isAvailable ? 'Out of Stock' : val.value}
                 >
                     <div className="variant-thumb-container">
                         <img src={getImageUrl(image)} alt={val.value} className="variant-thumb" />
@@ -56,7 +56,7 @@ export const ButtonGroup = ({ attribute, values, selectedValue, onSelect, checkA
                     onClick={() => onSelect(val.slug || val.value)}
                     disabled={!isAvailable}
                     className={`option-btn ${isSelected ? 'selected' : ''} ${!isAvailable ? 'disabled' : ''}`}
-                    title={!isAvailable ? 'Not available' : ''}
+                    title={!isAvailable ? 'Out of Stock' : val.value}
                 >
                     {val.value}
                 </button>
@@ -82,13 +82,13 @@ export const ColorSwatch = ({ attribute, values, selectedValue, onSelect, checkA
                     disabled={!isAvailable}
                     className={`color-swatch-btn ${isSelected ? 'selected' : ''} ${!isAvailable ? 'disabled' : ''}`}
                     style={{ backgroundColor: colorCode }}
-                    title={val.name || val.value}
+                    title={`${val.name || val.value} ${!isAvailable ? '(Out of Stock)' : ''}`}
                 >
-                    {isSelected && (
-                        <CheckIcon className={`check-icon ${['white', '#fff', '#ffffff'].includes(colorCode.toLowerCase()) ? 'dark' : 'light'}`} />
+                    {!isAvailable && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-full">
+                            <XMarkIcon className="w-5 h-5 text-white drop-shadow-md" />
+                        </div>
                     )}
-
-                    {!isAvailable && <div className="unavailable-line" />}
                 </button>
             );
         })}

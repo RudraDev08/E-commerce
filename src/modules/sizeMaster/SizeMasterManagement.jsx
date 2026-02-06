@@ -49,19 +49,19 @@ const CustomDropdown = ({ label, value, options, onChange, icon: Icon, color = "
     const activeColor = colorStyles[color] || colorStyles.indigo;
 
     return (
-        <div className="flex flex-col h-full justify-center" ref={containerRef}>
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+        <div className="flex flex-col h-full justify-end" ref={containerRef}>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 ml-1">
                 {label}
             </label>
             <div className="relative">
                 <button
                     onClick={() => setIsOpen(!isOpen)}
-                    className={`w-full relative flex items-center gap-3 pl-4 pr-10 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 transition-all hover:bg-slate-100 focus:outline-none focus:ring-2 ${isOpen ? 'ring-2 ' + activeColor : ''}`}
+                    className={`w-full relative flex items-center gap-3 pl-5 pr-10 py-3.5 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 focus:outline-none focus:ring-4 focus:ring-slate-100 ${isOpen ? 'ring-4 ring-slate-100 border-slate-300' : 'shadow-sm'}`}
                 >
-                    {Icon && <Icon className={`w-5 h-5 ${color === 'purple' ? 'text-purple-500' : color === 'pink' ? 'text-pink-500' : 'text-indigo-500'}`} />}
+                    {Icon && <Icon className={`w-5 h-5 transition-colors ${isOpen ? activeColor.split(' ')[0] : 'text-slate-400'}`} />}
                     <span className="truncate">{selectedOption.label}</span>
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                        <ChevronDownIcon className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                        <ChevronDownIcon className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180 text-slate-600' : ''}`} />
                     </span>
                 </button>
 
@@ -71,27 +71,27 @@ const CustomDropdown = ({ label, value, options, onChange, icon: Icon, color = "
                             initial={{ opacity: 0, y: 8, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                            transition={{ duration: 0.15, ease: "easeOut" }}
-                            className="absolute z-20 w-full mt-2 bg-white rounded-xl shadow-xl ring-1 ring-black/5 py-1 focus:outline-none overflow-hidden origin-top max-h-60 overflow-y-auto custom-scrollbar"
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                            className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 focus:outline-none overflow-hidden origin-top max-h-72 overflow-y-auto custom-scrollbar"
                         >
                             {options.map((option) => (
-                                <li key={option.value}>
+                                <li key={option.value} className="px-2">
                                     <button
                                         onClick={() => {
                                             onChange(option.value);
                                             setIsOpen(false);
                                         }}
-                                        className={`w-full flex items-center justify-between px-4 py-2.5 text-sm font-bold transition-colors ${value === option.value
+                                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold transition-all ${value === option.value
                                             ? 'bg-slate-50 text-slate-900'
                                             : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                                             }`}
                                     >
-                                        <span className="flex items-center gap-2">
+                                        <span className="flex items-center gap-3">
                                             {option.icon}
                                             {option.label}
                                         </span>
                                         {value === option.value && (
-                                            <CheckIcon className={`w-4 h-4 ${color === 'purple' ? 'text-purple-500' : color === 'pink' ? 'text-pink-500' : 'text-indigo-500'}`} />
+                                            <div className={`w-1.5 h-1.5 rounded-full ${color === 'purple' ? 'bg-purple-500' : color === 'pink' ? 'bg-pink-500' : 'bg-indigo-500'}`} />
                                         )}
                                     </button>
                                 </li>
@@ -316,240 +316,243 @@ const SizeMasterManagement = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] pb-20 font-sans text-slate-900">
-            {/* Page Header */}
-            <div className="px-8 py-8">
-                <h1 className="text-2xl font-bold text-slate-900">Size Master</h1>
-                <p className="text-slate-500 text-sm mt-1">Manage global size standards</p>
-            </div>
-
-            <div className="px-8 space-y-8">
-
-                {/* Management Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-
-                    {/* Card 1: Stats */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all">
-                        <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Total Sizes</p>
-                            <p className="text-3xl font-black text-slate-900">{sizes.length}</p>
-                        </div>
-                        <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                            <TagIcon className="w-6 h-6" />
-                        </div>
-                    </div>
-
-                    {/* Card 2: Filter Category (Custom Dropdown) */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
-                        <CustomDropdown
-                            label="Category"
-                            value={filterCategory}
-                            options={sizeCategories}
-                            onChange={(val) => { setFilterCategory(val); setCurrentPage(1); }}
-                            icon={FunnelIcon}
-                            color="purple"
-                        />
-                    </div>
-
-                    {/* Card 3: Filter Status (Custom Dropdown) */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
-                        <CustomDropdown
-                            label="Status"
-                            value={filterStatus}
-                            options={statusOptions}
-                            onChange={(val) => { setFilterStatus(val); setCurrentPage(1); }}
-                            icon={CheckCircleIcon}
-                            color="pink"
-                        />
-                    </div>
-
-                    {/* Card 4: Action (Gradient Button) */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between hover:shadow-md transition-all">
-                        <label className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-                            Actions
-                        </label>
-                        <button
-                            onClick={handleCreate}
-                            className="w-full py-3 bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white rounded-xl shadow-lg shadow-fuchsia-500/20 text-sm font-bold flex items-center justify-center gap-2 transition-all transform active:scale-95"
-                        >
-                            <PlusIcon className="w-5 h-5" />
-                            Add New Size
-                        </button>
-                    </div>
+        <div className="min-h-screen bg-[#F8FAFC] pb-24 font-sans text-slate-900">
+            {/* Page Container */}
+            <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-10 pb-8">
+                {/* Page Header */}
+                <div className="mb-10">
+                    <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Size Master</h1>
+                    <p className="text-slate-500 text-sm mt-2 font-medium">Manage global size standards & configurations</p>
                 </div>
 
-                {/* Main Table Card */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                    {/* Header with Search */}
-                    <div className="px-8 py-6 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-900">Sizes List</h2>
-                            <p className="text-sm text-slate-500 font-medium">{sizes.length} records found</p>
+                <div className="space-y-10">
+
+                    {/* Management Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+
+                        {/* Card 1: Stats */}
+                        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md hover:border-indigo-100 transition-all duration-300">
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Total Sizes</p>
+                                <p className="text-4xl font-black text-slate-900 tracking-tight">{sizes.length}</p>
+                            </div>
+                            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 group-hover:bg-indigo-100 transition-all duration-300">
+                                <TagIcon className="w-7 h-7" />
+                            </div>
                         </div>
-                        <div className="relative">
-                            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                            <input
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Search..."
-                                className="pl-11 pr-4 py-2.5 w-full sm:w-72 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all placeholder:text-slate-400"
+
+                        {/* Card 2: Filter Category */}
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md hover:border-purple-100 transition-all duration-300">
+                            <CustomDropdown
+                                label="Category"
+                                value={filterCategory}
+                                options={sizeCategories}
+                                onChange={(val) => { setFilterCategory(val); setCurrentPage(1); }}
+                                icon={FunnelIcon}
+                                color="purple"
                             />
                         </div>
+
+                        {/* Card 3: Filter Status */}
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md hover:border-pink-100 transition-all duration-300">
+                            <CustomDropdown
+                                label="Status"
+                                value={filterStatus}
+                                options={statusOptions}
+                                onChange={(val) => { setFilterStatus(val); setCurrentPage(1); }}
+                                icon={CheckCircleIcon}
+                                color="pink"
+                            />
+                        </div>
+
+                        {/* Card 4: Actions */}
+                        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-between hover:shadow-md hover:border-fuchsia-100 transition-all duration-300">
+                            <label className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                Actions
+                            </label>
+                            <button
+                                onClick={handleCreate}
+                                className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-lg shadow-slate-900/10 text-sm font-bold flex items-center justify-center gap-2 transition-all transform active:scale-95 hover:-translate-y-0.5"
+                            >
+                                <PlusIcon className="w-5 h-5" />
+                                Add New Size
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Table */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-slate-50/50 border-b border-slate-100">
-                                    <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Order</th>
-                                    <th className="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Identity</th>
-                                    <th className="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Category</th>
-                                    <th className="px-6 py-5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-5 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {loading ? (
-                                    Array.from({ length: itemsPerPage }).map((_, i) => (
-                                        <tr key={i} className="animate-pulse h-[88px] border-b border-slate-50 last:border-0 relative">
-                                            <td className="px-8 py-5"><div className="w-8 h-8 rounded-lg bg-slate-100"></div></td>
-                                            <td className="px-6 py-5"><div className="h-4 bg-slate-100 w-24 rounded"></div></td>
-                                            <td className="px-6 py-5"><div className="h-6 bg-slate-100 w-20 rounded-full"></div></td>
-                                            <td className="px-6 py-5"><div className="h-6 bg-slate-100 w-12 mx-auto rounded-full"></div></td>
-                                            <td className="px-6 py-5"></td>
-                                        </tr>
-                                    ))
-                                ) : currentItems.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="5" className="px-6 py-24 text-center">
-                                            <div className="mx-auto w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                                                <TagIcon className="w-8 h-8 text-slate-300" />
-                                            </div>
-                                            <h3 className="text-lg font-bold text-slate-900">No sizes found</h3>
-                                            <p className="text-sm text-slate-500 mt-1 mb-6">Get started by adding your first size.</p>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    <>
-                                        {currentItems.map((size, index) => (
-                                            <tr key={size._id} className="group hover:bg-slate-50/60 transition-colors border-b border-slate-50 last:border-0 relative h-[88px]">
-                                                <td className="px-8 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <GripVertical size={16} className="text-slate-300 cursor-grab hover:text-indigo-500 transition-colors" />
-                                                        <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md min-w-[30px] text-center">
-                                                            {size.displayOrder}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div>
-                                                        <div className="text-sm font-bold text-slate-900">{size.name}</div>
-                                                        <div className="text-[10px] uppercase font-bold text-slate-400 mt-0.5">{size.code} • {size.gender}</div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${getCategoryBadgeColor(size.category)}`}>
-                                                        {sizeCategories.find(c => c.value === size.category)?.label || size.category}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <button
-                                                        onClick={() => toggleStatus(size._id)}
-                                                        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${size.status === 'active' ? 'bg-emerald-500' : 'bg-slate-200'}`}
-                                                    >
-                                                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${size.status === 'active' ? 'translate-x-4' : 'translate-x-0'}`} />
-                                                    </button>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button
-                                                            onClick={() => handleEdit(size)}
-                                                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                                            title="Edit"
-                                                        >
-                                                            <PencilIcon className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(size._id)}
-                                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                            title="Delete"
-                                                        >
-                                                            <TrashIcon className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {/* Fixed Height Padding */}
-                                        {currentItems.length > 0 && Array.from({ length: Math.max(0, itemsPerPage - currentItems.length) }).map((_, index) => (
-                                            <tr key={`empty-${index}`} className="h-[88px] border-b border-transparent">
-                                                <td colSpan="5">&nbsp;</td>
-                                            </tr>
-                                        ))}
-                                    </>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Pagination */}
-                    {!loading && sizes.length > 0 && (
-                        <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between bg-white">
-                            <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
-                                <span>Showing</span>
-                                <span className="font-bold text-slate-900">{indexOfFirstItem + 1}</span>
-                                <span>-</span>
-                                <span className="font-bold text-slate-900">{Math.min(indexOfLastItem, sizes.length)}</span>
-                                <span>of</span>
-                                <span className="font-bold text-slate-900">{sizes.length}</span>
+                    {/* Main Table Card */}
+                    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                        {/* Header with Search */}
+                        <div className="px-8 py-8 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900">Sizes List</h2>
+                                <p className="text-sm text-slate-500 font-medium mt-1">{sizes.length} records found</p>
                             </div>
-
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                    disabled={currentPage === 1}
-                                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group"
-                                >
-                                    <ChevronLeftIcon className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
-                                    Prev
-                                </button>
-
-                                <div className="hidden sm:flex items-center gap-1">
-                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                        let pageNum = i + 1;
-                                        if (totalPages > 5 && currentPage > 3) {
-                                            pageNum = currentPage - 2 + i;
-                                            if (pageNum > totalPages) pageNum = totalPages - (4 - i);
-                                        }
-                                        if (pageNum <= 0) pageNum = i + 1;
-
-                                        return (
-                                            <button
-                                                key={pageNum}
-                                                onClick={() => setCurrentPage(pageNum)}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-all ${currentPage === pageNum
-                                                    ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20'
-                                                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                                                    }`}
-                                            >
-                                                {pageNum}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                    disabled={currentPage === totalPages}
-                                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group"
-                                >
-                                    Next
-                                    <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                                </button>
+                            <div className="relative w-full sm:w-auto">
+                                <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                <input
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search sizes..."
+                                    className="pl-12 pr-6 py-3 w-full sm:w-80 bg-white border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all placeholder:text-slate-400 shadow-sm"
+                                />
                             </div>
                         </div>
-                    )}
+
+                        {/* Table */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                                        <th className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Order</th>
+                                        <th className="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Identity</th>
+                                        <th className="px-6 py-5 text-xs font-bold text-slate-400 uppercase tracking-wider">Category</th>
+                                        <th className="px-6 py-5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-5 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {loading ? (
+                                        Array.from({ length: itemsPerPage }).map((_, i) => (
+                                            <tr key={i} className="animate-pulse h-[88px] border-b border-slate-50 last:border-0 relative">
+                                                <td className="px-8 py-5"><div className="w-8 h-8 rounded-lg bg-slate-100"></div></td>
+                                                <td className="px-6 py-5"><div className="h-4 bg-slate-100 w-24 rounded"></div></td>
+                                                <td className="px-6 py-5"><div className="h-6 bg-slate-100 w-20 rounded-full"></div></td>
+                                                <td className="px-6 py-5"><div className="h-6 bg-slate-100 w-12 mx-auto rounded-full"></div></td>
+                                                <td className="px-6 py-5"></td>
+                                            </tr>
+                                        ))
+                                    ) : currentItems.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="5" className="px-6 py-24 text-center">
+                                                <div className="mx-auto w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                                                    <TagIcon className="w-8 h-8 text-slate-300" />
+                                                </div>
+                                                <h3 className="text-lg font-bold text-slate-900">No sizes found</h3>
+                                                <p className="text-sm text-slate-500 mt-1 mb-6">Get started by adding your first size.</p>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        <>
+                                            {currentItems.map((size, index) => (
+                                                <tr key={size._id} className="group hover:bg-slate-50/60 transition-colors border-b border-slate-50 last:border-0 relative h-[88px]">
+                                                    <td className="px-8 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <GripVertical size={16} className="text-slate-300 cursor-grab hover:text-indigo-500 transition-colors" />
+                                                            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md min-w-[30px] text-center">
+                                                                {size.displayOrder}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div>
+                                                            <div className="text-sm font-bold text-slate-900">{size.name}</div>
+                                                            <div className="text-[10px] uppercase font-bold text-slate-400 mt-0.5">{size.code} • {size.gender}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${getCategoryBadgeColor(size.category)}`}>
+                                                            {sizeCategories.find(c => c.value === size.category)?.label || size.category}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <button
+                                                            onClick={() => toggleStatus(size._id)}
+                                                            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${size.status === 'active' ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                                                        >
+                                                            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${size.status === 'active' ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                        </button>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={() => handleEdit(size)}
+                                                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                                                title="Edit"
+                                                            >
+                                                                <PencilIcon className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(size._id)}
+                                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                                title="Delete"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {/* Fixed Height Padding */}
+                                            {currentItems.length > 0 && Array.from({ length: Math.max(0, itemsPerPage - currentItems.length) }).map((_, index) => (
+                                                <tr key={`empty-${index}`} className="h-[88px] border-b border-transparent">
+                                                    <td colSpan="5">&nbsp;</td>
+                                                </tr>
+                                            ))}
+                                        </>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Pagination */}
+                        {!loading && sizes.length > 0 && (
+                            <div className="px-8 py-6 border-t border-slate-100 flex items-center justify-between bg-white">
+                                <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
+                                    <span>Showing</span>
+                                    <span className="font-bold text-slate-900">{indexOfFirstItem + 1}</span>
+                                    <span>-</span>
+                                    <span className="font-bold text-slate-900">{Math.min(indexOfLastItem, sizes.length)}</span>
+                                    <span>of</span>
+                                    <span className="font-bold text-slate-900">{sizes.length}</span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                        disabled={currentPage === 1}
+                                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group hover:border-slate-300"
+                                    >
+                                        <ChevronLeftIcon className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                                        Prev
+                                    </button>
+
+                                    <div className="hidden sm:flex items-center gap-1">
+                                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                            let pageNum = i + 1;
+                                            if (totalPages > 5 && currentPage > 3) {
+                                                pageNum = currentPage - 2 + i;
+                                                if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                                            }
+                                            if (pageNum <= 0) pageNum = i + 1;
+
+                                            return (
+                                                <button
+                                                    key={pageNum}
+                                                    onClick={() => setCurrentPage(pageNum)}
+                                                    className={`w-9 h-9 flex items-center justify-center rounded-xl text-sm font-bold transition-all ${currentPage === pageNum
+                                                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
+                                                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                                                        }`}
+                                                >
+                                                    {pageNum}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                        disabled={currentPage === totalPages}
+                                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group hover:border-slate-300"
+                                    >
+                                        Next
+                                        <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 

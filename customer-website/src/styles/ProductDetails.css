@@ -756,24 +756,30 @@
 
 /* Updated Swatch Styles for Premium Feel */
 .color-swatch-btn {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    /* Subtle border for white swatches */
     position: relative;
     cursor: pointer;
     transition: all 0.2s ease;
+    padding: 0;
+    /* reset */
 }
 
 .color-swatch-btn:hover {
-    transform: scale(1.1);
+    transform: scale(1.05);
 }
 
 .color-swatch-btn.selected {
     border-color: transparent;
-    box-shadow: 0 0 0 2px white, 0 0 0 4px var(--text-main);
-    /* Ring effect */
-    transform: scale(1.1);
+    /* pure blue ring with white gap */
+    box-shadow: 0 0 0 3px #FFFFFF, 0 0 0 5px #2563EB;
+    transform: scale(1.0);
+    /* Reset scale or keep it? Image shows no scale up, just ring */
+    z-index: 1;
+    /* Ensure on top */
 }
 
 .options-group {
@@ -792,10 +798,35 @@
     background: white;
     color: var(--text-main);
     transition: all 0.2s;
+    min-width: 48px;
+    /* Ensure minimum click area */
+    display: flex;
+    /* Center content */
+    align-items: center;
+    justify-content: center;
 }
 
 .option-btn:hover:not(.disabled) {
     border-color: var(--text-main);
+    background-color: #F9FAFB;
+}
+
+.option-btn.selected {
+    border-color: #111827;
+    background-color: #111827;
+    /* Solid Black Selection */
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.option-btn.disabled {
+    background-color: #F3F4F6;
+    color: #9CA3AF;
+    cursor: not-allowed;
+    border-color: transparent;
+    opacity: 0.7;
+    text-decoration: line-through;
+    /* Clear visual indicator */
 }
 
 .option-btn.selected {

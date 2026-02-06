@@ -17,7 +17,7 @@ export const STORAGE_KEYS = {
     CART: 'shophub_cart',
     AUTH_TOKEN: 'shophub_auth_token',
     USER: 'shophub_user',
-    WISHLIST: 'shophub_wishlist'
+
 };
 
 // Product Status

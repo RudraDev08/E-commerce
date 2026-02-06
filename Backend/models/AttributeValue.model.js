@@ -374,11 +374,6 @@ const attributeValueSchema = new mongoose.Schema({
             default: 0
         },
 
-        wishlistCount: {
-            type: Number,
-            default: 0
-        },
-
         cartAddCount: {
             type: Number,
             default: 0

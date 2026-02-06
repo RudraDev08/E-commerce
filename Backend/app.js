@@ -20,7 +20,7 @@ import unifiedVariantRoutes from "./routes/attributes/unifiedVariantRoutes.js";
 import discoveryRoutes from "./routes/discoveryRoutes.js";
 import variantRoutes from "./routes/variant/variantRoutes.js";
 import orderRoutes from "./routes/Order/OrderRoutes.js";
-import wishlistRoutes from "./routes/Wishlist/WishlistRoutes.js";
+
 
 import sizeRoutes from "./routes/size/sizeRoutes.js";
 import colorRoutes from "./routes/color/colorRoutes.js";
@@ -83,7 +83,7 @@ app.use("/api/unified-variants", unifiedVariantRoutes);
 app.use("/api/discovery", discoveryRoutes);
 app.use("/api/variants", variantRoutes);
 app.use("/api/orders", orderRoutes);
-app.use("/api/wishlist", wishlistRoutes);
+
 app.use("/api/sizes", sizeRoutes);
 app.use("/api/colors", colorRoutes);
 app.use("/api/warehouses", warehouseRoutes);

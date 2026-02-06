@@ -25,6 +25,9 @@ router.get('/low-stock', inventoryController.getLowStockItems.bind(inventoryCont
 // Get out of stock items
 router.get('/out-of-stock', inventoryController.getOutOfStockItems.bind(inventoryController));
 
+// Get inventory by product ID
+router.get('/product/:productId', inventoryController.getInventoryByProductId.bind(inventoryController));
+
 // Get inventory by variant ID
 router.get('/:variantId', inventoryController.getInventoryByVariantId.bind(inventoryController));
 

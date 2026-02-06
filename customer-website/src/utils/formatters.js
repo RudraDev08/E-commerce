@@ -58,13 +58,16 @@ export const getImageUrl = (imagePath) => {
     // Normalize path separators (win to unix)
     const normalizedPath = imagePath.replace(/\\/g, '/');
 
-    // Remove 'uploads/' prefix if present to avoid duplication/nesting
-    const cleanPath = normalizedPath.replace(/^uploads\//, '');
+    // Remove 'uploads' prefix (optional leading slash, followed by 'uploads/')
+    // This prevents http://.../uploads/uploads/filename
+    const cleanPath = normalizedPath.replace(/^(\/)?uploads\//, '');
 
     const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || 'http://localhost:5000/uploads';
 
     // Ensure clean join
     const baseUrl = uploadsUrl.endsWith('/') ? uploadsUrl.slice(0, -1) : uploadsUrl;
+
+    // cleanPath should not start with slash for joining
     const finalPath = cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath;
 
     return `${baseUrl}/${finalPath}`;

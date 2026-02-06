@@ -74,48 +74,7 @@
     }
 }
 
-/* Wishlist Button */
-.pc-wishlist-btn {
-    position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    transition: all 0.2s ease;
-    z-index: 10;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
 
-.pc-wishlist-btn:hover {
-    transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.pc-wishlist-btn.active {
-    background: rgba(255, 56, 56, 0.1);
-    animation: heart-beat 0.3s ease;
-}
-
-@keyframes heart-beat {
-
-    0%,
-    100% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.2);
-    }
-}
 
 /* Tags */
 .pc-tags {
@@ -339,11 +298,7 @@
         font-size: 0.875rem;
     }
 
-    .pc-wishlist-btn {
-        width: 2rem;
-        height: 2rem;
-        font-size: 1rem;
-    }
+
 }
 
 /* Grid Layout Support */

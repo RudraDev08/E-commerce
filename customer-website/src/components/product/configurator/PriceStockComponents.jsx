@@ -1,14 +1,17 @@
-import React from 'react';
+import { CheckIcon, XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/solid';
 
-export const PriceDisplay = ({ price, currency = 'USD', originalPrice, loading }) => {
-    const formattedPrice = new Intl.NumberFormat('en-US', {
+export const PriceDisplay = ({ price, currency = 'INR', originalPrice, loading }) => {
+    // ... logic same ...
+    const formattedPrice = new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: currency,
+        maximumFractionDigits: 0
     }).format(price || 0);
 
-    const formattedOriginal = originalPrice ? new Intl.NumberFormat('en-US', {
+    const formattedOriginal = originalPrice ? new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: currency,
+        maximumFractionDigits: 0
     }).format(originalPrice) : null;
 
     if (loading) return <div className="h-8 w-32 bg-gray-200 animate-pulse rounded"></div>;
@@ -30,27 +33,32 @@ export const PriceDisplay = ({ price, currency = 'USD', originalPrice, loading }
 export const StockIndicator = ({ stock, loading }) => {
     if (loading) return <div className="h-6 w-24 bg-gray-200 animate-pulse rounded mt-2"></div>;
 
-    if (stock === 0 || stock === null || stock === undefined) {
+    if (stock === null || stock === undefined) {
+        return null; // Don't show anything until selection
+    }
+
+    if (stock === 0) {
         return (
             <div className="mt-2 flex items-center text-red-600 font-medium">
-                <span className="w-2 h-2 bg-red-600 rounded-full mr-2"></span>
+                <XMarkIcon className="w-5 h-5 mr-1" />
                 Out of Stock
             </div>
         );
     }
 
-    if (stock < 10) {
+    // Low Stock Warning (< 5)
+    if (stock < 5) {
         return (
-            <div className="mt-2 flex items-center text-amber-600 font-medium">
-                <span className="w-2 h-2 bg-amber-600 rounded-full mr-2"></span>
-                Only {stock} left!
+            <div className="mt-2 flex items-center text-orange-600 font-medium">
+                <ExclamationTriangleIcon className="w-5 h-5 mr-1" />
+                <span className="font-bold">Low Stock:</span>&nbsp;Only {stock} left!
             </div>
         );
     }
 
     return (
         <div className="mt-2 flex items-center text-green-600 font-medium">
-            <span className="w-2 h-2 bg-green-600 rounded-full mr-2"></span>
+            <CheckIcon className="w-5 h-5 mr-1" />
             In Stock
         </div>
     );

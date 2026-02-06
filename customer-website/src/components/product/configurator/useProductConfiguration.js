@@ -28,17 +28,30 @@ export const useProductConfiguration = (variants = [], attributeTypes = [], init
     const getVariantAttributeValue = useCallback((variant, attributeSlug) => {
         // Handle "contract" shape: variant.attributes = { color: 'red', size: 'xl' }
         if (variant.attributes && typeof variant.attributes === 'object' && !Array.isArray(variant.attributes)) {
-            return variant.attributes[attributeSlug];
+            // Check direct attributes first
+            if (variant.attributes[attributeSlug]) return variant.attributes[attributeSlug];
         }
 
         // Handle "backend" shape: variant.attributes = [{ attributeType: { slug: 'color' }, attributeValue: { slug: 'red' } }]
         if (Array.isArray(variant.attributes)) {
             const attr = variant.attributes.find(a =>
-                (a.attributeType?.slug === attributeSlug) ||
-                (a.attributeType === attributeSlug) // fallback if just ID
+                a && ((a.attributeType?.slug === attributeSlug) ||
+                    (a.attributeType === attributeSlug)) // fallback if just ID
             );
-            return attr?.attributeValue?.slug || attr?.attributeValue;
+            if (attr) return attr.attributeValue?.slug || attr.attributeValue;
         }
+
+        // NEW: Handle top-level structured attributes (size/color)
+        if (attributeSlug === 'size' && variant.size && typeof variant.size === 'object') {
+            return variant.size.name || variant.size.value;
+        }
+        if (attributeSlug === 'color' && variant.color && typeof variant.color === 'object') {
+            return variant.color.name || variant.color.value;
+        }
+
+        // Fallback for flat size/color properties if they exist
+        if (attributeSlug === 'size' && typeof variant.size === 'string') return variant.size;
+        if (attributeSlug === 'color' && typeof variant.color === 'string') return variant.color;
 
         return null;
     }, []);
@@ -100,7 +113,14 @@ export const useProductConfiguration = (variants = [], attributeTypes = [], init
 
             // Check if this variant has the TARGET value
             const variantVal = getVariantAttributeValue(variant, attributeSlug);
-            return String(variantVal) === String(valueSlug);
+            const matchesTarget = String(variantVal) === String(valueSlug);
+
+            // STOCK CHECK: The variant must have stock > 0 to be considered "Available"
+            // If inventory logic is enforced, stock should be present.
+            // We treat explicit 0 as unavailable.
+            const hasStock = (variant.stock !== undefined) ? variant.stock > 0 : true;
+
+            return matchesTarget && hasStock;
         });
     }, [variants, attributeTypes, selectedAttributes, getVariantAttributeValue]);
 
@@ -120,6 +140,7 @@ export const useProductConfiguration = (variants = [], attributeTypes = [], init
 
     return {
         selectedAttributes,
+        setSelectedAttributes,
         selectAttribute,
         resolvedVariant,
         isOptionAvailable,

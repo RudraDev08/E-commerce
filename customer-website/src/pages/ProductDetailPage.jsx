@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getProductBySlug } from '../api/productApi';
 import { getVariantsByProduct } from '../api/variantApi';
+import { getInventoryByProductId } from '../api/inventoryApi';
 import { useCart } from '../context/CartContext';
 import ProductImageGallery from '../components/product/ProductImageGallery';
 import { ProductConfigurator } from '../components/product/configurator/ProductConfigurator';
@@ -41,11 +42,56 @@ const ProductDetailPage = () => {
                 setProduct(productData);
 
                 if (productData._id) {
-                    const variantsRes = await getVariantsByProduct(productData._id);
+                    // Parallel Fetch: Variants & Inventory
+                    const [variantsRes, inventoryRes] = await Promise.all([
+                        getVariantsByProduct(productData._id),
+                        getInventoryByProductId(productData._id)
+                    ]);
+
                     const variantsList = variantsRes.data?.data || variantsRes.data || [];
+                    const inventories = inventoryRes.data || [];
+
+                    // Create Inventory Map
+                    const inventoryMap = {};
+                    console.log('DEBUG: Variants fetched:', variantsList.length);
+                    console.log('DEBUG: Inventory records:', inventories.length);
+
+                    inventories.forEach(inv => {
+                        if (!inv.variantId) return; // Skip invalid records
+                        // Handle both string ID and object ID and ensure string
+                        const vId = (typeof inv.variantId === 'object' && inv.variantId._id)
+                            ? String(inv.variantId._id)
+                            : String(inv.variantId);
+
+                        // DEBUG
+                        // console.log(`DEBUG: Mapping Inv Variant ${vId} -> Stock ${inv.totalStock}`);
+
+                        inventoryMap[vId] = inv.totalStock; // Available Stock
+                    });
+
+                    console.log('DEBUG: Inventory Map Keys:', Object.keys(inventoryMap));
+
                     const activeVariants = variantsList.filter(v =>
                         (v.status === true || v.status === 'active') && !v.isDeleted
-                    );
+                    ).map(v => {
+                        const vIdString = String(v._id);
+                        const stock = inventoryMap[vIdString] !== undefined ? inventoryMap[vIdString] : 0;
+
+                        // DEBUG
+                        // if (stock === 0) console.log(`DEBUG: Variant ${vIdString} has 0 stock (Map value: ${inventoryMap[vIdString]})`);
+
+                        return {
+                            ...v,
+                            // STRICT SOURCE OF TRUTH: Inventory Master
+                            // If no inventory record exists, stock is 0. No fallback to legacy variant.stock.
+                            stock: stock
+                        };
+                    });
+
+                    console.log('DEBUG: Active Variants with Stock:', activeVariants.map(v => ({ id: v._id, stock: v.stock })));
+
+
+
                     setVariants(activeVariants);
                 }
 
@@ -71,6 +117,32 @@ const ProductDetailPage = () => {
         return ['https://via.placeholder.com/600x600?text=No+Image'];
     }, [selectedVariant, product]);
 
+    // Dynamic Title
+    const displayTitle = useMemo(() => {
+        if (!selectedVariant) return product?.name || 'Product';
+        // Try structured color first
+        const colorName = selectedVariant.color?.name || selectedVariant.color?.value;
+        if (colorName) return `${product?.name} - ${colorName}`;
+        return product?.name || 'Product'; // Fallback
+    }, [product, selectedVariant]);
+
+    // Alternative Suggestions (if current is OOS)
+    const alternatives = useMemo(() => {
+        const stock = selectedVariant ? selectedVariant.stock : null;
+        if (!selectedVariant || (stock !== null && stock > 0)) return [];
+        // Find other variants that match at least ONE attribute (e.g. same size but different color, or same color different size)
+        // For simplicity, find ANY in stock.
+        return variants.filter(v => v.stock > 0 && v._id !== selectedVariant._id).slice(0, 2);
+    }, [selectedVariant, variants]);
+
+    // Validate quantity against stock
+    useEffect(() => {
+        const stock = selectedVariant ? selectedVariant.stock : 0;
+        if (selectedVariant && stock > 0 && quantity > stock) {
+            setQuantity(1);
+        }
+    }, [selectedVariant, quantity]);
+
     const handleAddToCart = () => {
         if (!selectedVariant) {
             alert('Please select all product options');
@@ -88,7 +160,7 @@ const ProductDetailPage = () => {
             name: product.name,
             sku: selectedVariant.sku,
             price: selectedVariant.price,
-            currency: selectedVariant.currency || product.currency || 'USD',
+            currency: selectedVariant.currency || product.currency || 'INR',
             quantity: quantity,
             attributes: selectedVariant.attributes,
             image: galleryImages[0],
@@ -182,6 +254,10 @@ const ProductDetailPage = () => {
     const currentStock = selectedVariant ? selectedVariant.stock : null;
     const isOutOfStock = currentStock === 0;
 
+
+
+
+
     return (
         <div className="product-details-container">
             <div className="container">
@@ -198,7 +274,7 @@ const ProductDetailPage = () => {
                     <div className="product-main-grid">
                         {/* Left Column: Gallery */}
                         <div className="gallery-section">
-                            <ProductImageGallery images={galleryImages} alt={product.name} />
+                            <ProductImageGallery images={galleryImages} alt={displayTitle} />
                         </div>
 
                         {/* Right Column: Details */}
@@ -208,7 +284,7 @@ const ProductDetailPage = () => {
                                 {product.brand && (
                                     <div className="product-brand">{product.brand.name || 'Brand'}</div>
                                 )}
-                                <h1 className="product-title">{product.name}</h1>
+                                <h1 className="product-title">{displayTitle}</h1>
                                 {product.shortDescription && (
                                     <p className="product-short-desc">{product.shortDescription}</p>
                                 )}
@@ -223,7 +299,28 @@ const ProductDetailPage = () => {
                                 />
                                 {selectedVariant && (
                                     <div className="stock-wrapper">
-                                        <StockIndicator stock={currentStock} />
+                                        <div className="flex flex-col">
+                                            <StockIndicator stock={currentStock} />
+                                            {/* Alternatives Badge */}
+                                            {isOutOfStock && alternatives.length > 0 && (
+                                                <div className="mt-2 text-sm text-gray-600 bg-gray-50 p-2 rounded border border-gray-200">
+                                                    <span className="font-semibold text-gray-800">Available in:</span>
+                                                    <div className="flex flex-wrap gap-2 mt-1">
+                                                        {alternatives.map(alt => (
+                                                            <button
+                                                                key={alt._id}
+                                                                onClick={() => setSelectedVariant(alt)}
+                                                                className="text-primary-600 hover:underline cursor-pointer flex items-center"
+                                                            >
+                                                                <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+                                                                {alt.color?.name || 'Variant'} {alt.size?.name ? `• ${alt.size.name}` : ''}
+                                                                <span className="text-gray-500 text-xs ml-1">({alt.stock} left)</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -234,6 +331,7 @@ const ProductDetailPage = () => {
                                     product={product}
                                     variants={variants}
                                     onVariantChange={setSelectedVariant}
+                                    controlledVariant={selectedVariant}
                                 />
                             </div>
 
@@ -246,11 +344,15 @@ const ProductDetailPage = () => {
                                             className="qty-select"
                                             value={quantity}
                                             onChange={(e) => setQuantity(Number(e.target.value))}
-                                            disabled={isOutOfStock}
+                                            disabled={isOutOfStock || !selectedVariant}
                                         >
-                                            {[...Array(10)].map((_, i) => (
-                                                <option key={i + 1} value={i + 1}>{i + 1}</option>
-                                            ))}
+                                            {selectedVariant && currentStock > 0 ? (
+                                                [...Array(Math.min(10, currentStock))].map((_, i) => (
+                                                    <option key={i + 1} value={i + 1}>{i + 1}</option>
+                                                ))
+                                            ) : (
+                                                <option value={1}>1</option>
+                                            )}
                                         </select>
                                     </div>
 

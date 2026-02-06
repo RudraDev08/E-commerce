@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
-import { useWishlist } from '../../context/WishlistContext';
+
 import { formatCurrency, getImageUrl } from '../../utils/formatters';
 import './ProductCard.css';
 
@@ -18,15 +18,13 @@ import './ProductCard.css';
  * Design Principles:
  * - Focus on product image and price
  * - Category • Brand breadcrumb
- * - Wishlist integration
  * - Always-enabled CTA (stock checked on backend)
  */
 const ProductCard = ({ product }) => {
     const navigate = useNavigate();
     const [imageLoaded, setImageLoaded] = useState(false);
     const { addToCart } = useCart();
-    const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
-    const inWishlist = isInWishlist(product._id);
+
 
     const handleAddToCart = (e) => {
         e.preventDefault();
@@ -41,16 +39,7 @@ const ProductCard = ({ product }) => {
         }
     };
 
-    const handleWishlistToggle = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
 
-        if (inWishlist) {
-            removeFromWishlist(product._id);
-        } else {
-            addToWishlist(product);
-        }
-    };
 
     // Price display - use product price directly (no variant price calculation)
     const displayPrice = product.salePrice || product.price;
@@ -91,14 +80,7 @@ const ProductCard = ({ product }) => {
                         }}
                     />
 
-                    {/* Wishlist Button */}
-                    <button
-                        className={`pc-wishlist-btn ${inWishlist ? 'active' : ''}`}
-                        onClick={handleWishlistToggle}
-                        aria-label="Add to wishlist"
-                    >
-                        {inWishlist ? '❤️' : '🤍'}
-                    </button>
+
 
                     {/* Discount Badge ONLY (NO stock badges) */}
                     {showDiscount && discountPercent > 0 && (
