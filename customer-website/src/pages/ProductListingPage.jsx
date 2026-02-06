@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { getProducts } from '../api/productApi';
 import { getCategories } from '../api/categoryApi';
 import { getBrands } from '../api/brandApi';
+import { getDiscoveryFilters } from '../api/discoveryApi';
+import { getAttributeTypes } from '../api/attributeApi';
 import ProductCard from '../components/product/ProductCard';
 import './ProductListingPage.css';
 
@@ -11,6 +13,7 @@ const ProductListingPage = () => {
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [brands, setBrands] = useState([]);
+    const [attributeTypes, setAttributeTypes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [totalProducts, setTotalProducts] = useState(0);
 
@@ -33,7 +36,7 @@ const ProductListingPage = () => {
 
     useEffect(() => {
         loadFiltersData();
-    }, []);
+    }, [filters.category]); // Reload facets when category changes (though usually handled by discovery logic)
 
     useEffect(() => {
         loadProducts();
@@ -42,12 +45,26 @@ const ProductListingPage = () => {
 
     const loadFiltersData = async () => {
         try {
-            const [categoriesRes, brandsRes] = await Promise.all([
+            // Context for Discovery
+            const context = {
+                category: filters.category,
+                // Add more context if needed for narrowing filters
+            };
+
+            const [categoriesRes, brandsRes, discoveryRes] = await Promise.all([
                 getCategories(),
-                getBrands()
+                getBrands(),
+                getDiscoveryFilters(context)
             ]);
+
             setCategories(categoriesRes.data || []);
             setBrands(brandsRes.data || []);
+
+            // discoveryRes.data should be the array of { attributeType, values }
+            // Ensure compatibility if it returns wrapped response
+            const dynamicFilters = discoveryRes.data?.data || discoveryRes.data || [];
+            setAttributeTypes(dynamicFilters);
+
         } catch (error) {
             console.error('Error loading filters:', error);
         }
@@ -69,6 +86,16 @@ const ProductListingPage = () => {
             if (filters.minPrice) params.minPrice = filters.minPrice;
             if (filters.maxPrice) params.maxPrice = filters.maxPrice;
             if (filters.search) params.search = filters.search;
+
+            // Pass dynamic filters
+            // Pass dynamic filters
+            // attributeTypes here is the Groups Array from Discovery
+            attributeTypes.forEach(group => {
+                const slug = group.attributeType.slug;
+                if (filters[slug]) {
+                    params[slug] = filters[slug];
+                }
+            });
 
             const response = await getProducts(params);
             setProducts(response.data || []);
@@ -228,6 +255,47 @@ const ProductListingPage = () => {
                                 ))}
                             </select>
                         </div>
+
+                        {/* Dynamic Attribute Filters (Rich with Counts) */}
+                        {attributeTypes.map((group) => {
+                            // group = { attributeType: {...}, values: [...] }
+                            // Only show if there are values
+                            if (!group.values || group.values.length === 0) return null;
+
+                            return (
+                                <div className="filter-group" key={group.attributeType._id}>
+                                    <label className="filter-label">{group.attributeType.name}</label>
+                                    <div className="filter-checkbox-group">
+                                        {group.values.map(val => (
+                                            <div key={val._id} className="filter-checkbox-item">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`filter-${group.attributeType.slug}-${val._id}`}
+                                                    checked={
+                                                        // Check if value ID or Name is in filters
+                                                        // Filters state for attribute is usually single string or array.
+                                                        // For multi-select, we need to handle comma-separated or array.
+                                                        // Current simplistic approach: string match
+                                                        // TODO: Robust Multi-select handling
+                                                        filters[group.attributeType.slug] === val._id ||
+                                                        filters[group.attributeType.slug] === val.name
+                                                    }
+                                                    onChange={(e) => {
+                                                        const newVal = e.target.checked ? val._id : '';
+                                                        handleFilterChange(group.attributeType.slug, newVal);
+                                                        // Note: Single select for now per attribute to match state structure 
+                                                        // unless we refactor 'filters' to support arrays
+                                                    }}
+                                                />
+                                                <label htmlFor={`filter-${group.attributeType.slug}-${val._id}`}>
+                                                    {val.name} <span className="text-gray-400 text-xs">({val.count})</span>
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
 
                         {/* Price Range Filter */}
                         <div className="filter-group">

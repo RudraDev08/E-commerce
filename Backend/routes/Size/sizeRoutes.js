@@ -7,10 +7,20 @@ import {
     deleteSize,
     toggleStatus,
     bulkCreateSizes,
-    restoreSize
+    restoreSize,
+    getSizeGroups,
+    getSizesByCategory,
+    reorderSizes,
+    convertSize
 } from '../../controllers/size.controller.js';
 
 const router = express.Router();
+
+// Size Master specific routes (must come before /:id routes)
+router.get('/groups', getSizeGroups);
+router.get('/convert', convertSize);
+router.get('/category/:sizeCategory', getSizesByCategory);
+router.put('/reorder', reorderSizes);
 
 // Create routes
 router.post('/', createSize);

@@ -283,7 +283,7 @@ inventoryLedgerSchema.index({ productId: 1, transactionType: 1 });
 inventoryLedgerSchema.index({ sku: 1, transactionDate: -1 });
 inventoryLedgerSchema.index({ transactionType: 1, transactionDate: -1 });
 inventoryLedgerSchema.index({ performedBy: 1, transactionDate: -1 });
-inventoryLedgerSchema.index({ batchId: 1 });
+
 inventoryLedgerSchema.index({ referenceType: 1, referenceId: 1 });
 
 // ========================================================================

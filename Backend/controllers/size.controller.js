@@ -6,7 +6,27 @@ import slugify from 'slugify';
 export const createSize = async (req, res) => {
     try {
         console.log('Create size request body:', req.body);
-        const { name, code, value, applicableCategories, status, priority, description } = req.body;
+        const {
+            name,
+            code,
+            value,
+            fullName,
+            abbreviation,
+            category,
+            sizeGroup,
+            gender,
+            displayOrder,
+            measurements,
+            internationalConversions,
+            sizeChartMetadata,
+            ram,
+            storage,
+            storageUnit,
+            applicableCategories,
+            status,
+            priority,
+            description
+        } = req.body;
 
         // Generate slug from name if not provided
         let slug = req.body.slug;
@@ -20,7 +40,6 @@ export const createSize = async (req, res) => {
         }
 
         // Check if size code already exists (including deleted)
-        // ...
         const existingSize = await Size.findOne({ code: code.toUpperCase() });
         if (existingSize) {
             if (existingSize.isDeleted) {
@@ -41,6 +60,18 @@ export const createSize = async (req, res) => {
             slug,
             code: code.toUpperCase(),
             value,
+            fullName,
+            abbreviation,
+            category: category || 'generic',
+            sizeGroup,
+            gender: gender || 'unisex',
+            displayOrder: displayOrder || 0,
+            measurements,
+            internationalConversions,
+            sizeChartMetadata,
+            ram,
+            storage,
+            storageUnit,
             applicableCategories,
             status: status || 'active',
             priority: priority || 0,
@@ -79,6 +110,9 @@ export const getSizes = async (req, res) => {
         const {
             status,
             category,
+            sizeCategory, // New: clothing_alpha, shoe_uk, etc.
+            sizeGroup,    // New: "Men's Clothing"
+            gender,       // New: men, women, unisex
             search,
             page = 1,
             limit = 50,
@@ -96,10 +130,23 @@ export const getSizes = async (req, res) => {
             query.applicableCategories = category;
         }
 
+        if (sizeCategory) {
+            query.category = sizeCategory;
+        }
+
+        if (sizeGroup) {
+            query.sizeGroup = sizeGroup;
+        }
+
+        if (gender) {
+            query.gender = gender;
+        }
+
         if (search) {
             query.$or = [
                 { name: { $regex: search, $options: 'i' } },
-                { code: { $regex: search, $options: 'i' } }
+                { code: { $regex: search, $options: 'i' } },
+                { fullName: { $regex: search, $options: 'i' } }
             ];
         }
 
@@ -113,13 +160,16 @@ export const getSizes = async (req, res) => {
                 sortOption = { name: 1 };
                 break;
             case 'priority':
-                sortOption = { priority: 1, name: 1 };
+                sortOption = { priority: 1, displayOrder: 1, name: 1 };
+                break;
+            case 'displayOrder':
+                sortOption = { displayOrder: 1, name: 1 };
                 break;
             case 'newest':
                 sortOption = { createdAt: -1 };
                 break;
             default:
-                sortOption = { priority: 1, name: 1 };
+                sortOption = { priority: 1, displayOrder: 1, name: 1 };
         }
 
         // Execute query
@@ -185,7 +235,27 @@ export const getSize = async (req, res) => {
 // @access  Admin
 export const updateSize = async (req, res) => {
     try {
-        const { name, code, value, applicableCategories, status, priority, description } = req.body;
+        const {
+            name,
+            code,
+            value,
+            fullName,
+            abbreviation,
+            category,
+            sizeGroup,
+            gender,
+            displayOrder,
+            measurements,
+            internationalConversions,
+            sizeChartMetadata,
+            ram,
+            storage,
+            storageUnit,
+            applicableCategories,
+            status,
+            priority,
+            description
+        } = req.body;
 
         // Find size
         const size = await Size.findOne({ _id: req.params.id, isDeleted: false });
@@ -219,6 +289,18 @@ export const updateSize = async (req, res) => {
         }
         if (code) size.code = code.toUpperCase();
         if (value !== undefined) size.value = value;
+        if (fullName !== undefined) size.fullName = fullName;
+        if (abbreviation !== undefined) size.abbreviation = abbreviation;
+        if (category) size.category = category;
+        if (sizeGroup !== undefined) size.sizeGroup = sizeGroup;
+        if (gender) size.gender = gender;
+        if (displayOrder !== undefined) size.displayOrder = displayOrder;
+        if (measurements) size.measurements = measurements;
+        if (internationalConversions) size.internationalConversions = internationalConversions;
+        if (sizeChartMetadata) size.sizeChartMetadata = sizeChartMetadata;
+        if (ram !== undefined) size.ram = ram;
+        if (storage !== undefined) size.storage = storage;
+        if (storageUnit) size.storageUnit = storageUnit;
         if (applicableCategories) size.applicableCategories = applicableCategories;
         if (status) size.status = status;
         if (priority !== undefined) size.priority = priority;
@@ -376,6 +458,127 @@ export const restoreSize = async (req, res) => {
         res.status(500).json({
             success: false,
             message: error.message || 'Failed to restore size'
+        });
+    }
+};
+
+// @desc    Get all size groups
+// @route   GET /api/sizes/groups
+// @access  Public
+export const getSizeGroups = async (req, res) => {
+    try {
+        const groups = await Size.getSizeGroups();
+
+        res.status(200).json({
+            success: true,
+            data: groups
+        });
+    } catch (error) {
+        console.error('Get size groups error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to fetch size groups'
+        });
+    }
+};
+
+// @desc    Get sizes by size category (clothing_alpha, shoe_uk, etc.)
+// @route   GET /api/sizes/category/:sizeCategory
+// @access  Public
+export const getSizesByCategory = async (req, res) => {
+    try {
+        const { sizeCategory } = req.params;
+        const { sizeGroup, gender } = req.query;
+
+        const sizes = await Size.findBySizeCategory(sizeCategory, { sizeGroup, gender });
+
+        res.status(200).json({
+            success: true,
+            data: sizes
+        });
+    } catch (error) {
+        console.error('Get sizes by category error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to fetch sizes by category'
+        });
+    }
+};
+
+// @desc    Reorder sizes (drag & drop)
+// @route   PUT /api/sizes/reorder
+// @access  Admin
+export const reorderSizes = async (req, res) => {
+    try {
+        const { reorderData } = req.body;
+
+        if (!Array.isArray(reorderData) || reorderData.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide reorder data array'
+            });
+        }
+
+        // Bulk update display orders
+        const bulkOps = reorderData.map(({ sizeId, newDisplayOrder }) => ({
+            updateOne: {
+                filter: { _id: sizeId },
+                update: { displayOrder: newDisplayOrder, updatedBy: req.user?._id }
+            }
+        }));
+
+        await Size.bulkWrite(bulkOps);
+
+        res.status(200).json({
+            success: true,
+            message: 'Sizes reordered successfully'
+        });
+    } catch (error) {
+        console.error('Reorder sizes error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to reorder sizes'
+        });
+    }
+};
+
+// @desc    Convert size (UK ⇄ US ⇄ EU)
+// @route   GET /api/sizes/convert
+// @access  Public
+export const convertSize = async (req, res) => {
+    try {
+        const { fromSize, fromSystem, toSystem } = req.query;
+
+        if (!fromSize || !fromSystem || !toSystem) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide fromSize, fromSystem, and toSystem parameters'
+            });
+        }
+
+        const convertedSize = await Size.convertSize(fromSize, fromSystem, toSystem);
+
+        if (!convertedSize) {
+            return res.status(404).json({
+                success: false,
+                message: 'Size conversion not available'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                from: fromSize,
+                to: convertedSize,
+                fromSystem,
+                toSystem
+            }
+        });
+    } catch (error) {
+        console.error('Convert size error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to convert size'
         });
     }
 };

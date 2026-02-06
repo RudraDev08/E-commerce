@@ -65,6 +65,14 @@ class InventoryService {
     return inventory;
   }
 
+  /**
+   * Public wrapper to ensure inventory exists for a variant
+   * Useful when creating variants
+   */
+  async initializeInventory(variantId) {
+    return this._getOrCreateInventory(variantId, null, 0);
+  }
+
   // ========================================================================
   // 2. STOCK UPDATES
   // ========================================================================

@@ -188,11 +188,11 @@ const VariantBuilder = () => {
         // Generator Loop
         selectedSizes.forEach(size => {
             // STRICT VALIDATION: Skip invalid sizes
-            if (!size.ram || !size.storage) {
-                console.warn(`Skipping invalid size: ${size.name}`);
-                skipped++;
-                return;
-            }
+            // if (!size.ram || !size.storage) {
+            //     console.warn(`Skipping invalid size: ${size.name}`);
+            //     skipped++;
+            //     return;
+            // }
 
             // NEW SKU LOGIC: Use RAM/Storage if available (e.g. 12-256), else fallback to Code
             let sizePart = size.code.replace(/[^a-zA-Z0-9]/g, '');
@@ -390,6 +390,11 @@ const VariantBuilder = () => {
                             base.colorId = v.colorId;
                         }
 
+                        // Add Images (New Feature)
+                        if (v.images && v.images.length > 0) {
+                            base.images = v.images;
+                        }
+
                         return base;
                     })
                 };
@@ -492,6 +497,14 @@ const VariantBuilder = () => {
     const handleImageUpload = async (variantId, files) => {
         if (!files || files.length === 0) return;
 
+        const currentVariant = variants.find(v => v._id === variantId);
+        const currentCount = (currentVariant.images || []).length;
+
+        if (currentCount + files.length > 5) {
+            toast.error(`Limit reached: You can only have 5 images per variant.`);
+            return;
+        }
+
         const toastId = toast.loading('Uploading images...');
         try {
             const res = await uploadAPI.uploadMultiple(files);
@@ -526,40 +539,40 @@ const VariantBuilder = () => {
     return (
         <div className="min-h-screen bg-slate-50 pb-20 font-sans">
             {/* Header */}
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm/50 backdrop-blur-md bg-white/90">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-                    <div className="flex items-center gap-6">
+            <header className="bg-white/80 backdrop-blur-xl sticky top-0 z-30 transition-all duration-300 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
+                <div className="w-full px-6 lg:px-8 h-24 flex items-center justify-between">
+                    <div className="flex items-center gap-8">
                         <button
                             onClick={() => navigate('/variant-mapping')}
-                            className="group p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all"
+                            className="group p-3 rounded-full hover:bg-slate-100/80 transition-all text-slate-400 hover:text-slate-900"
                         >
-                            <ArrowLeftIcon className="w-5 h-5 text-slate-500 group-hover:text-indigo-600" />
+                            <ArrowLeftIcon className="w-6 h-6 stroke-[2]" />
                         </button>
 
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 rounded-2xl bg-white shadow-lg shadow-slate-200/50 overflow-hidden flex-shrink-0 ring-1 ring-slate-100">
                                 {productImageUrl ? (
                                     <img src={productImageUrl} alt="" className="w-full h-full object-cover" />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center">
+                                    <div className="w-full h-full flex items-center justify-center bg-slate-50">
                                         <CubeIcon className="w-6 h-6 text-slate-300" />
                                     </div>
                                 )}
                             </div>
                             <div>
-                                <h1 className="text-xl font-bold text-slate-900 leading-tight">{product.name}</h1>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{product.name}</h1>
+                                <div className="flex items-center gap-3 mt-1.5">
+                                    <span className="text-xs font-semibold text-slate-500 tracking-wide">
                                         {product.sku || 'NO-SKU'}
                                     </span>
                                     {/* Strategy Badge */}
                                     {isColorwayMode ? (
-                                        <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100 uppercase">
-                                            Colorway Strategy
+                                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                                            Colorway
                                         </span>
                                     ) : (
-                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 uppercase">
-                                            Single Color Strategy
+                                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                                            Single Color
                                         </span>
                                     )}
                                 </div>
@@ -567,7 +580,7 @@ const VariantBuilder = () => {
                         </div>
                     </div>
 
-                    <div className="flex-1 max-w-sm mx-4">
+                    <div className="flex-1 max-w-md mx-8 transition-opacity duration-200 opacity-80 hover:opacity-100">
                         <ProductSelectDropdown
                             value={productId}
                             onChange={(newId) => navigate(`/variant-builder/${newId}`)}
@@ -575,15 +588,15 @@ const VariantBuilder = () => {
                         />
                     </div>
 
-                    <div className="flex items-center gap-6">
-                        <div className="hidden sm:flex flex-col items-end border-r border-slate-200 pr-6">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Variants</span>
-                            <span className="font-bold text-slate-900 text-xl">{stats.total}</span>
+                    <div className="flex items-center gap-10">
+                        <div className="hidden sm:flex flex-col items-end">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Total Variants</span>
+                            <span className="font-bold text-slate-900 text-2xl leading-none">{stats.total}</span>
                         </div>
                         <button
                             onClick={saveChanges}
                             disabled={saving}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:translate-y-0 flex items-center gap-2"
+                            className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-full font-bold shadow-xl shadow-slate-900/10 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:translate-y-0 flex items-center gap-2"
                         >
                             {saving ? 'Saving...' : 'Save Changes'}
                         </button>
@@ -591,20 +604,20 @@ const VariantBuilder = () => {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+            <main className="w-full px-6 lg:px-8 py-8 space-y-8">
                 {/* Generator */}
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-visible transition-all duration-300">
+                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300">
                     <div
-                        className="p-6 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
+                        className="p-6 flex justify-between items-center cursor-pointer hover:bg-slate-50/50 transition-colors"
                         onClick={() => setIsGenerating(!isGenerating)}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="bg-indigo-100 p-2 rounded-lg">
-                                <SparklesIcon className="w-5 h-5 text-indigo-600" />
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm ring-1 ring-indigo-100">
+                                <SparklesIcon className="w-5 h-5" />
                             </div>
                             <div>
-                                <h2 className="font-bold text-slate-900 text-lg">Variant Generator</h2>
-                                <p className="text-sm text-slate-500">
+                                <h2 className="font-bold text-slate-900 text-base">Variant Generator</h2>
+                                <p className="text-sm text-slate-500 font-medium mt-0.5">
                                     {isColorwayMode
                                         ? "Create defined colorways for multiple sizes"
                                         : "Combine sizes and colors to create new SKUs"
@@ -612,24 +625,24 @@ const VariantBuilder = () => {
                                 </p>
                             </div>
                         </div>
-                        <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-4 py-2 rounded-lg transition-colors">
+                        <button className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50 px-4 py-2 rounded-lg transition-all border border-indigo-100/50">
                             {isGenerating ? 'Collapse Panel' : 'Expand Panel'}
                         </button>
                     </div>
 
                     {isGenerating && (
-                        <div className="p-8 bg-slate-50/30">
+                        <div className="p-8 border-t border-slate-100 bg-slate-50/30">
                             {/* DYNAMIC GENERATOR UI */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
 
                                 {/* 1. Size Dropdown (Common) */}
-                                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                            <TagIcon className="w-4 h-4 text-indigo-500" />
+                                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm/50">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-bold text-slate-800 flex items-center gap-2.5 text-base">
+                                            <TagIcon className="w-5 h-5 text-indigo-500" />
                                             Select Sizes
                                         </h3>
-                                        <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide ${selectedSizes.length > 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
                                             {selectedSizes.length} Selected
                                         </span>
                                     </div>
@@ -646,7 +659,7 @@ const VariantBuilder = () => {
                                 {/* 2. Color Logic (Conditional) */}
                                 {isColorwayMode ? (
                                     // MODE: COLORWAY COMPOSER
-                                    <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm space-y-5">
+                                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm/50 space-y-6">
 
                                         {/* Name Input */}
                                         <div>
@@ -655,20 +668,20 @@ const VariantBuilder = () => {
                                             </label>
                                             <input
                                                 type="text"
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all"
+                                                className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 rounded-xl px-4 py-3 font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm"
                                                 placeholder="e.g. 'Chicago', 'Panda', 'Triple Black'"
                                                 value={colorwayName}
                                                 onChange={(e) => setColorwayName(e.target.value)}
                                             />
                                         </div>
 
-                                        <div className="border-t border-slate-100 pt-4">
-                                            <div className="flex justify-between items-center mb-3">
+                                        <div className="border-t border-slate-100 pt-6">
+                                            <div className="flex justify-between items-center mb-4">
                                                 <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
                                                     <SwatchIcon className="w-4 h-4 text-indigo-500" />
                                                     Composition
                                                 </h3>
-                                                <span className="text-xs font-medium text-slate-400">
+                                                <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-full">
                                                     {colorwayPalette.length} Parts
                                                 </span>
                                             </div>
@@ -678,17 +691,17 @@ const VariantBuilder = () => {
                                                 {colorwayPalette.map((color, index) => (
                                                     <div
                                                         key={`${color._id}-${index}`}
-                                                        className="group flex items-center justify-between p-2 pl-3 bg-slate-50 border border-slate-200 rounded-lg hover:border-indigo-200 transition-colors"
+                                                        className="group flex items-center justify-between p-2 pl-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-200 transition-colors shadow-sm"
                                                     >
                                                         <div className="flex items-center gap-3">
 
                                                             {/* Index / Primary Badge */}
                                                             {index === 0 ? (
-                                                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 uppercase tracking-wider">
+                                                                <span className="text-[10px] font-bold text-white bg-indigo-500 px-1.5 py-0.5 rounded shadow-sm shadow-indigo-200 uppercase tracking-wider">
                                                                     Primary
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-[10px] font-bold text-slate-400 bg-white px-1.5 py-0.5 rounded border border-slate-100 min-w-[24px] text-center">
+                                                                <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 min-w-[24px] text-center">
                                                                     Part {index + 1}
                                                                 </span>
                                                             )}
@@ -716,7 +729,7 @@ const VariantBuilder = () => {
                                                                 newPalette.splice(index, 1);
                                                                 setColorwayPalette(newPalette);
                                                             }}
-                                                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
+                                                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                                                             title="Remove part"
                                                         >
                                                             <XMarkIcon className="w-4 h-4" />
@@ -725,28 +738,23 @@ const VariantBuilder = () => {
                                                 ))}
 
                                                 {colorwayPalette.length === 0 && (
-                                                    <div className="p-4 border-2 border-dashed border-slate-200 rounded-lg text-center">
-                                                        <p className="text-xs font-medium text-slate-400">No colors added yet.</p>
-                                                        <p className="text-[10px] text-slate-300">Add colors to build the palette.</p>
+                                                    <div className="p-6 border-2 border-dashed border-slate-200 rounded-xl text-center bg-slate-50/50">
+                                                        <p className="text-xs font-semibold text-slate-400">No colors added yet.</p>
+                                                        <p className="text-[10px] text-slate-400 mt-1">Add colors below to build the palette.</p>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            {/* Add Color Dropdown (Re-using MultiSelect logic or simplified) */}
-                                            {/* Ideally this should be a simplified "Pick one to append" dropdown. 
-                                                For now we re-purpose the existing one but strictly handle "Append".
-                                            */}
+                                            {/* Add Color Dropdown */}
                                             <div className="relative">
-                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Add Part</label>
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Add Part</label>
                                                 <select
-                                                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
+                                                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-sm font-bold text-slate-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 cursor-pointer transition-all"
                                                     onChange={(e) => {
                                                         const cId = e.target.value;
                                                         if (!cId) return;
                                                         const color = allColors.find(c => c._id === cId);
                                                         if (color) {
-                                                            // Verify it's not already in (or allow duplicates if "Part Name" logic existed?)
-                                                            // For now, prevent exact duplicates for simplicity/safety
                                                             if (colorwayPalette.find(p => p._id === cId)) {
                                                                 toast('Color already in palette', { icon: '⚠️' });
                                                             } else {
@@ -766,17 +774,17 @@ const VariantBuilder = () => {
                                     </div>
                                 ) : (
                                     // MODE: SINGLE COLOR MATRIX
-                                    <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm h-full">
+                                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm/50 h-full flex flex-col">
                                         <div className="flex justify-between items-center mb-4">
-                                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                                <SwatchIcon className="w-4 h-4 text-indigo-500" />
+                                            <h3 className="font-bold text-slate-800 flex items-center gap-2.5 text-base">
+                                                <SwatchIcon className="w-5 h-5 text-indigo-500" />
                                                 Select Colors
                                             </h3>
-                                            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide ${selectedColors.length > 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
                                                 {selectedColors.length} Selected
                                             </span>
                                         </div>
-                                        <div className="min-h-[200px]">
+                                        <div className="flex-1 min-h-[160px]">
                                             <ColorMultiSelectDropdown
                                                 value={selectedColors.map(c => c._id)}
                                                 onChange={(ids) => {
@@ -786,19 +794,21 @@ const VariantBuilder = () => {
                                                 label=""
                                             />
                                         </div>
-                                        <p className="text-xs text-slate-400 mt-4 leading-relaxed">
-                                            This will generate <strong>{selectedColors.length * selectedSizes.length}</strong> unique SKUs (1 per size-color combination).
-                                        </p>
+                                        <div className="mt-6 pt-4 border-t border-slate-100">
+                                            <p className="text-xs text-slate-400 font-medium">
+                                                This will generate <strong className="text-slate-700">{Math.max(1, selectedColors.length * selectedSizes.length)}</strong> unique SKUs
+                                            </p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="flex justify-end items-center pt-4 border-t border-slate-200">
+                            <div className="flex justify-end items-center pt-6 border-t border-slate-100">
                                 <button
                                     onClick={generateVariants}
-                                    className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-3"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none hover:-translate-y-0.5"
                                 >
-                                    <PlusIcon className="w-5 h-5" />
+                                    <PlusIcon className="w-5 h-5 stroke-[2.5]" />
                                     Generate Variants
                                 </button>
                             </div>
@@ -808,52 +818,56 @@ const VariantBuilder = () => {
 
                 {/* Data Table */}
                 <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
-                        <div className="flex items-center gap-2 bg-slate-100/50 p-1.5 rounded-xl border border-slate-200">
+                    {/* Toolbar */}
+                    <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
+                        <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200/60">
                             <button
                                 onClick={() => setFilter('all')}
-                                className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${filter === 'all' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${filter === 'all'
+                                    ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
+                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'}`}
                             >
                                 All Variants
                             </button>
                             <button
                                 onClick={() => setFilter('new')}
-                                className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${filter === 'new' ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${filter === 'new'
+                                    ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100'
+                                    : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/50'}`}
                             >
-                                Unsaved ({stats.new})
+                                Unsaved <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${filter === 'new' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>{stats.new}</span>
                             </button>
                         </div>
-                        <div className="relative">
-                            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <div className="relative group">
+                            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                             <input
                                 type="text"
                                 placeholder="Search by SKU..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-11 pr-5 py-2.5 border border-slate-200 rounded-xl text-sm w-full sm:w-72 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                                className="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200/80 rounded-full text-sm w-full sm:w-72 focus:outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 transition-all font-medium placeholder-slate-400"
                             />
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto min-h-[400px]">
+                    <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="border-b border-slate-200 bg-slate-50/50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                    <th className="px-6 py-5">Variant Identity</th>
-                                    <th className="px-6 py-5 w-64">Images</th>
-                                    <th className="px-6 py-5 w-64">SKU Code</th>
-                                    <th className="px-6 py-5 w-40">Price (₹)</th>
-                                    {/* Stock column removed - managed by Inventory Master */}
-                                    <th className="px-6 py-5 w-24 text-center">Active</th>
+                                <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                    <th className="px-8 py-5 font-medium">Variant Identity</th>
+                                    <th className="px-6 py-5 font-medium">Images</th>
+                                    <th className="px-6 py-5 font-medium w-64">SKU Code</th>
+                                    <th className="px-6 py-5 font-medium w-40">Price (₹)</th>
+                                    <th className="px-6 py-5 font-medium w-24 text-center">Active</th>
                                     <th className="px-6 py-5 w-16"></th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100">
+                            <tbody className="divide-y divide-slate-50">
                                 {filteredVariants.length === 0 ? (
                                     <tr>
-                                        <td colSpan="6" className="px-6 py-20 text-center">
+                                        <td colSpan="6" className="px-6 py-24 text-center">
                                             <div className="flex flex-col items-center justify-center">
-                                                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4 border border-slate-100 shadow-sm">
+                                                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 ring-4 ring-slate-50/50">
                                                     <CubeIcon className="w-8 h-8 text-slate-300" />
                                                 </div>
                                                 <h3 className="text-slate-900 font-bold text-lg mb-1">No variants found</h3>
@@ -867,13 +881,13 @@ const VariantBuilder = () => {
                                     filteredVariants.map((variant) => (
                                         <tr
                                             key={variant._id}
-                                            className={`group transition-all duration-200 hover:bg-slate-50/80 ${variant.isNew ? 'bg-indigo-50/30 hover:bg-indigo-50/50' : ''}`}
+                                            className={`group transition-all duration-200 hover:bg-slate-50/60 ${variant.isNew ? 'bg-indigo-50/10' : ''}`}
                                         >
                                             {/* 1. IDENTITY COLUMN */}
-                                            <td className="px-6 py-5">
+                                            <td className="px-8 py-6">
                                                 <div className="flex items-center gap-5">
                                                     {/* Color Swatch */}
-                                                    <div className="relative w-14 h-14 rounded-2xl border-4 border-white shadow-md flex-shrink-0 overflow-hidden ring-1 ring-slate-100 group-hover:ring-slate-200 transition-all">
+                                                    <div className="relative w-12 h-12 rounded-xl shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1)] flex-shrink-0 overflow-hidden ring-1 ring-black/5 bg-white group-hover:shadow-[0_4px_12px_-2px_rgba(0,0,0,0.12)] transition-shadow">
                                                         {variant.isColorway ? (
                                                             <div className="flex flex-wrap h-full w-full">
                                                                 {variant.displayPalette.slice(0, 4).map((hex, i) => (
@@ -886,133 +900,126 @@ const VariantBuilder = () => {
                                                                     className="absolute inset-0"
                                                                     style={{ backgroundColor: variant.displayHex || '#eee' }}
                                                                 />
-                                                                {/* Shine Effect */}
+                                                                {/* Glossy Overlay */}
                                                                 <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-white/20 pointer-events-none" />
                                                             </div>
                                                         )}
 
                                                         {/* New Indicator */}
                                                         {variant.isNew && (
-                                                            <div className="absolute top-0 right-0 p-1 bg-indigo-600 rounded-bl-xl shadow-sm z-10">
-                                                                <SparklesIcon className="w-2.5 h-2.5 text-white" />
+                                                            <div className="absolute top-0 right-0 p-1 bg-indigo-500 rounded-bl-lg shadow-sm z-10">
+                                                                <SparklesIcon className="w-2 h-2 text-white" />
                                                             </div>
                                                         )}
                                                     </div>
 
                                                     {/* Text Info */}
-                                                    <div className="flex flex-col gap-1">
+                                                    <div className="flex flex-col gap-0.5">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="font-extrabold text-slate-900 text-lg tracking-tight">
+                                                            <span className="font-bold text-slate-900 text-base">
                                                                 {variant.size && variant.size.ram && variant.size.storage
                                                                     ? `${variant.size.ram}GB / ${variant.size.storage}${variant.size.storageUnit || 'GB'}`
-                                                                    : variant.sizeCode.includes('/') ? variant.sizeCode : 'INVALID CONFIG'
+                                                                    : variant.size ? (variant.size.name || variant.size.code) : (variant.sizeCode || 'N/A')
                                                                 }
                                                             </span>
                                                             {!variant.isNew && (
-                                                                <div className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-400 border border-slate-200" title="Attributes Locked">
+                                                                <div className="text-slate-300" title="Attributes Locked">
                                                                     <LockClosedIcon className="w-3 h-3" />
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <span className="text-sm font-semibold text-slate-500">
+                                                        <span className="text-sm font-medium text-slate-500">
                                                             {variant.displayColorName}
                                                         </span>
-                                                        {(!variant.sizeCode?.includes('/') && !variant.isNew && !(variant.size?.ram)) && (
-                                                            <span className="text-[10px] text-red-500 font-bold uppercase bg-red-50 px-1 rounded">Invalid Size</span>
-                                                        )}
                                                     </div>
                                                 </div>
                                             </td>
 
                                             {/* IMAGES COLUMN */}
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-wrap gap-2 mb-2">
-                                                    {(variant.images || []).map((img, imgIdx) => (
-                                                        <div key={imgIdx} className="relative group w-12 h-12 rounded-md border border-slate-200 overflow-hidden bg-white">
-                                                            <img
-                                                                src={getImageUrl(img)}
-                                                                alt="Variant"
-                                                                className="w-full h-full object-cover"
-                                                                onError={(e) => e.target.style.display = 'none'}
-                                                            />
-                                                            <button
-                                                                onClick={() => handleRemoveImage(variant._id, imgIdx)}
-                                                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity"
-                                                            >
-                                                                <XMarkIcon className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    ))}
+                                            <td className="px-6 py-6">
+                                                <div className="flex flex-col items-start gap-3">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {(variant.images || []).map((img, imgIdx) => (
+                                                            <div key={imgIdx} className="relative group/img w-10 h-10 rounded-lg ring-1 ring-slate-200/80 overflow-hidden bg-white shadow-sm hover:scale-110 transition-transform z-0 hover:z-10">
+                                                                <img
+                                                                    src={getImageUrl(img)}
+                                                                    alt="Variant"
+                                                                    className="w-full h-full object-cover"
+                                                                    onError={(e) => e.target.style.display = 'none'}
+                                                                />
+                                                                <button
+                                                                    onClick={() => handleRemoveImage(variant._id, imgIdx)}
+                                                                    className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white transition-opacity backdrop-blur-[1px]"
+                                                                >
+                                                                    <XMarkIcon className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-white ring-1 ring-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm active:translate-y-0.5 select-none">
+                                                        <CloudArrowUpIcon className="w-3.5 h-3.5" />
+                                                        Upload
+                                                        <input
+                                                            type="file"
+                                                            multiple
+                                                            accept="image/*"
+                                                            className="hidden"
+                                                            onChange={(e) => handleImageUpload(variant._id, e.target.files)}
+                                                        />
+                                                    </label>
                                                 </div>
-                                                <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors border border-indigo-200">
-                                                    <CloudArrowUpIcon className="w-3.5 h-3.5" />
-                                                    Upload
-                                                    <input
-                                                        type="file"
-                                                        multiple
-                                                        accept="image/*"
-                                                        className="hidden"
-                                                        onChange={(e) => handleImageUpload(variant._id, e.target.files)}
-                                                    />
-                                                </label>
                                             </td>
 
-
-
-                                            {/* SKU */}
-
                                             {/* 2. SKU COLUMN */}
-                                            <td className="px-6 py-5">
-                                                <input
-                                                    type="text"
-                                                    value={variant.sku}
-                                                    onChange={(e) => updateVariant(variant._id, 'sku', e.target.value)}
-                                                    className="w-full bg-white border border-slate-200 text-slate-600 text-xs font-mono font-medium rounded-lg px-3 py-2.5 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm placeholder-slate-300"
-                                                    placeholder="GEN-SKU-..."
-                                                />
+                                            <td className="px-6 py-6">
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={variant.sku}
+                                                        onChange={(e) => updateVariant(variant._id, 'sku', e.target.value)}
+                                                        className="w-full bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 focus:border-indigo-500 text-slate-600 text-xs font-mono font-semibold rounded-lg px-3 py-2 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-sm focus:shadow-md focus:bg-white placeholder-slate-300"
+                                                        placeholder="GEN-SKU-..."
+                                                    />
+                                                </div>
                                             </td>
 
                                             {/* 3. PRICE COLUMN */}
-                                            <td className="px-6 py-5">
+                                            <td className="px-6 py-6">
                                                 <div className="relative group/input">
                                                     <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                                        <span className="text-slate-400 font-semibold text-sm">₹</span>
+                                                        <span className="text-slate-400 font-medium text-sm">₹</span>
                                                     </div>
                                                     <input
                                                         type="number"
                                                         value={variant.price}
                                                         onChange={(e) => updateVariant(variant._id, 'price', e.target.value)}
-                                                        className="w-full bg-white border border-slate-200 text-slate-900 font-bold text-sm rounded-lg pl-8 pr-3 py-2.5 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm"
+                                                        className="w-full bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 focus:border-emerald-500 text-slate-900 font-bold text-sm rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-sm focus:shadow-md focus:bg-white"
                                                         placeholder="0.00"
                                                     />
                                                 </div>
                                             </td>
 
-                                            {/* Stock column removed - managed by Inventory Master */}
-
                                             {/* 4. STATUS COLUMN */}
-                                            <td className="px-6 py-5">
+                                            <td className="px-6 py-6">
                                                 <div className="flex justify-center">
                                                     <button
                                                         onClick={() => updateVariant(variant._id, 'status', variant.status === 'active' ? 'inactive' : 'active')}
-                                                        className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${variant.status === 'active' ? 'bg-emerald-500' : 'bg-slate-200'
-                                                            }`}
+                                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${variant.status === 'active' ? 'bg-emerald-500' : 'bg-slate-200'}`}
                                                     >
-                                                        <span className="sr-only">Use setting</span>
+                                                        <span className="sr-only">Toggle active</span>
                                                         <span
                                                             aria-hidden="true"
-                                                            className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${variant.status === 'active' ? 'translate-x-5' : 'translate-x-0'
-                                                                }`}
+                                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${variant.status === 'active' ? 'translate-x-5' : 'translate-x-0'}`}
                                                         />
                                                     </button>
                                                 </div>
                                             </td>
 
                                             {/* 6. ACTIONS COLUMN */}
-                                            <td className="px-6 py-5 text-right">
+                                            <td className="px-6 py-6 text-right">
                                                 <button
                                                     onClick={() => deleteVariant(variant._id, variant.isNew)}
-                                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 transform hover:scale-110 active:scale-95"
+                                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 transform hover:scale-105 active:scale-95"
                                                     title="Remove Variant"
                                                 >
                                                     <TrashIcon className="w-5 h-5" />

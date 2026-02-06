@@ -8,6 +8,6 @@ const router = express.Router();
 router.post('/', upload.single('image'), uploadImage);
 
 // Multiple files: POST /api/upload/multiple
-router.post('/multiple', upload.array('images', 10), uploadImage);
+router.post('/multiple', upload.array('images', 5), uploadImage);
 
 export default router;

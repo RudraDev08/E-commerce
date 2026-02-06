@@ -2,22 +2,78 @@ import ProductVariant from "../../models/variant/variantSchema.js";
 import inventoryService from "../../services/inventory.service.js";
 
 /* CREATE */
-/* CREATE (Fixed & Robust) */
+/* CREATE (Supports Bulk & Single) */
 export const createVariant = async (req, res) => {
   try {
-    // 1. Destructure to safely check fields before saving
-    const { productId, size, color, price, sku, mrp, isDefault } = req.body;
+    // CHECK FOR BULK MODE
+    if (req.body.variants && Array.isArray(req.body.variants)) {
+      const { productId, variants } = req.body;
+      if (!productId) {
+        return res.status(400).json({ success: false, message: "productId is required for bulk creation" });
+      }
 
-    // 2. Manual Validation
-    if (!productId || !sku || price === undefined || !size || !color) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields: productId, sku, price, size, and color are mandatory."
+      const createdVariants = [];
+      const stats = { created: 0, skipped: 0 };
+
+      // Process sequentially to handle errors gracefully (or Promise.all for speed)
+      for (const vData of variants) {
+        // Check for duplicates
+        const exists = await ProductVariant.findOne({ sku: vData.sku });
+        if (exists) {
+          stats.skipped++;
+          continue;
+        }
+
+        // Prepare Data
+        const variantPayload = {
+          product: productId,
+          sku: vData.sku,
+          size: vData.sizeId || vData.size, // Handle both ID formats
+          color: vData.colorId || vData.color,
+          price: vData.price,
+          status: vData.status,
+
+          // Colorway Fields
+          colorwayName: vData.colorwayName,
+          colorParts: vData.colorParts, // Array of IDs
+
+          // Defaults
+          mrp: vData.mrp || 0,
+          isDefault: false,
+          images: vData.images || []
+        };
+
+        const newVariant = await ProductVariant.create(variantPayload);
+
+        // Auto-Initialize Inventory
+        await inventoryService.initializeInventory(newVariant._id);
+
+        createdVariants.push(newVariant);
+        stats.created++;
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: `Processed ${variants.length} items`,
+        stats,
+        data: createdVariants
       });
     }
 
-    // 3. Attempt to Create
-    // Convert productId -> product for schema consistency if needed, allowed by Mongoose loose matching
+    // SINGLE MODE (Legacy Support)
+    // 1. Destructure to safely check fields
+    const { productId, size, color, price, sku, mrp, isDefault, colorwayName, colorParts } = req.body;
+
+    // 2. Manual Validation
+    const isColorway = !!colorwayName;
+    if (!productId || !sku || price === undefined || !size || (!color && !isColorway)) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: productId, sku, price, size, and color (or colorwayName) are mandatory."
+      });
+    }
+
+    // 3. Create
     const variantData = {
       product: productId,
       size,
@@ -26,41 +82,40 @@ export const createVariant = async (req, res) => {
       sku,
       mrp: mrp || 0,
       isDefault: isDefault || false,
+      colorwayName,
+      colorParts,
       ...req.body
     };
 
     const variant = await ProductVariant.create(variantData);
 
-    // ✅ FIX: Populate references correctly
+    // Populate
     await variant.populate('product', 'name');
     await variant.populate('size', 'code name');
-    await variant.populate('color', 'name hexCode');
+    if (variant.color) await variant.populate('color', 'name hexCode');
+    if (variant.colorParts && variant.colorParts.length > 0) await variant.populate('colorParts', 'name hexCode');
 
     // 4. Inventory Creation
-    // Inventory is managed strictly by the Inventory Service. 
-    // Listeners/Triggers should handle stock record creation based on Variant Created events.
+    await inventoryService.initializeInventory(variant._id);
 
     res.status(201).json({ success: true, data: variant });
 
   } catch (error) {
-    // 4. Handle Duplicate SKU Error (Mongoose Error Code 11000)
+    // Handle Duplicate SKU Error
     if (error.code === 11000) {
-      // Check which field caused the duplicate (usually SKU or Variant Combination)
       const field = Object.keys(error.keyPattern)[0];
       const message = field === 'sku'
         ? `The SKU '${req.body.sku}' is already taken.`
         : `This variant combination already exists for this product.`;
-
       return res.status(400).json({ success: false, message });
     }
 
-    // 5. Handle Validation Errors (e.g., wrong data types)
+    // Handle Validation Errors
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
       return res.status(400).json({ success: false, message: messages.join(', ') });
     }
 
-    // 6. Generic Server Error
     console.error("Create Variant Error:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }

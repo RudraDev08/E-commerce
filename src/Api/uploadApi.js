@@ -4,7 +4,7 @@ export const uploadAPI = {
     uploadSingle: (file) => {
         const formData = new FormData();
         formData.append('image', file);
-        return axiosInstance.post('/upload', formData, {
+        return axiosInstance.post('/api/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
     },
@@ -13,7 +13,7 @@ export const uploadAPI = {
         Array.from(files).forEach((file) => {
             formData.append('images', file);
         });
-        return axiosInstance.post('/upload/multiple', formData, {
+        return axiosInstance.post('/api/upload/multiple', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
     }

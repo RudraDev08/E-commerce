@@ -17,10 +17,20 @@ const variantSchema = new mongoose.Schema(
     },
     color: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Color", // Assuming Color model exists
-      required: true,
+      ref: "Color", // Single color mode
+      required: function () {
+        return !this.colorwayName && !this.colorParts; // Required only if not a colorway
+      },
       index: true
     },
+
+    // Colorway Strategy Fields
+    colorwayName: { type: String },
+    colorParts: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Color"
+    }],
+
     material: { type: String },
     style: { type: String },
 
