@@ -16,7 +16,7 @@ import {
     CheckIcon
 } from '@heroicons/react/24/outline';
 
-import { colorAPI } from '../../api/api';
+import { colorAPI } from '../../Api/api';
 import toast from 'react-hot-toast';
 import StatusSelect from '../../components/Shared/Dropdowns/StatusSelect';
 

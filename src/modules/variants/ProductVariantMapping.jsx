@@ -7,7 +7,7 @@ import {
     PhotoIcon,
     Square3Stack3DIcon
 } from '@heroicons/react/24/outline';
-import { productAPI, categoryAPI } from '../../api/api';
+import { productAPI, categoryAPI } from '../../Api/api';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 

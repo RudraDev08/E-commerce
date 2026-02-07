@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getProducts } from "../api/catalogApi";
+import { getProducts } from "../Api/catalogApi";
 import VariantForm from "../components/catalog/VariantForm";
 import VariantTable from "../components/catalog/VariantTable";
 

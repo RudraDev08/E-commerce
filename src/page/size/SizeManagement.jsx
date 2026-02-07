@@ -14,7 +14,7 @@ import {
     ChevronRightIcon
 } from '@heroicons/react/24/outline';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
-import { sizeAPI } from '../../api/api';
+import { sizeAPI } from '../../Api/api';
 import toast from 'react-hot-toast';
 import StatusSelect from '../../components/Shared/Dropdowns/StatusSelect';
 

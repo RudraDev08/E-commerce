@@ -1,6 +1,6 @@
 import axios from "./axiosInstance";
 
-export const getCountries = () => axios.get("/api/countries");
+export const getCountries = () => axios.get("/countries");
 
 export const addCountry = (data) => axios.post("/countries", data);
 

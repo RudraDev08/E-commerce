@@ -15,7 +15,7 @@ import {
     CloudArrowUpIcon
 } from '@heroicons/react/24/outline';
 import { productAPI, sizeAPI, colorAPI, variantAPI } from '../../Api/api';
-import { uploadAPI } from '../../api/uploadApi';
+import { uploadAPI } from '../../Api/uploadApi';
 import toast, { Toaster } from 'react-hot-toast';
 import ProductSelectDropdown from '../../components/Shared/Dropdowns/ProductSelectDropdown';
 import SizeMultiSelectDropdown from '../../components/Shared/Dropdowns/SizeMultiSelectDropdown';

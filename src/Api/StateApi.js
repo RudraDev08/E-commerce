@@ -2,7 +2,7 @@ import axios from "./axiosInstance";
 
 /* GET STATES by countryId */
 export const getStates = (countryId) =>
-  axios.get("/api/states", {
+  axios.get("/states", {
     params: { countryId },
   });
 

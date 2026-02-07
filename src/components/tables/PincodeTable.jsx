@@ -94,12 +94,27 @@ const PincodeTable = () => {
   const handleAdd = async () => {
     if (!pincode.trim() || !cityId) return toast.warning("Pincode and City required");
     try {
-      await addPincode({ pincode: pincode.trim(), cityId });
+      await addPincode({ pincode: pincode.trim(), cityId, active: true });
       setPincode("");
       fetchData();
       toast.success("Added successfully");
     } catch (err) {
       toast.error(err.response?.data?.message || "Submission failed");
+    }
+  };
+
+  const toggleStatus = async (p) => {
+    try {
+      const newStatus = !p.active;
+      // Optimistic Update
+      setData(prev => prev.map(item => item._id === p._id ? { ...item, active: newStatus } : item));
+
+      await updatePincode(p._id, { active: newStatus });
+      toast.success(`Pincode ${newStatus ? 'Activated' : 'Deactivated'}`);
+    } catch (err) {
+      // Revert on failure
+      setData(prev => prev.map(item => item._id === p._id ? { ...item, active: !p.active } : item));
+      toast.error("Status update failed");
     }
   };
 
@@ -257,6 +272,7 @@ const PincodeTable = () => {
                 <thead className="bg-gray-50">
                   <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <th className="py-4 px-6">Pincode</th>
+                    <th className="py-4 px-6">Status</th>
                     <th className="py-4 px-6">Geography</th>
                     <th className="py-4 px-6">Actions</th>
                   </tr>
@@ -277,6 +293,20 @@ const PincodeTable = () => {
                           ) : (
                             <span className="font-medium">{p.pincode}</span>
                           )}
+                        </td>
+
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => toggleStatus(p)}
+                              className={`relative flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-1 ${p.active ? 'bg-green-500' : 'bg-gray-300'}`}
+                            >
+                              <span className={`${p.active ? 'translate-x-4' : 'translate-x-1'} inline-block h-3.5 w-3.5 transform rounded-full bg-white transition`} />
+                            </button>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded border ${p.active ? 'bg-green-50 text-green-700 border-green-100' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                              {p.active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
                         </td>
                         <td className="py-4 px-6 text-sm">
                           {p.cityId?.name} / {p.cityId?.stateId?.name}
@@ -313,7 +343,7 @@ const PincodeTable = () => {
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 
