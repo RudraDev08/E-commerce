@@ -10,7 +10,13 @@ const pincodeSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "City",
     required: true
+  },
+  active: {
+    type: Boolean,
+    default: true
   }
+}, {
+  timestamps: true
 });
 
 export default mongoose.model("Pincode", pincodeSchema);

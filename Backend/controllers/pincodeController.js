@@ -24,11 +24,20 @@ export const addPincode = async (req, res) => {
 /* ================= GET PINCODES (VIEW + SEARCH + PAGINATION) ================= */
 export const getPincodes = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "" } = req.query;
+    const { page = 1, limit = 10, search = "", cityId = "" } = req.query;
 
-    const query = search
-      ? { pincode: { $regex: search, $options: "i" } }
-      : {};
+    // Build query object with hierarchical filtering
+    const query = {};
+
+    // Filter by cityId if provided (hierarchical filter)
+    if (cityId) {
+      query.cityId = cityId;
+    }
+
+    // Add search filter if provided
+    if (search) {
+      query.pincode = { $regex: search, $options: "i" };
+    }
 
     const total = await Pincode.countDocuments(query);
 
@@ -59,17 +68,31 @@ export const getPincodes = async (req, res) => {
 export const updatePincode = async (req, res) => {
   try {
     const { id } = req.params;
-    const { pincode } = req.body;
+    const updates = {};
 
-    if (!pincode) {
-      return res.status(400).json({ message: "Pincode required" });
+    // Allow updating pincode value
+    if (req.body.pincode !== undefined) {
+      updates.pincode = req.body.pincode;
+    }
+
+    // Allow updating active status
+    if (req.body.active !== undefined) {
+      updates.active = req.body.active;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "No fields to update" });
     }
 
     const updated = await Pincode.findByIdAndUpdate(
       id,
-      { pincode },
+      updates,
       { new: true }
     );
+
+    if (!updated) {
+      return res.status(404).json({ message: "Pincode not found" });
+    }
 
     res.json(updated);
   } catch (err) {
