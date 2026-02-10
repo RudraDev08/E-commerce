@@ -14,10 +14,18 @@ class CycleCountService {
 
         try {
             // 1. Generate count number
-            const count = await CycleCount.countDocuments();
-            const countNumber = `CC-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+            const lastCount = await CycleCount.findOne().sort({ createdAt: -1 });
+            let nextNum = 1;
 
-            // 2. Fetch inventory snapshot from InventoryMaster
+            if (lastCount && lastCount.countNumber) {
+                const parts = lastCount.countNumber.split('-');
+                const lastSeq = parseInt(parts[parts.length - 1], 10);
+                if (!isNaN(lastSeq)) {
+                    nextNum = lastSeq + 1;
+                }
+            }
+
+            const countNumber = `CC-${new Date().getFullYear()}-${String(nextNum).padStart(4, '0')}`;
             // ARCHITECTURE UPDATE: InventoryMaster is the Single Source of Truth
 
             const inventories = await InventoryMaster.find({

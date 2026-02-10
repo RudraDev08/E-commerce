@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   MagnifyingGlassIcon,
   PlusIcon,
@@ -11,12 +11,97 @@ import {
   ArchiveBoxIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ArrowUturnLeftIcon
+  ArrowUturnLeftIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CheckIcon
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
+import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import brandApi from "../../Api/Brands/brandApi";
 import BrandModal from "./BrandModal";
+
+const CustomDropdown = ({ label, value, options, onChange, icon: Icon, color = "indigo" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  const selectedOption = options.find(opt => opt.value === value) || options[0];
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const colorStyles = {
+    purple: "text-purple-600 ring-purple-500/20 group-hover:ring-purple-500/40",
+    pink: "text-pink-600 ring-pink-500/20 group-hover:ring-pink-500/40",
+    indigo: "text-indigo-600 ring-indigo-500/20 group-hover:ring-indigo-500/40"
+  };
+
+  const activeColor = colorStyles[color] || colorStyles.indigo;
+
+  return (
+    <div className="flex flex-col h-full justify-end min-w-[220px]" ref={containerRef}>
+      {label && <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 ml-1">
+        {label}
+      </label>}
+      <div className="relative">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-full relative flex items-center gap-3 pl-4 pr-10 h-11 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 focus:outline-none focus:ring-4 focus:ring-slate-100 ${isOpen ? 'ring-4 ring-slate-100 border-slate-300' : 'shadow-sm'}`}
+        >
+          {Icon && <Icon className={`w-5 h-5 transition-colors ${isOpen ? activeColor.split(' ')[0] : 'text-slate-400'}`} />}
+          <span className="truncate">{selectedOption?.label}</span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+            <ChevronDownIcon className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180 text-slate-600' : ''}`} />
+          </span>
+        </button>
+
+        <AnimatePresence>
+          {isOpen && (
+            <motion.ul
+              initial={{ opacity: 0, y: 8, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="absolute z-20 w-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 focus:outline-none overflow-hidden origin-top right-0"
+            >
+              {options.map((option) => (
+                <li key={option.value} className="px-2">
+                  <button
+                    onClick={() => {
+                      onChange(option.value);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold transition-all ${value === option.value
+                      ? 'bg-slate-50 text-slate-900'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                      }`}
+                  >
+                    <span className="flex items-center gap-3">
+                      {option.icon && <span className="text-slate-400">{option.icon}</span>}
+                      {option.label}
+                    </span>
+                    {value === option.value && (
+                      <div className={`w-1.5 h-1.5 rounded-full ${color === 'purple' ? 'bg-purple-500' : color === 'pink' ? 'bg-pink-500' : 'bg-indigo-500'}`} />
+                    )}
+                  </button>
+                </li>
+              ))}
+            </motion.ul>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
 
 const BrandList = () => {
   // ----------------------------------------------------------------------
@@ -97,10 +182,58 @@ const BrandList = () => {
     try {
       if (modal.mode === 'create') {
         await brandApi.create(formData);
-        toast.success("Brand created successfully");
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-2xl pointer-events-auto flex gap-2 p-1.5`}>
+            <div className="flex-1 w-0 p-2.5 pl-3">
+              <div className="flex items-start">
+                <div className="flex-shrink-0 pt-0.5">
+                  <div className="h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center">
+                    <CheckCircleIcon className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+                  </div>
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-semibold text-gray-900">Brand Created</p>
+                  <p className="mt-1 text-sm text-gray-500">Successfully added to your catalog.</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col justify-center">
+              <button
+                onClick={() => toast.dismiss(t.id)}
+                className="px-4 py-2 rounded-xl text-sm font-bold text-gray-900 hover:bg-gray-100 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ), { duration: 4500 });
       } else {
         await brandApi.update(modal.data._id, formData);
-        toast.success("Brand updated successfully");
+        toast.custom((t) => (
+          <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-2xl pointer-events-auto flex gap-2 p-1.5`}>
+            <div className="flex-1 w-0 p-2.5 pl-3">
+              <div className="flex items-start">
+                <div className="flex-shrink-0 pt-0.5">
+                  <div className="h-8 w-8 rounded-full bg-indigo-50 flex items-center justify-center">
+                    <CheckCircleIcon className="h-5 w-5 text-indigo-600" aria-hidden="true" />
+                  </div>
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-semibold text-gray-900">Changes Saved</p>
+                  <p className="mt-1 text-sm text-gray-500">Brand details updated successfully.</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col justify-center">
+              <button
+                onClick={() => toast.dismiss(t.id)}
+                className="px-4 py-2 rounded-xl text-sm font-bold text-gray-900 hover:bg-gray-100 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ), { duration: 4500 });
       }
       fetchBrands();
     } catch (error) {
@@ -109,41 +242,99 @@ const BrandList = () => {
   };
 
   const handleDelete = (id) => {
-    toast((t) => (
-      <div className="flex items-center gap-4 min-w-[300px]">
-        <div className="flex-1">
-          <h3 className="font-bold text-slate-900">Move to Trash?</h3>
-          <p className="text-xs text-slate-500 mt-1">You can restore it later.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => toast.dismiss(t.id)}
-            className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={async () => {
-              toast.dismiss(t.id);
-              try {
-                await brandApi.delete(id);
-                toast.success("Brand moved to trash");
-                fetchBrands();
-              } catch (e) { toast.error("Failed to delete"); }
-            }}
-            className="px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm"
-          >
-            Delete
-          </button>
+    toast.custom((t) => (
+      <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-2xl pointer-events-auto overflow-hidden`}>
+        <div className="p-5">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center">
+                <ArchiveBoxIcon className="h-5 w-5 text-amber-500" aria-hidden="true" />
+              </div>
+            </div>
+            <div className="ml-4 flex-1">
+              <h3 className="text-sm font-bold text-gray-900">Move to Trash?</h3>
+              <p className="mt-1 text-sm text-gray-500 leading-relaxed">Are you sure you want to remove this brand? You can restore it later from the trash.</p>
+
+              <div className="mt-5 flex gap-3">
+                <button
+                  onClick={() => toast.dismiss(t.id)}
+                  className="px-4 py-2 bg-gray-50 rounded-lg text-xs font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-all flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    toast.dismiss(t.id);
+                    try {
+                      await brandApi.delete(id);
+                      toast.custom((t) => (
+                        <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-2xl pointer-events-auto flex gap-2 p-1.5`}>
+                          <div className="flex-1 w-0 p-2.5 pl-3">
+                            <div className="flex items-start">
+                              <div className="flex-shrink-0 pt-0.5">
+                                <div className="h-8 w-8 rounded-full bg-rose-50 flex items-center justify-center">
+                                  <TrashIcon className="h-5 w-5 text-rose-500" aria-hidden="true" />
+                                </div>
+                              </div>
+                              <div className="ml-3 flex-1">
+                                <p className="text-sm font-semibold text-gray-900">Moved to Trash</p>
+                                <p className="mt-1 text-sm text-gray-500">Brand removed from active list.</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col justify-center">
+                            <button
+                              onClick={() => toast.dismiss(t.id)}
+                              className="px-4 py-2 rounded-xl text-sm font-bold text-gray-900 hover:bg-gray-100 transition-colors"
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </div>
+                      ), { duration: 3000 });
+                      fetchBrands();
+                    } catch (e) { toast.error("Failed to delete"); }
+                  }}
+                  className="px-4 py-2 bg-rose-500 text-white rounded-lg text-xs font-bold hover:bg-rose-600 shadow-md shadow-rose-200 transition-all flex-1"
+                >
+                  Move to Trash
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    ), { duration: 4000, style: { borderRadius: '16px', border: '1px solid #f1f5f9' } });
+    ), { duration: Infinity });
   };
 
   const handleRestore = async (id) => {
     try {
       await brandApi.restore(id);
-      toast.success("Brand restored");
+      toast.custom((t) => (
+        <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-2xl pointer-events-auto flex gap-2 p-1.5`}>
+          <div className="flex-1 w-0 p-2.5 pl-3">
+            <div className="flex items-start">
+              <div className="flex-shrink-0 pt-0.5">
+                <div className="h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center">
+                  <ArrowUturnLeftIcon className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+                </div>
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-sm font-semibold text-gray-900">Restored Successfully</p>
+                <p className="mt-1 text-sm text-gray-500">Brand is now active again.</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col justify-center">
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="px-4 py-2 rounded-xl text-sm font-bold text-gray-900 hover:bg-gray-100 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ), { duration: 4000 });
       fetchBrands();
     } catch (e) { toast.error("Failed to restore"); }
   };
@@ -206,34 +397,41 @@ const BrandList = () => {
             placeholder="Search brands..."
             value={filters.search}
             onChange={(e) => handleFilterChange('search', e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+            className="w-full h-11 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+        <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto md:overflow-visible pb-2 md:pb-0">
           {/* Filter: Status */}
-          <select
-            value={filters.status}
-            onChange={(e) => handleFilterChange('status', e.target.value)}
-            className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 focus:outline-none focus:border-indigo-500 cursor-pointer"
-          >
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+          <div className="h-11">
+            <CustomDropdown
+              label=""
+              value={filters.status}
+              options={[
+                { value: "", label: "All Status", icon: <FunnelIcon className="w-4 h-4" /> },
+                { value: "active", label: "Active", icon: <div className="w-2 h-2 rounded-full bg-emerald-500" /> },
+                { value: "inactive", label: "Inactive", icon: <div className="w-2 h-2 rounded-full bg-slate-400" /> }
+              ]}
+              onChange={(val) => handleFilterChange('status', val)}
+              icon={CheckCircleIcon}
+              color="indigo"
+            />
+          </div>
 
           {/* Filter: Deleted */}
-          <div className="flex bg-slate-100 p-1 rounded-xl">
+          <div className="flex bg-slate-100 p-1 rounded-xl h-11 items-center">
             <button
               onClick={() => handleFilterChange('isDeleted', 'false')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filters.isDeleted === 'false' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-4 h-full rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${filters.isDeleted === 'false' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
+              <div className={`w-1.5 h-1.5 rounded-full ${filters.isDeleted === 'false' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
               Live
             </button>
             <button
               onClick={() => handleFilterChange('isDeleted', 'true')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filters.isDeleted === 'true' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-4 h-full rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${filters.isDeleted === 'true' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
+              <div className={`w-1.5 h-1.5 rounded-full ${filters.isDeleted === 'true' ? 'bg-rose-500' : 'bg-slate-400'}`} />
               Trash
             </button>
           </div>
@@ -351,24 +549,57 @@ const BrandList = () => {
 
         {/* Pagination */}
         {pagination && pagination.pages > 1 && (
-          <div className="px-8 py-5 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Page {pagination.page} of {pagination.pages}
-            </span>
-            <div className="flex gap-2">
+          <div className="px-8 py-6 border-t border-slate-100 flex items-center justify-between bg-white">
+            <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
+              <span>Showing</span>
+              <span className="font-bold text-slate-900">{((pagination.page - 1) * filters.limit) + 1}</span>
+              <span>-</span>
+              <span className="font-bold text-slate-900">{Math.min(pagination.page * filters.limit, pagination.total || (pagination.pages * filters.limit))}</span>
+              <span>of</span>
+              <span className="font-bold text-slate-900">{pagination.total || "many"}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
                 disabled={pagination.page === 1}
                 onClick={() => handlePageChange(pagination.page - 1)}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group hover:border-slate-300"
               >
-                Previous
+                <ChevronLeftIcon className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                Prev
               </button>
+
+              <div className="hidden sm:flex items-center gap-1">
+                {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                  let pageNum = i + 1;
+                  if (pagination.pages > 5 && pagination.page > 3) {
+                    pageNum = pagination.page - 2 + i;
+                    if (pageNum > pagination.pages) pageNum = pagination.pages - (4 - i);
+                  }
+                  if (pageNum <= 0) pageNum = i + 1;
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`w-9 h-9 flex items-center justify-center rounded-xl text-sm font-bold transition-all ${pagination.page === pageNum
+                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                        }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
               <button
                 disabled={pagination.page === pagination.pages}
                 onClick={() => handlePageChange(pagination.page + 1)}
-                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group hover:border-slate-300"
               >
                 Next
+                <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>
           </div>

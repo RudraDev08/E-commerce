@@ -351,27 +351,31 @@ const CategoryManagement = () => {
     return (
         <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
             {/* Header */}
-            <div className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between z-10 shadow-sm">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Category Management</h1>
-                    <p className="text-sm text-slate-500 mt-1">Organize your catalog hierarchy</p>
+            <div className="w-full bg-white border-b border-gray-100 px-8 py-6 flex items-center justify-between sticky top-0 z-30 shadow-[0_1px_2px_0_rgba(0,0,0,0.05)]">
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-2xl font-bold text-[#111827] tracking-tight">Category Management</h1>
+                    <p className="text-sm font-medium text-[#6B7280]">Organize your catalog hierarchy</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={expandAll}
-                        className="text-sm font-semibold text-slate-600 hover:text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
-                    >
-                        Expand All
-                    </button>
-                    <button
-                        onClick={collapseAll}
-                        className="text-sm font-semibold text-slate-600 hover:text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
-                    >
-                        Collapse All
-                    </button>
+
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-4 border-r border-gray-200 pr-6 mr-2">
+                        <button
+                            onClick={expandAll}
+                            className="text-sm font-medium text-[#6B7280] hover:text-[#2563EB] transition-colors duration-200 hover:underline decoration-2 underline-offset-4 decoration-[#2563EB]/30"
+                        >
+                            Expand All
+                        </button>
+                        <button
+                            onClick={collapseAll}
+                            className="text-sm font-medium text-[#6B7280] hover:text-[#2563EB] transition-colors duration-200 hover:underline decoration-2 underline-offset-4 decoration-[#2563EB]/30"
+                        >
+                            Collapse All
+                        </button>
+                    </div>
+
                     <button
                         onClick={handleCreate}
-                        className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-slate-900/10 hover:bg-slate-800 transition-all active:scale-95"
+                        className="flex items-center gap-2 bg-[#0F172A] text-white px-5 py-2.5 rounded-lg font-medium shadow-md hover:shadow-[0_4px_12px_rgba(15,23,42,0.25)] hover:-translate-y-0.5 transition-all duration-200 focus:ring-4 focus:ring-[#0F172A]/20 outline-none"
                     >
                         <PlusIcon className="w-5 h-5" />
                         New Category

@@ -355,8 +355,8 @@ const StateTable = () => {
         {/* Notification */}
         {notification.show && (
           <div className={`mb-6 p-4 rounded-xl border ${notification.type === "error"
-              ? "bg-red-50 border-red-200 text-red-700"
-              : "bg-green-50 border-green-200 text-green-700"
+            ? "bg-red-50 border-red-200 text-red-700"
+            : "bg-green-50 border-green-200 text-green-700"
             }`}>
             <div className="flex items-center gap-2">
               {notification.type === "error" ? (
@@ -498,17 +498,16 @@ const StateTable = () => {
                       </div>
 
                       {/* Filter */}
-                      <div className="relative group">
-                        <FunnelIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
-                        <select
-                          value={filterActive}
-                          onChange={(e) => setFilterActive(e.target.value)}
-                          className="pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none w-full sm:w-auto transition-all hover:border-gray-400"
-                        >
-                          <option value="all">All Status</option>
-                          <option value="active">Active Only</option>
-                          <option value="inactive">Inactive Only</option>
-                        </select>
+                      <div className="w-full sm:w-48">
+                        <LocationDropdown
+                          data={[
+                            { _id: "active", name: "Active Only" },
+                            { _id: "inactive", name: "Inactive Only" },
+                          ]}
+                          value={filterActive === 'all' ? '' : filterActive}
+                          onChange={(val) => setFilterActive(val || 'all')}
+                          placeholder="All Status"
+                        />
                       </div>
                     </div>
                   )}
@@ -608,15 +607,15 @@ const StateTable = () => {
                               <button
                                 onClick={() => toggleActive(state)}
                                 className={`h-6 w-11 rounded-full transition-all duration-300 flex items-center p-1 ${state.active
-                                    ? 'bg-gradient-to-r from-green-400 to-green-500 justify-end hover:from-green-500 hover:to-green-600'
-                                    : 'bg-gradient-to-r from-gray-300 to-gray-400 justify-start hover:from-gray-400 hover:to-gray-500'
+                                  ? 'bg-gradient-to-r from-green-400 to-green-500 justify-end hover:from-green-500 hover:to-green-600'
+                                  : 'bg-gradient-to-r from-gray-300 to-gray-400 justify-start hover:from-gray-400 hover:to-gray-500'
                                   }`}
                               >
                                 <div className="h-4 w-4 bg-white rounded-full shadow-sm hover:shadow transition-shadow" />
                               </button>
                               <span className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${state.active
-                                  ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 hover:from-green-200 hover:to-green-300'
-                                  : 'bg-gradient-to-r from-red-100 to-red-200 text-red-800 hover:from-red-200 hover:to-red-300'
+                                ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 hover:from-green-200 hover:to-green-300'
+                                : 'bg-gradient-to-r from-red-100 to-red-200 text-red-800 hover:from-red-200 hover:to-red-300'
                                 }`}>
                                 {state.active ? 'Active' : 'Inactive'}
                               </span>

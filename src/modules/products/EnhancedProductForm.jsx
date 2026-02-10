@@ -234,12 +234,15 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
         }));
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleSubmit = async (e, publishStatusOverride = null) => {
+        if (e) e.preventDefault(); // Handle optional event
         setLoading(true);
 
         try {
             const formDataToSend = new FormData();
+
+            // Determine effective status
+            const effectivePublishStatus = publishStatusOverride || formData.publishStatus;
 
             // Basic fields
             formDataToSend.append('name', formData.name);
@@ -274,7 +277,7 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
             formDataToSend.append('tags', JSON.stringify(formData.tags));
             formDataToSend.append('featured', formData.featured);
             formDataToSend.append('displayPriority', formData.displayPriority);
-            formDataToSend.append('publishStatus', formData.publishStatus);
+            formDataToSend.append('publishStatus', effectivePublishStatus);
             formDataToSend.append('visibility', JSON.stringify(formData.visibility));
 
             // Physical
@@ -286,11 +289,6 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
             if (formData.image instanceof File) {
                 formDataToSend.append('image', formData.image);
             }
-            // If it's a string, it means it's an existing image. 
-            // We generally don't need to send it back as 'image' field for file uploads, 
-            // but we might need to send it if the backend logic for 'image' field expects a string for legacy preservation.
-            // However, our updated backend logic in ProductController.js specifically checks for `files.image` or `body.image`.
-            // If we send `body.image` as the existing filename/URL, the backend will verify it.
             else if (typeof formData.image === 'string' && formData.image.trim() !== '') {
                 formDataToSend.append('image', formData.image);
             }
@@ -354,6 +352,7 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
                             </div>
                         </div>
                         <button
+                            type="button"
                             onClick={onClose}
                             className="group p-2 rounded-xl bg-white/10 hover:bg-white/20 transition-all duration-200 hover:rotate-90"
                         >
@@ -368,6 +367,7 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
                             return (
                                 <button
                                     key={tab.id}
+                                    type="button"
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`flex items-center space-x-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-200 whitespace-nowrap ${activeTab === tab.id
                                         ? 'bg-white text-indigo-600 shadow-xl scale-105'
@@ -383,7 +383,7 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
                 </div>
 
                 {/* Form Content */}
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto">
                     <div className="p-6">
                         {/* Tab: Basic Info */}
                         {activeTab === 'basic' && (
@@ -467,17 +467,17 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
 
                             <div className="flex space-x-3">
                                 <button
-                                    type="submit"
+                                    type="button"
                                     disabled={loading}
-                                    onClick={() => handleChange('publishStatus', 'draft')}
+                                    onClick={(e) => handleSubmit(e, 'draft')}
                                     className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                                 >
                                     Save as Draft
                                 </button>
                                 <button
-                                    type="submit"
+                                    type="button"
                                     disabled={loading}
-                                    onClick={() => handleChange('publishStatus', 'published')}
+                                    onClick={(e) => handleSubmit(e, 'published')}
                                     className="rounded-lg bg-indigo-600 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
                                 >
                                     {loading ? 'Saving...' : initialData ? 'Update Product' : 'Create Product'}
@@ -485,7 +485,7 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
                             </div>
                         </div>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     );
