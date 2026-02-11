@@ -45,7 +45,7 @@ const cycleCountSchema = new mongoose.Schema({
     },
 
     items: [{
-        inventory: { type: mongoose.Schema.Types.ObjectId, ref: 'Variant' }, // Remapped to Variant
+        inventory: { type: mongoose.Schema.Types.ObjectId, ref: 'InventoryMaster' }, // Remapped to Variant
         variant: { type: mongoose.Schema.Types.ObjectId, ref: 'Variant' },
         sku: String,
         systemQuantity: Number, // Snapshot at start

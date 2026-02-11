@@ -170,7 +170,16 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
     };
 
     const handleChange = (field, value) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+        setFormData(prev => {
+            const updates = { ...prev, [field]: value };
+
+            // Special handling: Reset subcategories when category changes
+            if (field === 'category' && value !== prev.category) {
+                updates.subCategories = [];
+            }
+
+            return updates;
+        });
     };
 
     const handleNestedChange = (parent, field, value) => {

@@ -2,6 +2,8 @@
  * Product Form Tab Components
  * Individual tab content for the Enhanced Product Form
  */
+import SearchableSelect from '../../components/common/SearchableSelect';
+
 
 // ============================================================================
 // TAB 1: BASIC INFO
@@ -278,20 +280,18 @@ export const PricingTab = ({ formData, onChange }) => {
 
                 {/* GST % */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        GST Rate (%)
-                    </label>
-                    <select
-                        value={formData.tax}
-                        onChange={(e) => onChange('tax', e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    >
-                        <option value="0">0%</option>
-                        <option value="5">5%</option>
-                        <option value="12">12%</option>
-                        <option value="18">18%</option>
-                        <option value="28">28%</option>
-                    </select>
+                    <SearchableSelect
+                        label="GST Rate (%)"
+                        options={[
+                            { _id: '0', name: '0%' },
+                            { _id: '5', name: '5%' },
+                            { _id: '12', name: '12%' },
+                            { _id: '18', name: '18%' },
+                            { _id: '28', name: '28%' }
+                        ]}
+                        value={String(formData.tax)}
+                        onChange={(val) => onChange('tax', val)}
+                    />
                 </div>
             </div>
 
@@ -630,19 +630,17 @@ export const MarketingTab = ({ formData, onChange, onNestedChange, onArrayAdd, o
 
             {/* Publish Status */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Publish Status
-                </label>
-                <select
+                <SearchableSelect
+                    label="Publish Status"
+                    options={[
+                        { _id: 'draft', name: 'Draft' },
+                        { _id: 'published', name: 'Published' },
+                        { _id: 'scheduled', name: 'Scheduled' },
+                        { _id: 'archived', name: 'Archived' }
+                    ]}
                     value={formData.publishStatus}
-                    onChange={(e) => onChange('publishStatus', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="archived">Archived</option>
-                </select>
+                    onChange={(val) => onChange('publishStatus', val)}
+                />
             </div>
         </div>
     );
@@ -693,15 +691,16 @@ export const PhysicalTab = ({ formData, onChange, onNestedChange }) => (
                     />
                 </div>
                 <div>
-                    <select
+                    <SearchableSelect
+                        label=""
+                        options={[
+                            { _id: 'cm', name: 'cm' },
+                            { _id: 'inch', name: 'inch' },
+                            { _id: 'm', name: 'm' }
+                        ]}
                         value={formData.dimensions.unit}
-                        onChange={(e) => onNestedChange('dimensions', 'unit', e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    >
-                        <option value="cm">cm</option>
-                        <option value="inch">inch</option>
-                        <option value="m">m</option>
-                    </select>
+                        onChange={(val) => onNestedChange('dimensions', 'unit', val)}
+                    />
                 </div>
             </div>
         </div>
@@ -724,15 +723,16 @@ export const PhysicalTab = ({ formData, onChange, onNestedChange }) => (
                     />
                 </div>
                 <div>
-                    <select
+                    <SearchableSelect
+                        label=""
+                        options={[
+                            { _id: 'kg', name: 'kg' },
+                            { _id: 'g', name: 'g' },
+                            { _id: 'lb', name: 'lb' }
+                        ]}
                         value={formData.weight.unit}
-                        onChange={(e) => onNestedChange('weight', 'unit', e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-                    >
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
-                        <option value="lb">lb</option>
-                    </select>
+                        onChange={(val) => onNestedChange('weight', 'unit', val)}
+                    />
                 </div>
             </div>
         </div>

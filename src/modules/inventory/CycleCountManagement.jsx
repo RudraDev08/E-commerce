@@ -174,9 +174,9 @@ const CycleCountManagement = () => {
                                     </td>
                                     <td className="p-4">
                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${item.status === 'MATCH' ? 'bg-green-100 text-green-600' :
-                                                item.status === 'VARIANCE' ? 'bg-orange-100 text-orange-600' :
-                                                    item.status === 'ADJUSTED' ? 'bg-blue-100 text-blue-600' :
-                                                        'bg-gray-100 text-gray-400'
+                                            item.status === 'VARIANCE' ? 'bg-orange-100 text-orange-600' :
+                                                item.status === 'ADJUSTED' ? 'bg-blue-100 text-blue-600' :
+                                                    'bg-gray-100 text-gray-400'
                                             }`}>
                                             {item.status}
                                         </span>
@@ -284,7 +284,7 @@ const CycleCountManagement = () => {
                             </div>
                             <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
                                 <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2 text-gray-500 font-bold hover:bg-gray-50 rounded-lg">Cancel</button>
-                                <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-sm">Start Working</button>
+                                <button type="submit" disabled={!newCountData.warehouse} className={`px-5 py-2 rounded-lg font-bold shadow-sm ${!newCountData.warehouse ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'bg-indigo-600 hover:bg-indigo-700 text-white'}`}>Start Working</button>
                             </div>
                         </form>
                     </div>

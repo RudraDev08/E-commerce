@@ -108,13 +108,13 @@ const ProductVariantMapping = () => {
     const StatusBadge = ({ configured }) => {
         if (configured) {
             return (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
                     Configured
                 </span>
             );
         }
         return (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium bg-[#F3F4F6] text-[#6B7280] border border-[#E5E7EB]">
                 Not Configured
             </span>
         );
@@ -123,47 +123,47 @@ const ProductVariantMapping = () => {
     const ProductCell = ({ product }) => {
         const imgUrl = getImageUrl(product.image || product.images?.[0] || product.featuredImage);
         return (
-            <div className="flex items-center gap-4">
-                <div className="h-10 w-10 shrink-0 rounded bg-gray-50 border border-gray-200 flex items-center justify-center overflow-hidden">
+            <div className="flex items-center gap-3">
+                <div className="h-12 w-12 shrink-0 rounded-xl bg-[#F3F4F6] border border-[#E5E7EB] flex items-center justify-center overflow-hidden">
                     {imgUrl ? (
                         <img src={imgUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
-                        <PhotoIcon className="h-4 w-4 text-gray-300" />
+                        <PhotoIcon className="h-5 w-5 text-[#9CA3AF]" />
                     )}
                 </div>
                 <div>
-                    <div className="font-medium text-gray-900">{product.name}</div>
-                    <div className="text-xs text-gray-500">{product.brand?.name || 'Unknown Brand'}</div>
+                    <div className="font-semibold text-[14px] text-[#111827]">{product.name}</div>
+                    <div className="text-[12px] text-[#6B7280]">{product.brand?.name || 'Unknown Brand'}</div>
                 </div>
             </div>
         );
     };
 
     return (
-        <div className="min-h-screen bg-white font-sans text-gray-900 pb-20">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="min-h-screen bg-[#F9FAFB] font-sans pb-20">
+            <div className="w-full px-8 py-8">
 
                 {/* PAGE HEADER */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8 border-b border-gray-100 pb-6">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+                        <h1 className="text-[24px] font-semibold tracking-tight text-[#111827]">
                             Variant Mapping
                         </h1>
-                        <p className="mt-1 text-sm text-gray-500">
+                        <p className="mt-1.5 text-[14px] text-[#6B7280]">
                             Configure sizes, colors, and sellable variants for your products.
                         </p>
                     </div>
 
-                    {/* Summary Chips */}
-                    <div className="flex items-center gap-3">
-                        <div className="px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-medium text-gray-600">
-                            Total: <span className="text-gray-900 font-bold">{stats.total}</span>
+                    {/* Summary Pills */}
+                    <div className="flex items-center gap-2">
+                        <div className="px-[14px] py-[6px] bg-[#F3F4F6] border border-[#E5E7EB] rounded-full text-[12px] font-medium text-[#374151]">
+                            Total: <span className="font-semibold">{stats.total}</span>
                         </div>
-                        <div className="px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full text-xs font-medium text-emerald-700">
-                            Configured: <span className="font-bold">{stats.configured}</span>
+                        <div className="px-[14px] py-[6px] bg-[#ECFDF5] border border-[#A7F3D0] rounded-full text-[12px] font-medium text-[#065F46]">
+                            Configured: <span className="font-semibold">{stats.configured}</span>
                         </div>
-                        <div className="px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-medium text-gray-600">
-                            Not Configured: <span className="text-gray-900 font-bold">{stats.notConfigured}</span>
+                        <div className="px-[14px] py-[6px] bg-[#FEF2F2] border border-[#FECACA] rounded-full text-[12px] font-medium text-[#991B1B]">
+                            Not Configured: <span className="font-semibold">{stats.notConfigured}</span>
                         </div>
                     </div>
                 </div>
@@ -171,48 +171,50 @@ const ProductVariantMapping = () => {
                 {/* MAIN CONTENT */}
                 <div className="space-y-6">
 
-                    {/* Toolbar */}
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="relative flex-1 max-w-md">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                    {/* Search + Filter Card */}
+                    <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <div className="relative flex-1 max-w-md">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <MagnifyingGlassIcon className="h-5 w-5 text-[#9CA3AF]" />
+                                </div>
+                                <input
+                                    type="text"
+                                    className="block w-full h-[42px] pl-10 pr-3 border border-[#E5E7EB] rounded-lg bg-white placeholder-[#9CA3AF] text-[#111827] text-sm focus:outline-none focus:ring-[3px] focus:ring-[rgba(79,70,229,0.15)] focus:border-[#4F46E5] transition-all duration-200"
+                                    placeholder="Search products..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
                             </div>
-                            <input
-                                type="text"
-                                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out"
-                                placeholder="Search products..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                        <div className="relative w-full sm:w-48">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <FunnelIcon className="h-4 w-4 text-gray-400" />
+                            <div className="relative w-full sm:w-48">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <FunnelIcon className="h-4 w-4 text-[#9CA3AF]" />
+                                </div>
+                                <select
+                                    value={filterCategory}
+                                    onChange={(e) => setFilterCategory(e.target.value)}
+                                    className="block w-full h-[42px] pl-9 pr-10 border border-[#E5E7EB] rounded-lg bg-white text-[#111827] text-sm focus:outline-none focus:ring-[3px] focus:ring-[rgba(79,70,229,0.15)] focus:border-[#4F46E5] hover:border-[#4F46E5] transition-all duration-200 cursor-pointer"
+                                >
+                                    <option value="all">All Categories</option>
+                                    {categories.map(cat => (
+                                        <option key={cat._id} value={cat._id}>{cat.name}</option>
+                                    ))}
+                                </select>
                             </div>
-                            <select
-                                value={filterCategory}
-                                onChange={(e) => setFilterCategory(e.target.value)}
-                                className="block w-full pl-9 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg"
-                            >
-                                <option value="all">All Categories</option>
-                                {categories.map(cat => (
-                                    <option key={cat._id} value={cat._id}>{cat.name}</option>
-                                ))}
-                            </select>
                         </div>
                     </div>
 
-                    {/* TABLE */}
-                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                    {/* TABLE CARD */}
+                    <div className="bg-[#FFFFFF] border border-[#E5E7EB] rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
 
-                        {/* Empty State Banner (If no products configured yet) */}
+                        {/* Empty State Banner */}
                         {!loading && filteredProducts.length > 0 && stats.configured === 0 && !searchTerm && (
-                            <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex flex-col items-center justify-center text-center">
-                                <div className="h-12 w-12 bg-white rounded-lg border border-gray-200 flex items-center justify-center mb-4 shadow-sm">
-                                    <Square3Stack3DIcon className="h-6 w-6 text-gray-400" />
+                            <div className="p-8 border-b border-[#E5E7EB] bg-[#F9FAFB] flex flex-col items-center justify-center text-center">
+                                <div className="h-12 w-12 bg-white rounded-xl border border-[#E5E7EB] flex items-center justify-center mb-4 shadow-sm">
+                                    <Square3Stack3DIcon className="h-6 w-6 text-[#9CA3AF]" />
                                 </div>
-                                <h3 className="text-base font-semibold text-gray-900">No variants configured yet</h3>
-                                <p className="mt-1 text-sm text-gray-500 max-w-md mb-6">
+                                <h3 className="text-base font-semibold text-[#111827]">No variants configured yet</h3>
+                                <p className="mt-2 text-sm text-[#6B7280] max-w-md">
                                     Your products are ready, but they don't have variants (Size/Color) configured yet.
                                     Configure variants to enable inventory management and selling.
                                 </p>
@@ -220,72 +222,72 @@ const ProductVariantMapping = () => {
                         )}
 
                         <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
+                            <table className="min-w-full divide-y divide-[#E5E7EB]">
+                                <thead className="bg-[#F9FAFB]">
                                     <tr>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                        <th scope="col" className="px-4 py-3 text-left text-[12px] font-medium text-[#6B7280] uppercase tracking-[0.05em] border-b border-[#E5E7EB]">
                                             Product
                                         </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-32">
+                                        <th scope="col" className="px-4 py-3 text-left text-[12px] font-medium text-[#6B7280] uppercase tracking-[0.05em] w-32 border-b border-[#E5E7EB]">
                                             SKU
                                         </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-40">
+                                        <th scope="col" className="px-4 py-3 text-left text-[12px] font-medium text-[#6B7280] uppercase tracking-[0.05em] w-40 border-b border-[#E5E7EB]">
                                             Category
                                         </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-32">
+                                        <th scope="col" className="px-4 py-3 text-left text-[12px] font-medium text-[#6B7280] uppercase tracking-[0.05em] w-32 border-b border-[#E5E7EB]">
                                             Base Price
                                         </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-40">
+                                        <th scope="col" className="px-4 py-3 text-left text-[12px] font-medium text-[#6B7280] uppercase tracking-[0.05em] w-40 border-b border-[#E5E7EB]">
                                             Status
                                         </th>
-                                        <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider w-48">
+                                        <th scope="col" className="px-4 py-3 text-right text-[12px] font-medium text-[#6B7280] uppercase tracking-[0.05em] w-48 border-b border-[#E5E7EB]">
                                             Actions
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-100">
+                                <tbody className="bg-white divide-y divide-[#F3F4F6]">
                                     {loading ? (
                                         [...Array(5)].map((_, i) => (
                                             <tr key={i} className="animate-pulse">
-                                                <td className="px-6 py-4"><div className="h-10 bg-gray-100 rounded w-full"></div></td>
-                                                <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-20"></div></td>
-                                                <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-24"></div></td>
-                                                <td className="px-6 py-4"><div className="h-4 bg-gray-100 rounded w-16"></div></td>
-                                                <td className="px-6 py-4"><div className="h-6 bg-gray-100 rounded-full w-24"></div></td>
-                                                <td className="px-6 py-4"></td>
+                                                <td className="px-4 py-4"><div className="h-12 bg-[#F3F4F6] rounded-lg w-full"></div></td>
+                                                <td className="px-4 py-4"><div className="h-4 bg-[#F3F4F6] rounded w-20"></div></td>
+                                                <td className="px-4 py-4"><div className="h-4 bg-[#F3F4F6] rounded w-24"></div></td>
+                                                <td className="px-4 py-4"><div className="h-4 bg-[#F3F4F6] rounded w-16"></div></td>
+                                                <td className="px-4 py-4"><div className="h-6 bg-[#F3F4F6] rounded-full w-24"></div></td>
+                                                <td className="px-4 py-4"></td>
                                             </tr>
                                         ))
                                     ) : filteredProducts.length === 0 ? (
                                         <tr>
-                                            <td colSpan="6" className="px-6 py-12 text-center text-sm text-gray-500">
-                                                <CubeIcon className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+                                            <td colSpan="6" className="px-4 py-12 text-center text-sm text-[#6B7280]">
+                                                <CubeIcon className="mx-auto h-12 w-12 text-[#9CA3AF] mb-3" />
                                                 No products found matching your filters.
                                             </td>
                                         </tr>
                                     ) : (
                                         filteredProducts.map((product) => (
-                                            <tr key={product._id} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                            <tr key={product._id} className="hover:bg-[#F9FAFB] transition-all duration-200">
+                                                <td className="px-4 py-4 whitespace-nowrap">
                                                     <ProductCell product={product} />
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className="text-sm font-mono text-gray-500">
+                                                <td className="px-4 py-4 whitespace-nowrap">
+                                                    <span className="text-sm font-mono text-[#6B7280]">
                                                         {product.sku || '---'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                <td className="px-4 py-4 whitespace-nowrap text-sm text-[#6B7280]">
                                                     {product.category?.name || 'Uncategorized'}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-[#111827]">
                                                     ₹{product.basePrice || product.price || 0}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-4 py-4 whitespace-nowrap">
                                                     <StatusBadge configured={(product.variantCount || 0) > 0} />
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                     <button
                                                         onClick={() => handleConfigure(product)}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
+                                                        className="inline-flex items-center gap-1.5 h-[36px] px-4 bg-[#4F46E5] text-white text-sm font-medium rounded-lg hover:bg-[#4338CA] focus:outline-none focus:ring-[3px] focus:ring-[rgba(79,70,229,0.25)] shadow-[0_2px_6px_rgba(79,70,229,0.2)] transition-all duration-200"
                                                     >
                                                         {(product.variantCount || 0) > 0 ? 'Edit Variants' : 'Configure'}
                                                         {(!product.variantCount || product.variantCount === 0) && <ArrowRightIcon className="h-3.5 w-3.5" />}
@@ -300,9 +302,9 @@ const ProductVariantMapping = () => {
 
                         {/* FOOTER */}
                         {!loading && filteredProducts.length > 0 && (
-                            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                                <div className="text-sm text-gray-500">
-                                    Showing <span className="font-medium">{filteredProducts.length}</span> results
+                            <div className="bg-[#F9FAFB] px-4 py-4 border-t border-[#F3F4F6] flex items-center justify-between">
+                                <div className="text-[13px] text-[#6B7280]">
+                                    Showing <span className="font-medium text-[#111827]">{filteredProducts.length}</span> results
                                 </div>
                             </div>
                         )}

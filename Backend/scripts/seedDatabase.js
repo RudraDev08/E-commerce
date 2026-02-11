@@ -1,306 +1,352 @@
-import mongoose from 'mongoose';
-import Product from '../models/Product/ProductSchema.js';
-import ProductVariant from '../models/variant/productVariantSchema.js';
-import Category from '../models/Category/CategorySchema.js';
-import Brand from '../models/Brands/BrandsSchema.js';
-import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
-import InventoryService from '../services/inventory.service.js';
-import dotenv from 'dotenv';
+const mongoose = require('mongoose');
+const SizeMaster = require('../models/SizeMaster');
+const ColorMaster = require('../models/ColorMaster');
+const WarehouseMaster = require('../models/WarehouseMaster');
+const VariantMaster = require('../models/VariantMaster');
+const VariantInventory = require('../models/VariantInventory');
 
-dotenv.config();
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ecommerce';
-
-/**
- * Seed Database with Sample E-commerce Data
- * Creates: Categories, Brands, Products, Variants, and Inventory
- */
 async function seedDatabase() {
     try {
-        await mongoose.connect(MONGODB_URI);
-        console.log('✅ Connected to MongoDB\n');
+        // Connect to MongoDB
+        await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ecommerce', {
+            useNewUrlParser: true,
+            useUnifiedTopology: true
+        });
 
-        // Step 0: Clear Database
-        console.log('🧹 Clearing existing data...');
+        console.log('✅ Connected to MongoDB');
+
+        // Clear existing data
+        console.log('🗑️  Clearing existing data...');
         await Promise.all([
-            Category.deleteMany({}),
-            Brand.deleteMany({}),
-            Product.deleteMany({}),
-            ProductVariant.deleteMany({}),
-            InventoryMaster.deleteMany({})
+            SizeMaster.deleteMany({}),
+            ColorMaster.deleteMany({}),
+            WarehouseMaster.deleteMany({}),
+            VariantMaster.deleteMany({}),
+            VariantInventory.deleteMany({})
         ]);
-        // Also clear inventory if possible, but we don't have the model import here directly, 
-        // relying on InventoryService might be tricky if it doesn't expose delete.
-        // But since we are deleting products/variants, inventory links will be broken anyway.
-        // Let's rely on the diagnostic script to check for clean state or just let it be.
-        // Actually, let's try to clear InventoryMaster using the service if possible or a direct model if imported.
-        // We didn't import InventoryMaster model directly. Let's add it or skip for now.
-        // Ideally we should import InventoryMaster to clean it too.
-        console.log('✅ Database cleared\n');
 
-        // Step 1: Create Categories
-        console.log('📁 Creating Categories...');
+        // ========================================
+        // 1. CREATE SIZE MASTERS
+        // ========================================
+        console.log('📏 Creating size masters...');
+        const sizes = await SizeMaster.create([
+            // Storage sizes
+            { category: 'storage', value: '128GB', displayName: '128 GB', sortOrder: 1 },
+            { category: 'storage', value: '256GB', displayName: '256 GB', sortOrder: 2 },
+            { category: 'storage', value: '512GB', displayName: '512 GB', sortOrder: 3 },
+            { category: 'storage', value: '1TB', displayName: '1 TB', sortOrder: 4 },
 
-        const electronicsCategory = await Category.create({
-            name: 'Electronics',
-            slug: 'electronics',
-            description: 'Electronic devices and gadgets',
-            status: 'active',
-            priority: 1
-        });
+            // RAM sizes
+            { category: 'ram', value: '6GB', displayName: '6 GB RAM', sortOrder: 1 },
+            { category: 'ram', value: '8GB', displayName: '8 GB RAM', sortOrder: 2 },
+            { category: 'ram', value: '12GB', displayName: '12 GB RAM', sortOrder: 3 },
+            { category: 'ram', value: '16GB', displayName: '16 GB RAM', sortOrder: 4 },
 
-        const mobilesCategory = await Category.create({
-            name: 'Smartphones',
-            slug: 'smartphones',
-            description: 'Latest smartphones and mobile devices',
-            parentId: electronicsCategory._id,
-            status: 'active',
-            priority: 1
-        });
+            // Clothing sizes
+            { category: 'clothing', value: 'XS', displayName: 'Extra Small', sortOrder: 1 },
+            { category: 'clothing', value: 'S', displayName: 'Small', sortOrder: 2 },
+            { category: 'clothing', value: 'M', displayName: 'Medium', sortOrder: 3 },
+            { category: 'clothing', value: 'L', displayName: 'Large', sortOrder: 4 },
+            { category: 'clothing', value: 'XL', displayName: 'Extra Large', sortOrder: 5 },
 
-        const accessoriesCategory = await Category.create({
-            name: 'Mobile Accessories',
-            slug: 'mobile-accessories',
-            description: 'Cases, chargers, and more',
-            parentId: electronicsCategory._id,
-            status: 'active',
-            priority: 2
-        });
+            // Shoe sizes
+            { category: 'shoe', value: '7', displayName: 'UK 7', sortOrder: 1 },
+            { category: 'shoe', value: '8', displayName: 'UK 8', sortOrder: 2 },
+            { category: 'shoe', value: '9', displayName: 'UK 9', sortOrder: 3 },
+            { category: 'shoe', value: '10', displayName: 'UK 10', sortOrder: 4 }
+        ]);
 
-        console.log(`✅ Created ${3} categories\n`);
+        console.log(`   ✓ Created ${sizes.length} sizes`);
 
-        // Step 2: Create Brands
-        console.log('🏷️  Creating Brands...');
+        // ========================================
+        // 2. CREATE COLOR MASTERS
+        // ========================================
+        console.log('🎨 Creating color masters...');
+        const colors = await ColorMaster.create([
+            { name: 'Phantom Black', hexCode: '#1a1a1a', category: 'solid' },
+            { name: 'Phantom Silver', hexCode: '#c0c0c0', category: 'metallic' },
+            { name: 'Phantom Green', hexCode: '#2d5016', category: 'solid' },
+            { name: 'Phantom Blue', hexCode: '#1e3a8a', category: 'solid' },
+            { name: 'Rose Gold', hexCode: '#b76e79', category: 'metallic' },
+            { name: 'Midnight Purple', hexCode: '#4c1d95', category: 'solid' },
+            { name: 'Arctic White', hexCode: '#f8fafc', category: 'solid' },
+            { name: 'Crimson Red', hexCode: '#dc2626', category: 'solid' }
+        ]);
 
-        const samsung = await Brand.create({
-            name: 'Samsung',
-            slug: 'samsung',
-            description: 'Samsung Electronics',
-            status: 'active'
-        });
+        console.log(`   ✓ Created ${colors.length} colors`);
 
-        const apple = await Brand.create({
-            name: 'Apple',
-            slug: 'apple',
-            description: 'Apple Inc.',
-            status: 'active'
-        });
-
-        const oneplus = await Brand.create({
-            name: 'OnePlus',
-            slug: 'oneplus',
-            description: 'OnePlus Technology',
-            status: 'active'
-        });
-
-        console.log(`✅ Created ${3} brands\n`);
-
-        // Step 3: Create Products
-        console.log('📦 Creating Products...');
-
-        const products = [];
-
-        // Product 1: Samsung Galaxy S23
-        const galaxyS23 = await Product.create({
-            name: 'Samsung Galaxy S23 Ultra 5G',
-            slug: 'samsung-galaxy-s23-ultra',
-            sku: 'SGS23-ULTRA-5G',  // Added SKU
-            description: 'Samsung Galaxy S23 Ultra 5G (Titanium Black, 12GB RAM, 256GB Storage) with Snapdragon 8 Elite, 200MP Camera with ProVisual Engine, 5000mAh Battery',
-            category: mobilesCategory._id,
-            brand: samsung._id,
-            basePrice: 129999,
-            price: 129999,
-            hasVariants: true,
-            tags: ['Best Seller', 'Trending', '5G'],
-            status: 'active', // Fixed: isActive -> status
-            featured: true,   // Fixed: isFeatured -> featured
-            rating: 4.5,
-            reviewCount: 1234
-        });
-        products.push(galaxyS23);
-
-        // Product 2: iPhone 15 Pro
-        const iphone15 = await Product.create({
-            name: 'Apple iPhone 15 Pro',
-            slug: 'apple-iphone-15-pro',
-            sku: 'IPHONE-15-PRO', // Added SKU
-            description: 'Apple iPhone 15 Pro (Natural Titanium, 128GB) with A17 Pro chip, ProMotion display, and advanced camera system',
-            category: mobilesCategory._id,
-            brand: apple._id,
-            basePrice: 134900,
-            price: 134900,
-            hasVariants: true,
-            tags: ['Premium', 'New Launch'],
-            status: 'active',
-            featured: true,
-            rating: 4.7,
-            reviewCount: 892
-        });
-        products.push(iphone15);
-
-        // Product 3: OnePlus 12
-        const oneplus12 = await Product.create({
-            name: 'OnePlus 12',
-            slug: 'oneplus-12',
-            sku: 'ONEPLUS-12', // Added SKU
-            description: 'OnePlus 12 (Flowy Emerald, 12GB RAM, 256GB Storage) with Snapdragon 8 Gen 3, 50MP Hasselblad Camera',
-            category: mobilesCategory._id,
-            brand: oneplus._id,
-            basePrice: 64999,
-            price: 64999,
-            hasVariants: true,
-            tags: ['Best Value', 'Fast Charging'],
-            status: 'active',
-            featured: true,
-            rating: 4.4,
-            reviewCount: 567
-        });
-        products.push(oneplus12);
-
-        console.log(`✅ Created ${products.length} products\n`);
-
-        // Step 4: Create Variants
-        console.log('🎨 Creating Variants...');
-
-        let totalVariants = 0;
-
-        // Samsung Galaxy S23 Variants
-        const s23Variants = [
-            { color: 'Phantom Black', storage: '128GB', price: 124999, stock: 50 },
-            { color: 'Phantom Black', storage: '256GB', price: 129999, stock: 35 },
-            { color: 'Phantom Black', storage: '512GB', price: 139999, stock: 20 },
-            { color: 'Green', storage: '128GB', price: 124999, stock: 40 },
-            { color: 'Green', storage: '256GB', price: 129999, stock: 30 },
-            { color: 'Cream', storage: '256GB', price: 129999, stock: 25 }
-        ];
-
-        for (const [index, variantData] of s23Variants.entries()) {
-            const variant = await ProductVariant.create({
-                productId: galaxyS23._id,
-                sku: `SGS23-${variantData.color.substring(0, 3).toUpperCase()}-${variantData.storage}`,
-                attributes: {
-                    color: variantData.color,
-                    storage: variantData.storage
+        // ========================================
+        // 3. CREATE WAREHOUSES
+        // ========================================
+        console.log('🏭 Creating warehouses...');
+        const warehouses = await WarehouseMaster.create([
+            {
+                name: 'Main Warehouse - Delhi',
+                code: 'WH-DEL',
+                address: {
+                    street: 'Sector 18',
+                    city: 'New Delhi',
+                    state: 'Delhi',
+                    country: 'India',
+                    zipCode: '110001'
                 },
-                price: variantData.price,
-                stock: variantData.stock,
-                status: true // Fixed: isActive -> status
-            });
+                isDefault: true,
+                isActive: true
+            },
+            {
+                name: 'Mumbai Distribution Center',
+                code: 'WH-MUM',
+                address: {
+                    street: 'Andheri East',
+                    city: 'Mumbai',
+                    state: 'Maharashtra',
+                    country: 'India',
+                    zipCode: '400069'
+                },
+                isDefault: false,
+                isActive: true
+            },
+            {
+                name: 'Bangalore Tech Hub',
+                code: 'WH-BLR',
+                address: {
+                    street: 'Whitefield',
+                    city: 'Bangalore',
+                    state: 'Karnataka',
+                    country: 'India',
+                    zipCode: '560066'
+                },
+                isDefault: false,
+                isActive: true
+            }
+        ]);
 
-            // Auto-create inventory
-            await InventoryService.autoCreateInventoryForVariant(variant, 'SEED_SCRIPT');
+        console.log(`   ✓ Created ${warehouses.length} warehouses`);
 
-            // Update stock
-            await InventoryService.updateStock(
-                variant._id,
-                variantData.stock,
-                'INITIAL_STOCK',
-                'SEED_SCRIPT',
-                'Initial stock from seed script'
-            );
+        // ========================================
+        // 4. CREATE VARIANTS (Samsung Fold 6)
+        // ========================================
+        console.log('📱 Creating Samsung Fold 6 variants...');
 
-            totalVariants++;
+        const storage512 = sizes.find(s => s.category === 'storage' && s.value === '512GB');
+        const storage256 = sizes.find(s => s.category === 'storage' && s.value === '256GB');
+        const ram12 = sizes.find(s => s.category === 'ram' && s.value === '12GB');
+        const ram8 = sizes.find(s => s.category === 'ram' && s.value === '8GB');
+
+        const blackColor = colors.find(c => c.name === 'Phantom Black');
+        const silverColor = colors.find(c => c.name === 'Phantom Silver');
+        const greenColor = colors.find(c => c.name === 'Phantom Green');
+
+        const fold6Variants = [];
+
+        // Variant 1: 512GB + 12GB RAM + Black
+        fold6Variants.push(await VariantMaster.create({
+            productGroup: 'FOLD6_2024',
+            productName: 'Samsung Galaxy Z Fold 6',
+            brand: 'Samsung',
+            category: 'Smartphones',
+            subcategory: 'Foldable',
+            sku: 'SAM-FOLD6-512GB-12GB-BLK',
+            color: blackColor._id,
+            sizes: [
+                { sizeId: storage512._id, category: 'storage', value: '512GB' },
+                { sizeId: ram12._id, category: 'ram', value: '12GB' }
+            ],
+            price: 164999,
+            compareAtPrice: 174999,
+            costPrice: 140000,
+            weight: 239,
+            dimensions: { length: 15.5, width: 6.7, height: 0.6, unit: 'cm' },
+            description: 'Experience the future of mobile technology with the Samsung Galaxy Z Fold 6. Featuring a stunning foldable display, powerful performance, and cutting-edge camera system.',
+            specifications: {
+                display: '7.6" Dynamic AMOLED 2X',
+                processor: 'Snapdragon 8 Gen 3',
+                battery: '4400mAh',
+                camera: '50MP + 12MP + 10MP',
+                frontCamera: '10MP + 4MP Under Display',
+                os: 'Android 14 with One UI 6.1'
+            },
+            images: [
+                {
+                    url: 'https://images.samsung.com/is/image/samsung/p6pim/in/2407/gallery/in-galaxy-z-fold6-f956-sm-f956bzkainu-542628046',
+                    thumbnailUrl: 'https://images.samsung.com/is/image/samsung/p6pim/in/2407/gallery/in-galaxy-z-fold6-f956-sm-f956bzkainu-542628046?$320_320_PNG$',
+                    isPrimary: true,
+                    sortOrder: 0,
+                    altText: 'Samsung Galaxy Z Fold 6 Phantom Black Front View'
+                },
+                {
+                    url: 'https://images.samsung.com/is/image/samsung/p6pim/in/2407/gallery/in-galaxy-z-fold6-f956-sm-f956bzkainu-542628047',
+                    thumbnailUrl: 'https://images.samsung.com/is/image/samsung/p6pim/in/2407/gallery/in-galaxy-z-fold6-f956-sm-f956bzkainu-542628047?$320_320_PNG$',
+                    isPrimary: false,
+                    sortOrder: 1,
+                    altText: 'Samsung Galaxy Z Fold 6 Unfolded View'
+                }
+            ],
+            status: 'active'
+        }));
+
+        // Variant 2: 512GB + 12GB RAM + Silver
+        fold6Variants.push(await VariantMaster.create({
+            productGroup: 'FOLD6_2024',
+            productName: 'Samsung Galaxy Z Fold 6',
+            brand: 'Samsung',
+            category: 'Smartphones',
+            subcategory: 'Foldable',
+            sku: 'SAM-FOLD6-512GB-12GB-SLV',
+            color: silverColor._id,
+            sizes: [
+                { sizeId: storage512._id, category: 'storage', value: '512GB' },
+                { sizeId: ram12._id, category: 'ram', value: '12GB' }
+            ],
+            price: 164999,
+            compareAtPrice: 174999,
+            costPrice: 140000,
+            weight: 239,
+            dimensions: { length: 15.5, width: 6.7, height: 0.6, unit: 'cm' },
+            description: 'Experience the future of mobile technology with the Samsung Galaxy Z Fold 6. Featuring a stunning foldable display, powerful performance, and cutting-edge camera system.',
+            specifications: {
+                display: '7.6" Dynamic AMOLED 2X',
+                processor: 'Snapdragon 8 Gen 3',
+                battery: '4400mAh',
+                camera: '50MP + 12MP + 10MP',
+                frontCamera: '10MP + 4MP Under Display',
+                os: 'Android 14 with One UI 6.1'
+            },
+            images: [
+                {
+                    url: 'https://images.samsung.com/is/image/samsung/p6pim/in/2407/gallery/in-galaxy-z-fold6-f956-sm-f956bzsainu-542628066',
+                    isPrimary: true,
+                    sortOrder: 0,
+                    altText: 'Samsung Galaxy Z Fold 6 Phantom Silver'
+                }
+            ],
+            status: 'active'
+        }));
+
+        // Variant 3: 256GB + 8GB RAM + Black
+        fold6Variants.push(await VariantMaster.create({
+            productGroup: 'FOLD6_2024',
+            productName: 'Samsung Galaxy Z Fold 6',
+            brand: 'Samsung',
+            category: 'Smartphones',
+            subcategory: 'Foldable',
+            sku: 'SAM-FOLD6-256GB-8GB-BLK',
+            color: blackColor._id,
+            sizes: [
+                { sizeId: storage256._id, category: 'storage', value: '256GB' },
+                { sizeId: ram8._id, category: 'ram', value: '8GB' }
+            ],
+            price: 154999,
+            compareAtPrice: 164999,
+            costPrice: 130000,
+            weight: 239,
+            dimensions: { length: 15.5, width: 6.7, height: 0.6, unit: 'cm' },
+            description: 'Experience the future of mobile technology with the Samsung Galaxy Z Fold 6. Featuring a stunning foldable display, powerful performance, and cutting-edge camera system.',
+            specifications: {
+                display: '7.6" Dynamic AMOLED 2X',
+                processor: 'Snapdragon 8 Gen 3',
+                battery: '4400mAh',
+                camera: '50MP + 12MP + 10MP',
+                frontCamera: '10MP + 4MP Under Display',
+                os: 'Android 14 with One UI 6.1'
+            },
+            images: [
+                {
+                    url: 'https://images.samsung.com/is/image/samsung/p6pim/in/2407/gallery/in-galaxy-z-fold6-f956-sm-f956bzkainu-542628046',
+                    isPrimary: true,
+                    sortOrder: 0,
+                    altText: 'Samsung Galaxy Z Fold 6 Phantom Black'
+                }
+            ],
+            status: 'active'
+        }));
+
+        // Variant 4: 256GB + 8GB RAM + Green
+        fold6Variants.push(await VariantMaster.create({
+            productGroup: 'FOLD6_2024',
+            productName: 'Samsung Galaxy Z Fold 6',
+            brand: 'Samsung',
+            category: 'Smartphones',
+            subcategory: 'Foldable',
+            sku: 'SAM-FOLD6-256GB-8GB-GRN',
+            color: greenColor._id,
+            sizes: [
+                { sizeId: storage256._id, category: 'storage', value: '256GB' },
+                { sizeId: ram8._id, category: 'ram', value: '8GB' }
+            ],
+            price: 154999,
+            compareAtPrice: null,
+            costPrice: 130000,
+            weight: 239,
+            dimensions: { length: 15.5, width: 6.7, height: 0.6, unit: 'cm' },
+            description: 'Experience the future of mobile technology with the Samsung Galaxy Z Fold 6. Featuring a stunning foldable display, powerful performance, and cutting-edge camera system.',
+            specifications: {
+                display: '7.6" Dynamic AMOLED 2X',
+                processor: 'Snapdragon 8 Gen 3',
+                battery: '4400mAh',
+                camera: '50MP + 12MP + 10MP',
+                frontCamera: '10MP + 4MP Under Display',
+                os: 'Android 14 with One UI 6.1'
+            },
+            images: [
+                {
+                    url: 'https://images.samsung.com/is/image/samsung/p6pim/in/2407/gallery/in-galaxy-z-fold6-f956-sm-f956blgainu-542628086',
+                    isPrimary: true,
+                    sortOrder: 0,
+                    altText: 'Samsung Galaxy Z Fold 6 Phantom Green'
+                }
+            ],
+            status: 'active'
+        }));
+
+        console.log(`   ✓ Created ${fold6Variants.length} variants`);
+
+        // ========================================
+        // 5. CREATE INVENTORY RECORDS
+        // ========================================
+        console.log('📦 Creating inventory records...');
+
+        const defaultWarehouse = warehouses.find(w => w.isDefault);
+        const inventoryRecords = [];
+
+        for (const variant of fold6Variants) {
+            // Create inventory for each warehouse
+            for (const warehouse of warehouses) {
+                const quantity = warehouse.isDefault ? 50 : Math.floor(Math.random() * 30) + 10;
+
+                inventoryRecords.push(await VariantInventory.create({
+                    variant: variant._id,
+                    warehouse: warehouse._id,
+                    quantity: quantity,
+                    reservedQuantity: 0,
+                    reorderLevel: 10,
+                    reorderQuantity: 20
+                }));
+            }
         }
 
-        // iPhone 15 Pro Variants
-        const iphone15Variants = [
-            { color: 'Natural Titanium', storage: '128GB', price: 134900, stock: 30 },
-            { color: 'Natural Titanium', storage: '256GB', price: 144900, stock: 25 },
-            { color: 'Blue Titanium', storage: '128GB', price: 134900, stock: 28 },
-            { color: 'Blue Titanium', storage: '256GB', price: 144900, stock: 22 },
-            { color: 'Black Titanium', storage: '256GB', price: 144900, stock: 20 }
-        ];
+        console.log(`   ✓ Created ${inventoryRecords.length} inventory records`);
 
-        for (const variantData of iphone15Variants) {
-            const variant = await ProductVariant.create({
-                productId: iphone15._id,
-                sku: `IP15P-${variantData.color.substring(0, 3).toUpperCase()}-${variantData.storage}`,
-                attributes: {
-                    color: variantData.color,
-                    storage: variantData.storage
-                },
-                price: variantData.price,
-                stock: variantData.stock,
-                status: true // Fixed
-            });
-
-            await InventoryService.autoCreateInventoryForVariant(variant, 'SEED_SCRIPT');
-            await InventoryService.updateStock(
-                variant._id,
-                variantData.stock,
-                'INITIAL_STOCK',
-                'SEED_SCRIPT',
-                'Initial stock from seed script'
-            );
-
-            totalVariants++;
-        }
-
-        // OnePlus 12 Variants
-        const oneplus12Variants = [
-            { color: 'Flowy Emerald', storage: '256GB', price: 64999, stock: 45 },
-            { color: 'Flowy Emerald', storage: '512GB', price: 69999, stock: 30 },
-            { color: 'Silky Black', storage: '256GB', price: 64999, stock: 40 },
-            { color: 'Silky Black', storage: '512GB', price: 69999, stock: 25 }
-        ];
-
-        for (const variantData of oneplus12Variants) {
-            const variant = await ProductVariant.create({
-                productId: oneplus12._id,
-                sku: `OP12-${variantData.color.substring(0, 3).toUpperCase()}-${variantData.storage}`,
-                attributes: {
-                    color: variantData.color,
-                    storage: variantData.storage
-                },
-                price: variantData.price,
-                stock: variantData.stock,
-                status: true // Fixed
-            });
-
-            await InventoryService.autoCreateInventoryForVariant(variant, 'SEED_SCRIPT');
-            await InventoryService.updateStock(
-                variant._id,
-                variantData.stock,
-                'INITIAL_STOCK',
-                'SEED_SCRIPT',
-                'Initial stock from seed script'
-            );
-
-            totalVariants++;
-        }
-
-        console.log(`✅ Created ${totalVariants} variants\n`);
-        console.log(`✅ Auto-created ${totalVariants} inventory records\n`);
-
-        // Final Summary
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('🎉 DATABASE SEEDING COMPLETE!');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
+        // ========================================
+        // SUMMARY
+        // ========================================
+        console.log('\n✅ DATABASE SEEDING COMPLETED SUCCESSFULLY!\n');
         console.log('📊 Summary:');
-        console.log(`   Categories: 3`);
-        console.log(`   Brands: 3`);
-        console.log(`   Products: ${products.length}`);
-        console.log(`   Variants: ${totalVariants}`);
-        console.log(`   Inventory Records: ${totalVariants}\n`);
+        console.log(`   • Sizes: ${sizes.length}`);
+        console.log(`   • Colors: ${colors.length}`);
+        console.log(`   • Warehouses: ${warehouses.length}`);
+        console.log(`   • Variants: ${fold6Variants.length}`);
+        console.log(`   • Inventory Records: ${inventoryRecords.length}`);
+        console.log('\n🚀 You can now test the system with:');
+        console.log(`   • Product Group: FOLD6_2024`);
+        console.log(`   • API: GET /api/variants/group/FOLD6_2024`);
 
-        console.log('📦 Products Created:');
-        console.log('   1. Samsung Galaxy S23 Ultra (6 variants)');
-        console.log('   2. Apple iPhone 15 Pro (5 variants)');
-        console.log('   3. OnePlus 12 (4 variants)\n');
-
-        console.log('✅ Your e-commerce database is now ready!');
-        console.log('✅ Visit your website to see the products!\n');
-
-        await mongoose.disconnect();
-        console.log('✅ Disconnected from MongoDB\n');
-
+        process.exit(0);
     } catch (error) {
         console.error('❌ Error seeding database:', error);
-        console.error(error.stack);
         process.exit(1);
     }
 }
 
-// Run the seed script
+// Run the seeding
 seedDatabase();

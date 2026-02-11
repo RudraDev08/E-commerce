@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useProductConfiguration } from './useProductConfiguration';
 import { AttributeGroup } from './AttributeGroup';
 import { getAttributeTypes } from '../../../api/attributeApi';
@@ -171,9 +171,14 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
         getVariantAttributeValue
     } = useProductConfiguration(variants, relevantAttributes);
 
+    // Track the last synced variant to prevent infinite loops
+    const lastSyncedVariantId = useRef(null);
+
     // Sync externally selected variant (e.g. from Alternatives Badge)
     useEffect(() => {
-        if (controlledVariant && controlledVariant._id !== resolvedVariant?._id) {
+        if (controlledVariant && controlledVariant._id !== lastSyncedVariantId.current) {
+            lastSyncedVariantId.current = controlledVariant._id;
+
             const newAttrs = {};
             relevantAttributes.forEach(attr => {
                 const val = getVariantAttributeValue(controlledVariant, attr.slug);
@@ -181,7 +186,7 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
             });
             setSelectedAttributes(newAttrs);
         }
-    }, [controlledVariant, relevantAttributes, getVariantAttributeValue, resolvedVariant?._id, setSelectedAttributes]);
+    }, [controlledVariant, relevantAttributes, getVariantAttributeValue]);
 
     // 4. Notify Parent
     useEffect(() => {
