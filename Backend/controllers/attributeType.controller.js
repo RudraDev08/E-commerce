@@ -45,7 +45,7 @@ export const createAttributeType = async (req, res) => {
             description,
             helpText,
             icon,
-            createdBy: req.user?._id
+            createdBy: 'admin'
         });
 
         res.status(201).json({
@@ -151,7 +151,7 @@ export const updateAttributeType = async (req, res) => {
             });
         }
 
-        const updates = { ...req.body, updatedBy: req.user?._id };
+        const updates = { ...req.body, updatedBy: 'admin' };
 
         if (updates.name) {
             updates.slug = slugify(updates.name, { lower: true, strict: true });

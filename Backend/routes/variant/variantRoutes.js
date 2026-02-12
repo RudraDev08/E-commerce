@@ -7,9 +7,20 @@ import {
   updateVariant,
   deleteVariant,
 } from "../../controllers/variant/variantController.js";
+import {
+  generateCombinations,
+  previewCombinationsEndpoint
+} from "../../controllers/variantCombination.controller.js";
 import { upload } from "../../config/multer.js";
 
 const router = express.Router();
+
+/* COMBINATION GENERATOR ROUTES */
+// Generate all combinations (Storage × RAM × Color)
+router.post("/generate-combinations", generateCombinations);
+
+// Preview combinations before generating
+router.post("/preview-combinations", previewCombinationsEndpoint);
 
 /* CRUD ROUTES */
 // CREATE (bulk) - Support multiple images per variant

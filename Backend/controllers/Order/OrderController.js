@@ -1,5 +1,5 @@
 import Order from '../../models/Order/OrderSchema.js';
-import Product from '../../models/Product/ProductSchema.js';
+import '../../src/modules/product/product.model.js';
 import inventoryService from '../../services/inventory.service.js';
 
 // Helper: Generate Order ID (ORD-YYYYMMDD-XXXX)
@@ -32,7 +32,7 @@ export const createOrder = async (req, res) => {
             subtotal,
             tax,
             total,
-            userId // In real app, get from req.user
+            userId
         } = req.body;
 
         // 1. Basic Validation
@@ -145,7 +145,7 @@ export const getOrderById = async (req, res) => {
 export const getMyOrders = async (req, res) => {
     try {
         // Mock user ID until auth is fully integrated
-        const userId = req.user?._id || "65c3f9b0e4b0a1b2c3d4e5f6";
+        const userId = "65c3f9b0e4b0a1b2c3d4e5f6";
 
         const orders = await Order.find({ customer: userId })
             .sort({ createdAt: -1 });

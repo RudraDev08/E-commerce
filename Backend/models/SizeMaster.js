@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const sizeSchema = new mongoose.Schema({
     category: {
@@ -45,4 +45,4 @@ sizeSchema.virtual('label').get(function () {
 sizeSchema.set('toJSON', { virtuals: true });
 sizeSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('SizeMaster', sizeSchema);
+export default mongoose.model('SizeMaster', sizeSchema);

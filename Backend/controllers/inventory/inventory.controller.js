@@ -76,7 +76,7 @@ class InventoryController {
      */
     async getInventoryStats(req, res) {
         try {
-            const stats = await inventoryService.getInventoryStats();
+            const stats = await inventoryService.getInventoryStats(req.query);
 
             res.status(200).json({
                 success: true,

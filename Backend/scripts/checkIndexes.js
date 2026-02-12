@@ -11,8 +11,17 @@ const checkIndexes = async () => {
         const db = mongoose.connection.db;
 
         console.log('\n📋 INVENTORY MASTER INDEXES:\n');
-        const indexes = await db.collection('inventorymasters').indexes();
-        indexes.forEach(idx => {
+        const invIndexes = await db.collection('inventorymasters').indexes();
+        invIndexes.forEach(idx => {
+            console.log(`Index: ${idx.name}`);
+            console.log(`  Keys: ${JSON.stringify(idx.key)}`);
+            console.log(`  Unique: ${idx.unique || false}`);
+            console.log('');
+        });
+
+        console.log('\n📋 VARIANT INDEXES:\n');
+        const varIndexes = await db.collection('variants').indexes();
+        varIndexes.forEach(idx => {
             console.log(`Index: ${idx.name}`);
             console.log(`  Keys: ${JSON.stringify(idx.key)}`);
             console.log(`  Unique: ${idx.unique || false}`);

@@ -20,6 +20,7 @@ import {
   ArrowPathIcon,
   InformationCircleIcon,
   ChevronUpDownIcon,
+  ChevronDownIcon,
   CheckCircleIcon,
   XCircleIcon,
   ExclamationTriangleIcon,
@@ -39,6 +40,7 @@ const StateTable = () => {
   const [notification, setNotification] = useState({ show: false, message: "", type: "" });
   const [searchTerm, setSearchTerm] = useState("");
   const [filterActive, setFilterActive] = useState("all");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [sortDirection, setSortDirection] = useState("asc");
 
   // Show toast notification
@@ -497,17 +499,68 @@ const StateTable = () => {
                         />
                       </div>
 
-                      {/* Filter */}
-                      <div className="w-full sm:w-48">
-                        <LocationDropdown
-                          data={[
-                            { _id: "active", name: "Active Only" },
-                            { _id: "inactive", name: "Inactive Only" },
-                          ]}
-                          value={filterActive === 'all' ? '' : filterActive}
-                          onChange={(val) => setFilterActive(val || 'all')}
-                          placeholder="All Status"
-                        />
+                      {/* Status Filter Dropdown */}
+                      <div className="w-full sm:w-56 relative">
+                        {/* Click Outside Overlay */}
+                        {isFilterOpen && (
+                          <div className="fixed inset-0 z-20" onClick={() => setIsFilterOpen(false)} />
+                        )}
+
+                        {/* Dropdown Trigger */}
+                        <button
+                          onClick={() => setIsFilterOpen(!isFilterOpen)}
+                          className="w-full flex items-center justify-between px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-gray-400 relative z-30"
+                        >
+                          <div className="flex items-center gap-2">
+                            <FunnelIcon className={`h-4 w-4 ${filterActive !== 'all' ? 'text-blue-600' : 'text-gray-500'}`} />
+                            <span className={`text-sm font-medium ${filterActive !== 'all' ? 'text-blue-700' : 'text-gray-700'}`}>
+                              {filterActive === 'all' && "All Status"}
+                              {filterActive === 'active' && "Active Only"}
+                              {filterActive === 'inactive' && "Inactive Only"}
+                            </span>
+                          </div>
+                          <ChevronDownIcon
+                            className={`h-4 w-4 text-gray-500 transition-transform duration-300 ${isFilterOpen ? 'rotate-180' : ''}`}
+                          />
+                        </button>
+
+                        {/* Dropdown Panel */}
+                        <div
+                          className={`
+                            absolute top-full right-0 mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-xl z-40 transform transition-all duration-200 origin-top overflow-hidden
+                            ${isFilterOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'}
+                          `}
+                        >
+                          <div className="p-1.5 space-y-1">
+                            {[
+                              { value: 'all', label: 'All Status', icon: '🔄', color: 'text-gray-700', bg: 'hover:bg-gray-50' },
+                              { value: 'active', label: 'Active Only', icon: '✓', color: 'text-green-700', bg: 'hover:bg-green-50' },
+                              { value: 'inactive', label: 'Inactive Only', icon: '✕', color: 'text-red-700', bg: 'hover:bg-red-50' }
+                            ].map((option) => (
+                              <button
+                                key={option.value}
+                                onClick={() => {
+                                  setFilterActive(option.value);
+                                  setIsFilterOpen(false);
+                                }}
+                                className={`
+                                  w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors
+                                  ${filterActive === option.value
+                                    ? 'bg-blue-50 text-blue-700 font-medium'
+                                    : `${option.color} ${option.bg}`}
+                                `}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span>{option.icon}</span>
+                                  <span>{option.label}</span>
+                                </div>
+                                {filterActive === option.value && (
+                                  <CheckIcon className="h-4 w-4 text-blue-600" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}

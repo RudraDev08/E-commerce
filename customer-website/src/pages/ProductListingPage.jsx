@@ -57,16 +57,30 @@ const ProductListingPage = () => {
                 getDiscoveryFilters(context)
             ]);
 
-            setCategories(categoriesRes.data || []);
-            setBrands(brandsRes.data || []);
+            // Ensure categories is strictly an array
+            let categoriesData = categoriesRes.data?.data || categoriesRes.data || [];
+            if (!Array.isArray(categoriesData)) categoriesData = [];
+            setCategories(categoriesData);
 
-            // discoveryRes.data should be the array of { attributeType, values }
-            // Ensure compatibility if it returns wrapped response
-            const dynamicFilters = discoveryRes.data?.data || discoveryRes.data || [];
+            // Ensure brands is strictly an array
+            let brandsData = brandsRes.data?.data || brandsRes.data || [];
+            if (!Array.isArray(brandsData)) brandsData = [];
+            setBrands(brandsData);
+
+            // Ensure dynamicFilters is strictly an array
+            let dynamicFilters = discoveryRes.data?.data || discoveryRes.data || [];
+            if (!Array.isArray(dynamicFilters)) {
+                console.warn('Received non-array data for dynamic filters:', dynamicFilters);
+                dynamicFilters = [];
+            }
             setAttributeTypes(dynamicFilters);
 
         } catch (error) {
             console.error('Error loading filters:', error);
+            // On error, default to empty arrays to prevent crashes
+            setCategories([]);
+            setBrands([]);
+            setAttributeTypes([]);
         }
     };
 

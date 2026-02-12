@@ -8,7 +8,7 @@ class CycleCountService {
     /**
      * Start a new cycle count (creates snapshot)
      */
-    async startCycleCount(data, createdBy) {
+    async startCycleCount(data) {
         const session = await mongoose.startSession();
         session.startTransaction();
 
@@ -59,7 +59,7 @@ class CycleCountService {
                     totalVariance: 0,
                     adjustmentsMade: 0
                 },
-                createdBy,
+                // createdBy,
                 startedAt: new Date(),
                 notes: data.notes
             });
@@ -101,7 +101,7 @@ class CycleCountService {
     /**
      * Finalize and apply adjustments
      */
-    async finalizeCycleCount(id, userId) {
+    async finalizeCycleCount(id) {
         const session = await mongoose.startSession();
         session.startTransaction();
 
@@ -120,7 +120,7 @@ class CycleCountService {
                         'set',
                         item.countedQuantity,
                         'AUDIT_ADJUSTMENT',
-                        userId,
+                        'SYSTEM', // userId removed
                         `Cycle Count: ${cycleCount.countNumber}`
                     );
                     item.status = 'ADJUSTED';

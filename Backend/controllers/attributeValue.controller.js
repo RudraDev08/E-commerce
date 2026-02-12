@@ -81,7 +81,7 @@ export const createAttributeValue = async (req, res) => {
             // Metadata (legacy support or extra data)
             metadata,
 
-            createdBy: req.user?._id
+            createdBy: 'admin'
         });
 
         res.status(201).json({
@@ -241,7 +241,7 @@ export const updateAttributeValue = async (req, res) => {
             });
         }
 
-        const updates = { ...req.body, updatedBy: req.user?._id };
+        const updates = { ...req.body, updatedBy: 'admin' };
 
         // Don't allowing updating attributeType usually, but if needed logic should go here
         delete updates.attributeType;
@@ -282,7 +282,7 @@ export const deleteAttributeValue = async (req, res) => {
             });
         }
 
-        await attributeValue.softDelete(req.user?._id);
+        await attributeValue.softDelete('admin');
 
         res.json({
             success: true,
@@ -324,7 +324,7 @@ export const bulkCreateAttributeValues = async (req, res) => {
             name: val.name.toUpperCase(),
             slug: slugify(val.name, { lower: true, strict: true }),
             code: `${attrType.code}-${val.name.toUpperCase().replace(/\s+/g, '-')}-${Date.now().toString().slice(-4)}`,
-            createdBy: req.user?._id
+            createdBy: 'admin'
         }));
 
         const createdValues = await AttributeValue.insertMany(preparedValues, { ordered: false });
@@ -358,7 +358,7 @@ export const reorderAttributeValues = async (req, res) => {
         const bulkOps = reorderData.map(({ valueId, newDisplayOrder }) => ({
             updateOne: {
                 filter: { _id: valueId },
-                update: { displayOrder: newDisplayOrder, updatedBy: req.user?._id }
+                update: { displayOrder: newDisplayOrder, updatedBy: 'admin' }
             }
         }));
 

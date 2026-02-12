@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const colorSchema = new mongoose.Schema({
     name: {
@@ -39,4 +39,4 @@ colorSchema.virtual('displayLabel').get(function () {
 colorSchema.set('toJSON', { virtuals: true });
 colorSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('ColorMaster', colorSchema);
+export default mongoose.model('ColorMaster', colorSchema);

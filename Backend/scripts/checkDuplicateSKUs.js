@@ -14,7 +14,7 @@ const checkDuplicates = async () => {
         console.log('='.repeat(80));
 
         // Check variants for duplicate SKUs
-        const variantDuplicates = await db.collection('productvariants').aggregate([
+        const variantDuplicates = await db.collection('variants').aggregate([
             { $group: { _id: '$sku', count: { $sum: 1 }, ids: { $push: '$_id' } } },
             { $match: { count: { $gt: 1 } } }
         ]).toArray();
@@ -47,7 +47,7 @@ const checkDuplicates = async () => {
         });
 
         // List all variant SKUs
-        const allVariants = await db.collection('productvariants').find({}, { sku: 1, _id: 1 }).toArray();
+        const allVariants = await db.collection('variants').find({}, { projection: { sku: 1, _id: 1 } }).toArray();
         console.log(`\n📦 ALL VARIANT SKUs (${allVariants.length}):\n`);
         allVariants.forEach((v, i) => {
             console.log(`${i + 1}. SKU: ${v.sku}, _id: ${v._id}`);

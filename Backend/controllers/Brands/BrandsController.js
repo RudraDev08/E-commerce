@@ -150,7 +150,8 @@ export const getBrandById = async (req, res) => {
 // ============================================================================
 // UPDATE
 // ============================================================================
-export const updateBrand = async (req, res) => {
+export const updateBrand = async (req, res, next) => {
+  console.log('UPDATE BRAND CALLED', req.params.id);
   try {
     const {
       name,
@@ -170,9 +171,6 @@ export const updateBrand = async (req, res) => {
     // Update fields
     if (name) {
       brand.name = name.trim();
-      // Update slug if name changes? Usually risky for SEO. 
-      // Let's keep it stable unless explicitly requested or maybe user can't change it easily.
-      // For now, if they change name, we DO NOT auto-change slug to preserve URLs.
     }
 
     if (description !== undefined) brand.description = description;
@@ -190,14 +188,13 @@ export const updateBrand = async (req, res) => {
     if (req.files?.logo?.[0]) brand.logo = req.files.logo[0].filename;
     if (req.files?.banner?.[0]) brand.banner = req.files.banner[0].filename;
 
-    brand.updatedBy = "admin"; // TODO: link to req.user
+    brand.updatedBy = "admin";
 
     await brand.save();
 
     res.json({ success: true, message: "Brand updated successfully", data: brand });
   } catch (error) {
-    console.error("Update Brand Error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };
 

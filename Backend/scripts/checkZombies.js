@@ -1,7 +1,7 @@
 // Check for Zombie Inventory (Active Inventory for Deleted Variants)
 import mongoose from 'mongoose';
 import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
-import ProductVariant from '../models/variant/productVariantSchema.js';
+import Variant from '../models/variant/variantSchema.js';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -12,7 +12,7 @@ const checkZombies = async () => {
         await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/AdminPanel');
 
         // Get all variants (even deleted ones)
-        const allVariants = await ProductVariant.find({}, '_id isDeleted isDate isactive status').lean();
+        const allVariants = await Variant.find({}, '_id isDeleted isDate isactive status').lean();
 
         // Get active inventory
         const activeInventory = await InventoryMaster.find({ isDeleted: false }, 'variantId sku').lean();

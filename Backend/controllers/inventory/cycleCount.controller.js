@@ -5,8 +5,7 @@ class CycleCountController {
 
     async create(req, res) {
         try {
-            const userId = req.user?.id || 'ADMIN';
-            const cycleCount = await cycleCountService.startCycleCount(req.body, userId);
+            const cycleCount = await cycleCountService.startCycleCount(req.body);
             res.status(201).json({ success: true, data: cycleCount });
         } catch (error) {
             res.status(400).json({ success: false, message: error.message });
@@ -45,8 +44,7 @@ class CycleCountController {
 
     async finalize(req, res) {
         try {
-            const userId = req.user?.id || 'ADMIN';
-            const result = await cycleCountService.finalizeCycleCount(req.params.id, userId);
+            const result = await cycleCountService.finalizeCycleCount(req.params.id);
             res.status(200).json({ success: true, message: 'Cycle count finalized and stock adjusted', data: result });
         } catch (error) {
             res.status(400).json({ success: false, message: error.message });

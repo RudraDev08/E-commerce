@@ -46,7 +46,7 @@ export const createColor = async (req, res) => {
             status: status || 'active',
             priority: priority || 0,
             description,
-            createdBy: req.user?._id
+            createdBy: 'admin'
         });
 
         res.status(201).json({
@@ -218,7 +218,7 @@ export const updateColor = async (req, res) => {
         if (status) color.status = status;
         if (priority !== undefined) color.priority = priority;
         if (description !== undefined) color.description = description;
-        color.updatedBy = req.user?._id;
+        color.updatedBy = 'admin';
 
         await color.save();
 
@@ -251,7 +251,7 @@ export const deleteColor = async (req, res) => {
         }
 
         // Soft delete
-        await color.softDelete(req.user?._id);
+        await color.softDelete('admin');
 
         res.status(200).json({
             success: true,
@@ -282,7 +282,7 @@ export const toggleStatus = async (req, res) => {
 
         // Toggle status
         color.status = color.status === 'active' ? 'inactive' : 'active';
-        color.updatedBy = req.user?._id;
+        color.updatedBy = 'admin';
         await color.save();
 
         res.status(200).json({
@@ -317,7 +317,7 @@ export const bulkCreateColors = async (req, res) => {
         const preparedColors = colors.map(color => ({
             ...color,
             hexCode: color.hexCode.toUpperCase(),
-            createdBy: req.user?._id
+            createdBy: 'admin'
         }));
 
         // Insert colors

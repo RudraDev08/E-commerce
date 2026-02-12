@@ -1,8 +1,8 @@
 // FINAL MIGRATION - Create inventory for all missing variants
 import mongoose from 'mongoose';
-import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
-import ProductVariant from '../models/variant/productVariantSchema.js';
-import Product from '../models/Product/ProductSchema.js';
+import InventoryMaster from '../src/modules/inventory/inventory.model.js';
+import ProductVariant from '../models/variant/variantSchema.js';
+import Product from '../src/modules/product/product.model.js';
 import dotenv from 'dotenv';
 
 dotenv.config();

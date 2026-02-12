@@ -1,4 +1,4 @@
-import Product from '../../models/Product/ProductSchema.js';
+import Product from '../../src/modules/product/product.model.js';
 import Category from '../../models/Category/CategorySchema.js';
 import Brand from '../../models/Brands/BrandsSchema.js';
 import Variant from '../../models/variant/variantSchema.js';
@@ -524,7 +524,7 @@ export const softDeleteProduct = async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ success: false, message: MSG.NOT_FOUND });
 
-    await product.softDelete(req.user?.id || 'admin');
+    await product.softDelete('admin');
 
     // CASCADE: Delete Variants
     await Variant.updateMany(
@@ -575,7 +575,7 @@ export const bulkSoftDeleteProducts = async (req, res) => {
       {
         isDeleted: true,
         deletedAt: new Date(),
-        deletedBy: req.user?.id || 'admin',
+        deletedBy: 'admin',
         status: 'archived'
       }
     );

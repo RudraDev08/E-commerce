@@ -46,7 +46,7 @@ class StockTransferService {
      * Complete a transfer
      * Moves stock and updates status
      */
-    async completeTransfer(transferId, userId) {
+    async completeTransfer(transferId) {
         const session = await mongoose.startSession();
         session.startTransaction();
 
@@ -63,7 +63,7 @@ class StockTransferService {
                     transfer.sourceWarehouse,
                     transfer.destinationWarehouse,
                     item.quantity,
-                    userId,
+                    'SYSTEM', // userId removed
                     session
                 );
             }
@@ -88,13 +88,13 @@ class StockTransferService {
     /**
      * Cancel a transfer
      */
-    async cancelTransfer(transferId, userId) {
+    async cancelTransfer(transferId) {
         const transfer = await StockTransfer.findById(transferId);
         if (!transfer) throw new Error('Transfer not found');
         if (transfer.status !== 'PENDING') throw new Error('Only pending transfers can be cancelled');
 
         transfer.status = 'CANCELLED';
-        transfer.notes = (transfer.notes || '') + ` [Cancelled by ${userId}]`;
+        transfer.notes = (transfer.notes || '') + ` [Cancelled by SYSTEM]`;
 
         return await transfer.save();
     }

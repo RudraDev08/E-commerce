@@ -1,6 +1,6 @@
 import { getDynamicFilters } from '../services/filterService.js';
 import { parseSearchQuery } from '../services/searchParser.service.js';
-import UnifiedVariant from '../models/UnifiedVariant.model.js';
+import VariantMaster from '../models/VariantMaster.js';
 
 // Get Dynamic Facets/Filters
 export const getExploreFilters = async (req, res) => {
@@ -88,7 +88,7 @@ export const searchProducts = async (req, res) => {
         }
 
         // 3. Execute Search
-        const results = await UnifiedVariant.find(matchConditions)
+        const results = await VariantMaster.find(matchConditions)
             .populate('product', 'name slug images') // Assuming Product linkage
             .limit(50);
 

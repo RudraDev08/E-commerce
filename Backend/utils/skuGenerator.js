@@ -5,7 +5,7 @@
  * Example: TSHIRT-M-RED-A3B9
  */
 
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 class SKUGenerator {
     /**
@@ -158,4 +158,4 @@ class SKUGenerator {
     }
 }
 
-module.exports = SKUGenerator;
+export default SKUGenerator;

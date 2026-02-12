@@ -76,7 +76,7 @@ export const createSize = async (req, res) => {
             status: status || 'active',
             priority: priority || 0,
             description,
-            createdBy: req.user?._id
+            createdBy: 'admin'
         });
 
         res.status(201).json({
@@ -305,7 +305,7 @@ export const updateSize = async (req, res) => {
         if (status) size.status = status;
         if (priority !== undefined) size.priority = priority;
         if (description !== undefined) size.description = description;
-        size.updatedBy = req.user?._id;
+        size.updatedBy = 'admin';
 
         await size.save();
 
@@ -346,7 +346,7 @@ export const deleteSize = async (req, res) => {
         }
 
         // Soft delete
-        await size.softDelete(req.user?._id);
+        await size.softDelete('admin');
 
         res.status(200).json({
             success: true,
@@ -377,7 +377,7 @@ export const toggleStatus = async (req, res) => {
 
         // Toggle status
         size.status = size.status === 'active' ? 'inactive' : 'active';
-        size.updatedBy = req.user?._id;
+        size.updatedBy = 'admin';
         await size.save();
 
         res.status(200).json({
@@ -412,7 +412,7 @@ export const bulkCreateSizes = async (req, res) => {
         const preparedSizes = sizes.map(size => ({
             ...size,
             code: size.code.toUpperCase(),
-            createdBy: req.user?._id
+            createdBy: 'admin'
         }));
 
         // Insert sizes
@@ -523,7 +523,7 @@ export const reorderSizes = async (req, res) => {
         const bulkOps = reorderData.map(({ sizeId, newDisplayOrder }) => ({
             updateOne: {
                 filter: { _id: sizeId },
-                update: { displayOrder: newDisplayOrder, updatedBy: req.user?._id }
+                update: { displayOrder: newDisplayOrder, updatedBy: 'admin' }
             }
         }));
 

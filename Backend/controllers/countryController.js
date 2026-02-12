@@ -1,6 +1,6 @@
 import Country from "../models/Country.js";
 
-//ADD Country
+// GET Countries
 export const getCountries = async (req, res) => {
   try {
     const countries = await Country.find();
@@ -16,20 +16,19 @@ export const createCountry = async (req, res) => {
     const country = await Country.create(req.body);
     res.status(201).json(country);
   } catch (error) {
-    console.error("COUNTRY CREATE ERROR:", error.message); 
+    console.error("COUNTRY CREATE ERROR:", error.message);
     res.status(400).json({ message: error.message });
   }
 };
 
 
 // Update Country
-
 export const updateCountry = async (req, res) => {
   try {
     const { id } = req.params;
     const updated = await Country.findByIdAndUpdate(id, req.body, { new: true });
 
-    if(!updated){
+    if (!updated) {
       return res.status(404).json({ message: "Country not found" });
     }
 
@@ -39,19 +38,18 @@ export const updateCountry = async (req, res) => {
   }
 }
 
-// delete Country
-export const deleteCountry = async (req, res) =>{
+// Delete Country
+export const deleteCountry = async (req, res) => {
   try {
-    const {id} = req.params;
+    const { id } = req.params;
     const deleted = await Country.findByIdAndDelete(id);
 
-    if(!deleted){
+    if (!deleted) {
       return res.status(404).json({ message: "Country not found" });
     }
 
     res.json(deleted);
   } catch (error) {
-    res.status(500).json({ message: error.message });    
+    res.status(500).json({ message: error.message });
   }
-
 }

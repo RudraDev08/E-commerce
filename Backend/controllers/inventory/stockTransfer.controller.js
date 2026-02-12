@@ -5,9 +5,7 @@ class StockTransferController {
 
     async create(req, res) {
         try {
-            // requestedBy from Middleware (req.user.id or similar)
-            // For now assuming passed or 'SYSTEM' if not auth
-            const performedBy = req.user?.id || 'SYSTEM'; // Adjust based on strict auth
+            const performedBy = 'SYSTEM';
 
             const data = {
                 ...req.body,
@@ -42,8 +40,7 @@ class StockTransferController {
 
     async complete(req, res) {
         try {
-            const performedBy = req.user?.id || 'SYSTEM';
-            const transfer = await stockTransferService.completeTransfer(req.params.id, performedBy);
+            const transfer = await stockTransferService.completeTransfer(req.params.id);
             res.status(200).json({ success: true, message: 'Transfer completed', data: transfer });
         } catch (error) {
             res.status(400).json({ success: false, message: error.message });
@@ -52,8 +49,7 @@ class StockTransferController {
 
     async cancel(req, res) {
         try {
-            const performedBy = req.user?.id || 'SYSTEM';
-            const transfer = await stockTransferService.cancelTransfer(req.params.id, performedBy);
+            const transfer = await stockTransferService.cancelTransfer(req.params.id);
             res.status(200).json({ success: true, message: 'Transfer cancelled', data: transfer });
         } catch (error) {
             res.status(400).json({ success: false, message: error.message });

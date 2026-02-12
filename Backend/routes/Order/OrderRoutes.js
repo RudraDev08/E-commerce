@@ -6,7 +6,7 @@ import {
 } from '../../controllers/Order/OrderController.js';
 
 // Middleware for auth can be added later
-// import { protect } from '../../middlewares/auth.js';
+
 
 const router = express.flatten ? express.Router() : express.Router();
 

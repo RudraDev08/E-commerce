@@ -118,7 +118,7 @@ const BrandList = () => {
     isFeatured: "",
     isDeleted: "false", // 'false' | 'true' | 'all'
     page: 1,
-    limit: 10
+    limit: 5
   });
   const [pagination, setPagination] = useState(null);
 
@@ -548,22 +548,36 @@ const BrandList = () => {
         </div>
 
         {/* Pagination */}
-        {pagination && pagination.pages > 1 && (
-          <div className="px-8 py-6 border-t border-slate-100 flex items-center justify-between bg-white">
-            <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
-              <span>Showing</span>
-              <span className="font-bold text-slate-900">{((pagination.page - 1) * filters.limit) + 1}</span>
-              <span>-</span>
-              <span className="font-bold text-slate-900">{Math.min(pagination.page * filters.limit, pagination.total || (pagination.pages * filters.limit))}</span>
-              <span>of</span>
-              <span className="font-bold text-slate-900">{pagination.total || "many"}</span>
+        {/* Pagination */}
+        {pagination && (
+          <div className="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
+                <span>Rows per page:</span>
+                <select
+                  value={filters.limit}
+                  onChange={(e) => handleFilterChange('limit', Number(e.target.value))}
+                  className="h-8 pl-2 pr-8 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                >
+                  {[5, 10, 25, 50, 100].map(limit => (
+                    <option key={limit} value={limit}>{limit}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="text-sm text-slate-500">
+                <span className="font-bold text-slate-900">{((pagination.page - 1) * filters.limit) + 1}</span>
+                <span>-</span>
+                <span className="font-bold text-slate-900">{Math.min(pagination.page * filters.limit, pagination.total || (pagination.page * filters.limit))}</span>
+                <span> of </span>
+                <span className="font-bold text-slate-900">{pagination.total || (pagination.pages * filters.limit)}</span>
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 disabled={pagination.page === 1}
                 onClick={() => handlePageChange(pagination.page - 1)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group hover:border-slate-300"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group hover:border-slate-300"
               >
                 <ChevronLeftIcon className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
                 Prev
@@ -582,7 +596,7 @@ const BrandList = () => {
                     <button
                       key={pageNum}
                       onClick={() => handlePageChange(pageNum)}
-                      className={`w-9 h-9 flex items-center justify-center rounded-xl text-sm font-bold transition-all ${pagination.page === pageNum
+                      className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-all ${pagination.page === pageNum
                         ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20'
                         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                         }`}
@@ -596,7 +610,7 @@ const BrandList = () => {
               <button
                 disabled={pagination.page === pagination.pages}
                 onClick={() => handlePageChange(pagination.page + 1)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group hover:border-slate-300"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-xs uppercase tracking-wider shadow-sm group hover:border-slate-300"
               >
                 Next
                 <ChevronRightIcon className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />

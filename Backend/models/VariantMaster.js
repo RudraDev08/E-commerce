@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const crypto = require('crypto');
+import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 const variantImageSchema = new mongoose.Schema({
     url: {
@@ -161,14 +161,21 @@ const variantSchema = new mongoose.Schema({
 // INDEXES FOR PERFORMANCE
 // ========================================
 
-// Compound index for product group queries
-variantSchema.index({ productGroup: 1, status: 1 });
+// ========================================
+// INDEXES FOR PERFORMANCE & INTEGRITY
+// ========================================
+
+// Compound index for product group queries & duplicate prevention
+variantSchema.index({ productGroup: 1, configHash: 1 }, { unique: true });
 
 // Compound index for category browsing
 variantSchema.index({ category: 1, subcategory: 1, status: 1 });
 
 // Compound index for brand filtering
 variantSchema.index({ brand: 1, status: 1 });
+
+// SKU should be unique system-wide
+variantSchema.index({ sku: 1 }, { unique: true });
 
 // Text search index
 variantSchema.index({ productName: 'text', description: 'text' });
@@ -341,4 +348,4 @@ variantSchema.virtual('discountPercentage').get(function () {
 variantSchema.set('toJSON', { virtuals: true });
 variantSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('VariantMaster', variantSchema);
+export default mongoose.models.VariantMaster || mongoose.model('VariantMaster', variantSchema);

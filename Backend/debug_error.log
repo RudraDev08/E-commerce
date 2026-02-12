@@ -1,0 +1,30 @@
+
+--- 2026-02-12T09:16:17.321Z ---
+Path: /api/brands/6978662c3a660bef42f9f2a3
+Error: Only image files are allowed!
+Stack: Error: Only image files are allowed!
+    at fileFilter (file:///C:/Users/Dell/Desktop/Testing-panel/Backend/config/multer.js:37:12)
+    at wrappedFileFilter (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\multer\index.js:44:7)
+    at Multipart.<anonymous> (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\multer\lib\make-middleware.js:132:7)
+    at Multipart.emit (node:events:518:28)
+    at HeaderParser.cb (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\busboy\lib\types\multipart.js:358:14)
+    at HeaderParser.push (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\busboy\lib\types\multipart.js:162:20)
+    at SBMH.ssCb [as _cb] (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\busboy\lib\types\multipart.js:394:37)
+    at feed (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\streamsearch\lib\sbmh.js:219:14)
+    at SBMH.push (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\streamsearch\lib\sbmh.js:104:16)
+    at Multipart._write (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\busboy\lib\types\multipart.js:567:19)
+
+--- 2026-02-12T09:24:29.196Z ---
+Path: /api/brands/6978662c3a660bef42f9f2a3
+Error: Only image files are allowed!
+Stack: Error: Only image files are allowed!
+    at fileFilter (file:///C:/Users/Dell/Desktop/Testing-panel/Backend/config/multer.js:37:12)
+    at wrappedFileFilter (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\multer\index.js:44:7)
+    at Multipart.<anonymous> (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\multer\lib\make-middleware.js:132:7)
+    at Multipart.emit (node:events:518:28)
+    at HeaderParser.cb (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\busboy\lib\types\multipart.js:358:14)
+    at HeaderParser.push (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\busboy\lib\types\multipart.js:162:20)
+    at SBMH.ssCb [as _cb] (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\busboy\lib\types\multipart.js:394:37)
+    at feed (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\streamsearch\lib\sbmh.js:219:14)
+    at SBMH.push (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\streamsearch\lib\sbmh.js:104:16)
+    at Multipart._write (C:\Users\Dell\Desktop\Testing-panel\Backend\node_modules\busboy\lib\types\multipart.js:567:19)

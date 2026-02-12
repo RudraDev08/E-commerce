@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const warehouseSchema = new mongoose.Schema({
     name: {
@@ -45,4 +45,4 @@ warehouseSchema.pre('save', async function (next) {
     next();
 });
 
-module.exports = mongoose.model('WarehouseMaster', warehouseSchema);
+export default mongoose.model('WarehouseMaster', warehouseSchema);

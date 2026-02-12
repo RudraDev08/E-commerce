@@ -174,8 +174,8 @@ export const createCategory = async (req, res) => {
       ...otherFields,
       image: req.files?.image?.[0]?.path || '',
       banner: req.files?.banner?.[0]?.path || '',
-      createdBy: req.user?.name || 'admin',
-      updatedBy: req.user?.name || 'admin'
+      createdBy: 'admin',
+      updatedBy: 'admin'
     };
 
     console.log('Creating category with data:', categoryData);
@@ -397,7 +397,7 @@ export const updateCategory = async (req, res) => {
     // Update fields
     const updateData = {
       ...otherFields,
-      updatedBy: req.user?.name || 'admin'
+      updatedBy: 'admin'
     };
 
     if (name) updateData.name = name;
@@ -443,7 +443,7 @@ export const toggleStatus = async (req, res) => {
     }
 
     category.status = category.status === 'active' ? 'inactive' : 'active';
-    category.updatedBy = req.user?.name || 'admin';
+    category.updatedBy = 'admin';
     await category.save();
 
     res.json({
@@ -476,7 +476,7 @@ export const toggleFeatured = async (req, res) => {
     }
 
     category.isFeatured = !category.isFeatured;
-    category.updatedBy = req.user?.name || 'admin';
+    category.updatedBy = 'admin';
     await category.save();
 
     res.json({
@@ -516,7 +516,7 @@ export const softDelete = async (req, res) => {
         isDeleted: true,
         status: 'inactive', // Optionally also set inactive
         deletedAt: new Date(),
-        updatedBy: req.user?.name || 'admin'
+        updatedBy: 'admin'
       },
       { new: true }
     );

@@ -80,7 +80,7 @@ class InventoryService {
   /**
    * Update stock manually with reason
    */
-  async updateStock(variantId, newStock, reason, performedBy, notes = '') {
+  async updateStock(variantId, newStock, reason, notes = '') {
     try {
       const inventory = await this._getOrCreateInventory(variantId);
 
@@ -135,7 +135,7 @@ class InventoryService {
         stockAfter,
         reason,
         notes,
-        performedBy,
+        performedBy: 'SYSTEM',
         performedByRole: 'ADMIN'
       });
 
@@ -148,7 +148,7 @@ class InventoryService {
   /**
    * Update stock for a specific warehouse location
    */
-  async updateLocationStock(variantId, warehouseId, updateType, quantity, reason, performedBy, notes = '') {
+  async updateLocationStock(variantId, warehouseId, updateType, quantity, reason, notes = '') {
     try {
       // 1. Ensure inventory and location entry exists
       let inventory = await this._getOrCreateInventory(variantId);
@@ -233,7 +233,7 @@ class InventoryService {
         },
         reason,
         notes: notes || `Location Update: ${updateType} ${quantity} at WH ${warehouseId}`,
-        performedBy,
+        performedBy: 'SYSTEM',
         performedByRole: 'ADMIN'
       });
 
@@ -246,7 +246,7 @@ class InventoryService {
   /**
    * Bulk update stock
    */
-  async bulkUpdateInventories(updates, performedBy) {
+  async bulkUpdateInventories(updates) {
     const batchId = new mongoose.Types.ObjectId().toString();
     const results = { success: [], failed: [] };
 
@@ -288,7 +288,7 @@ class InventoryService {
           variantId,
           newStock,
           update.reason || 'MANUAL_CORRECTION',
-          performedBy,
+          'SYSTEM', // performedBy replacement
           update.notes || `Bulk Batch ${batchId}`
         );
 
@@ -529,8 +529,8 @@ class InventoryService {
   }
 
   // Alias for Controller compatibility
-  async bulkUpdateStock(updates, performedBy) {
-    return this.bulkUpdateInventories(updates, performedBy);
+  async bulkUpdateStock(updates) {
+    return this.bulkUpdateInventories(updates, 'SYSTEM');
   }
 
   async getInventoryByProductId(productId) {
@@ -560,24 +560,65 @@ class InventoryService {
     return this.getLowStockItems();
   }
 
-  async getInventoryStats() {
-    // Aggregation on InventoryMaster
+  async getInventoryStats(filters = {}) {
+    const query = { isDeleted: { $ne: true } };
+
+    if (filters.search) {
+      query.sku = { $regex: filters.search, $options: 'i' };
+    }
+    if (filters.stockStatus) {
+      query.status = filters.stockStatus.toUpperCase();
+    }
+    if (filters.lowStock === 'true') {
+      query.status = 'LOW_STOCK';
+    }
+    if (filters.warehouseId) {
+      query['locations.warehouseId'] = new mongoose.Types.ObjectId(filters.warehouseId);
+    }
+
+    // Aggregation on InventoryMaster with Variant lookup for value
     const stats = await InventoryMaster.aggregate([
       {
-        $match: { isDeleted: { $ne: true } }
+        $match: query
+      },
+      {
+        $lookup: {
+          from: 'variants',
+          localField: 'variantId',
+          foreignField: '_id',
+          as: 'variant'
+        }
       },
       {
         $group: {
           _id: null,
-          totalUnits: { $sum: '$totalStock' },
-          lowStockCount: { $sum: { $cond: [{ $eq: ['$status', 'LOW_STOCK'] }, 1, 0] } },
-          outOfStockCount: { $sum: { $cond: [{ $eq: ['$status', 'OUT_OF_STOCK'] }, 1, 0] } }
-          // Value requires joining with Variant price? Or we store cost?
-          // Ignoring value for now to keep simple, or approximation
+          totalVariants: { $sum: 1 },
+          totalStock: { $sum: '$totalStock' },
+          totalReserved: { $sum: '$reservedStock' },
+          inStock: { $sum: { $cond: [{ $eq: ['$status', 'IN_STOCK'] }, 1, 0] } },
+          lowStock: { $sum: { $cond: [{ $eq: ['$status', 'LOW_STOCK'] }, 1, 0] } },
+          outOfStock: { $sum: { $cond: [{ $eq: ['$status', 'OUT_OF_STOCK'] }, 1, 0] } },
+          totalInventoryValue: {
+            $sum: {
+              $multiply: [
+                '$totalStock',
+                { $ifNull: [{ $arrayElemAt: ['$variant.price', 0] }, 0] }
+              ]
+            }
+          }
         }
       }
     ]);
-    return stats[0] || { totalUnits: 0, lowStockCount: 0, outOfStockCount: 0 };
+
+    return stats[0] || {
+      totalVariants: 0,
+      totalStock: 0,
+      totalReserved: 0,
+      inStock: 0,
+      lowStock: 0,
+      outOfStock: 0,
+      totalInventoryValue: 0
+    };
   }
 
   // Clean up legacy
@@ -586,7 +627,7 @@ class InventoryService {
       data.variantId,
       (data.transactionType === 'SET') ? data.quantity : 0, // Simplified adapter
       data.reason,
-      data.performedBy
+      'SYSTEM'
     );
     return { message: 'Updated', inventory: val.inventory };
   }

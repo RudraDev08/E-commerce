@@ -1,5 +1,5 @@
 import Variant from "../../models/variant/variantSchema.js";
-import Product from "../../models/Product/ProductSchema.js";
+import Product from "../../src/modules/product/product.model.js";
 import Size from "../../models/Size.model.js";
 import Color from "../../models/Color.model.js";
 
@@ -338,11 +338,11 @@ export const deleteVariant = async (req, res) => {
       return res.status(404).json({ success: false, message: "Variant not found" });
     }
 
-    await variant.softDelete(req.user?._id);
+    await variant.softDelete('admin');
 
     // CASCADE: Soft Delete Inventory
     const inventoryService = (await import('../../services/inventory.service.js')).default;
-    await inventoryService.softDeleteInventory(variant._id, req.user?._id || 'admin');
+    await inventoryService.softDeleteInventory(variant._id, 'admin');
 
     res.json({
       success: true,

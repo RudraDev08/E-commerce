@@ -131,9 +131,21 @@ const InventoryMaster = () => {
     }
   };
 
+  const handleSearch = () => {
+    setCurrentPage(1);
+    fetchInventories();
+    fetchStats();
+  };
+
   const fetchStats = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/stats`);
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (stockStatusFilter) params.append('stockStatus', stockStatusFilter);
+      if (lowStockOnly) params.append('lowStock', 'true');
+      if (warehouseFilter) params.append('warehouseId', warehouseFilter);
+
+      const response = await axios.get(`${API_BASE}/stats?${params}`);
       if (response.data.success) {
         setStats(response.data.data);
       }
@@ -263,7 +275,7 @@ const InventoryMaster = () => {
                   placeholder="Search by SKU or product name..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && fetchInventories()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 />
               </div>
 
@@ -304,7 +316,7 @@ const InventoryMaster = () => {
                 </label>
 
                 <button
-                  onClick={fetchInventories}
+                  onClick={handleSearch}
                   className="px-6 py-2.5 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors shadow-sm active:transform active:scale-95"
                 >
                   Search
