@@ -1,0 +1,357 @@
+/* AboutPage.css - Premium Modern Design 2026 */
+
+/* ===============================================
+   HERO SECTION
+   =============================================== */
+.about-hero {
+    position: relative;
+    padding: var(--spacing-3xl) 0;
+    background: linear-gradient(135deg, var(--primary-50) 0%, #ffffff 100%);
+    overflow: hidden;
+}
+
+.about-hero-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-2xl);
+    align-items: center;
+}
+
+.about-hero-text h1 {
+    font-size: 3.5rem;
+    line-height: 1.1;
+    margin-bottom: var(--spacing-lg);
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+    /* Fallback */
+}
+
+.about-hero-text .subtitle {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xl);
+    max-width: 540px;
+}
+
+.about-hero-actions {
+    display: flex;
+    gap: var(--spacing-md);
+}
+
+.about-hero-visual {
+    position: relative;
+    border-radius: var(--radius-2xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-2xl);
+    transform: perspective(1000px) rotateY(-5deg);
+    transition: transform var(--transition-slow);
+}
+
+.about-hero-visual:hover {
+    transform: perspective(1000px) rotateY(0deg);
+}
+
+.about-hero-visual img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* ===============================================
+   STORY SECTION
+   =============================================== */
+.about-story {
+    padding: var(--spacing-3xl) 0;
+    background: var(--bg-primary);
+}
+
+.story-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-3xl);
+    align-items: center;
+}
+
+.story-image {
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+}
+
+.story-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.story-content h2 {
+    font-size: 2.5rem;
+    margin-bottom: var(--spacing-md);
+}
+
+.story-content p {
+    font-size: 1.125rem;
+    line-height: 1.8;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-lg);
+}
+
+/* ===============================================
+   MISSION & VISION
+   =============================================== */
+.about-mission {
+    padding: var(--spacing-3xl) 0;
+    background: var(--bg-secondary);
+}
+
+.mission-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-xl);
+}
+
+.mission-card {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    padding: var(--spacing-2xl);
+    border-radius: var(--radius-xl);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: var(--shadow-lg);
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.mission-card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--shadow-xl);
+}
+
+.mission-icon {
+    width: 64px;
+    height: 64px;
+    background: var(--primary-100);
+    color: var(--primary-600);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.mission-icon svg {
+    width: 32px;
+    height: 32px;
+}
+
+.mission-card h3 {
+    font-size: 1.75rem;
+    margin-bottom: var(--spacing-md);
+}
+
+/* ===============================================
+   CORE VALUES
+   =============================================== */
+.about-values {
+    padding: var(--spacing-3xl) 0;
+}
+
+.values-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-lg);
+    margin-top: var(--spacing-2xl);
+}
+
+.value-item {
+    text-align: center;
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    transition: background-color var(--transition-base);
+}
+
+.value-item:hover {
+    background-color: var(--primary-50);
+}
+
+.value-icon {
+    width: 80px;
+    height: 80px;
+    background: var(--bg-secondary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--spacing-md);
+    color: var(--primary-600);
+    transition: all var(--transition-base);
+}
+
+.value-item:hover .value-icon {
+    background: var(--primary-600);
+    color: white;
+    transform: scale(1.1);
+}
+
+.value-item h4 {
+    margin-bottom: var(--spacing-sm);
+}
+
+/* ===============================================
+   TEAM SECTION
+   =============================================== */
+.about-team {
+    padding: var(--spacing-3xl) 0;
+    background: var(--bg-secondary);
+}
+
+.team-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-lg);
+}
+
+.team-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    transition: transform var(--transition-base);
+    text-align: center;
+    padding-bottom: var(--spacing-lg);
+}
+
+.team-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+}
+
+.team-image {
+    width: 100%;
+    height: 280px;
+    object-fit: cover;
+    margin-bottom: var(--spacing-md);
+    background-color: var(--gray-200);
+    /* Placeholder */
+}
+
+.team-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.team-role {
+    color: var(--primary-600);
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+/* ===============================================
+   STATS / MILESTONES
+   =============================================== */
+.about-stats {
+    padding: var(--spacing-3xl) 0;
+    background: var(--primary-900);
+    color: white;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-xl);
+    text-align: center;
+}
+
+.stat-item h3 {
+    font-size: 3.5rem;
+    font-weight: 800;
+    color: var(--accent-pink);
+    /* Pop of color */
+    margin-bottom: var(--spacing-xs);
+}
+
+.stat-item p {
+    color: var(--primary-200);
+    font-size: 1.125rem;
+    font-weight: 500;
+}
+
+/* ===============================================
+   CTA SECTION
+   =============================================== */
+.about-cta {
+    padding: 6rem 0;
+    text-align: center;
+    background: var(--gradient-primary);
+    color: white;
+}
+
+.about-cta h2 {
+    color: white;
+    font-size: 3rem;
+    margin-bottom: var(--spacing-lg);
+}
+
+.about-cta p {
+    color: var(--primary-100);
+    font-size: 1.25rem;
+    margin-bottom: var(--spacing-xl);
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ===============================================
+   RESPONSIVE DESIGN
+   =============================================== */
+@media (max-width: 1024px) {
+    .about-hero-content {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .about-hero-actions {
+        justify-content: center;
+    }
+
+    .about-hero-visual {
+        transform: none;
+        margin-top: var(--spacing-xl);
+    }
+
+    .values-grid,
+    .team-grid,
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .about-hero-text h1 {
+        font-size: 2.5rem;
+    }
+
+    .story-grid,
+    .mission-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .about-cta h2 {
+        font-size: 2rem;
+    }
+}
+
+@media (max-width: 480px) {
+
+    .values-grid,
+    .team-grid,
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-item h3 {
+        font-size: 2.5rem;
+    }
+}

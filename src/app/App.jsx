@@ -1,145 +1,122 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import ProfessionalAside from "../components/aside/SimpleAside";
-import AdminHeader from "../components/header/Header";
+
+// Layout
+import AdminLayout from "../layout/AdminLayout";
+
+// Dashboard
 import Dashboard from "../modules/dashboard/Dashboard";
+
+// Infrastructure Pages
 import CountryPage from "../page/CountryPage";
 import StatePage from "../page/StatePage";
 import CityPage from "../page/CityPage";
 import PincodeTable from "../components/tables/PincodeTable";
+
+// Catalogue
+import CategoryManagement from "../modules/categories/CategoryManagement";
 import BrandList from "../modules/brands/BrandList";
 
+// Products & Attributes
 import Product from "../modules/products/Products";
-import InventoryMaster from "../modules/inventory/InventoryMaster";
 import VariantTable from "../page/VariantBuilder";
-import CategorySelectorDemo from "../page/CategorySelectorDemo";
-import CategoryManagement from "../modules/categories/CategoryManagement";
 import SizeManagement from "../page/size/SizeManagement";
 import ColorManagement from "../page/color/ColorManagement";
-
 import ProductVariantMapping from "../modules/variants/ProductVariantMapping";
 import VariantBuilder from "../modules/variants/VariantBuilder";
+import AttributeList from "../modules/attributes/AttributeList";
+import AttributeForm from "../modules/attributes/AttributeForm";
+import AttributeValues from "../modules/attributes/AttributeValues";
+
+// Inventory
+import InventoryMaster from "../modules/inventory/InventoryMaster";
 import WarehouseManagement from "../modules/inventory/WarehouseManagement";
 import StockTransferManagement from "../modules/inventory/StockTransferManagement";
 import CycleCountManagement from "../modules/inventory/CycleCountManagement";
 
+// Other
+import CategorySelectorDemo from "../page/CategorySelectorDemo";
+
 function App() {
-  const [isLoading, setIsLoading] = useState(true);
-  // BUG FIX: Safety check for window object (SSR/build compatibility)
-  const [sidebarOpen, setSidebarOpen] = useState(
-    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
-  );
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // RESPONSIVE UI ENHANCEMENT: Handle window resize to auto-collapse on mobile
-  useEffect(() => {
-    // BUG FIX: Safety check for window object
-    if (typeof window === 'undefined') return;
-
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="h-12 w-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   return (
     <BrowserRouter>
-      <div className="flex min-h-screen bg-[#F8FAFC]">
-        {/* SIDEBAR */}
-        <ProfessionalAside
-          isExpanded={sidebarOpen}
-          setIsExpanded={setSidebarOpen}
-        />
+      <Routes>
+        {/* Main Admin Wrapper */}
+        <Route path="/" element={<AdminLayout />}>
 
-        {/* MAIN AREA - UI LAYOUT FIX: Removed unnecessary margins */}
-        <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
-          {/* HEADER */}
-          <AdminHeader
-            sidebarOpen={sidebarOpen}
-            onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
-          />
+          {/* Dashboard */}
+          <Route index element={<Dashboard />} />
 
-          {/* CONTENT - UI LAYOUT FIX: Removed max-w-7xl mx-auto to eliminate gap */}
-          <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/country" element={<CountryPage />} />
-              <Route path="/state" element={<StatePage />} />
-              <Route path="/city" element={<CityPage />} />
-              <Route path="/pincode" element={<PincodeTable />} />
-              <Route path="/categories" element={<CategoryManagement />} />
-              <Route path="/categories/:id" element={<CategoryManagement />} />
+          {/* Infrastructure */}
+          <Route path="country" element={<CountryPage />} />
+          <Route path="state" element={<StatePage />} />
+          <Route path="city" element={<CityPage />} />
+          <Route path="pincode" element={<PincodeTable />} />
 
-              {/* BRAND ROUTES */}
-              <Route path="/brands" element={<BrandList />} />
+          {/* Catalogue */}
+          <Route path="categories">
+            <Route index element={<CategoryManagement />} />
+            <Route path=":id" element={<CategoryManagement />} />
+          </Route>
 
-              {/* PRODUCT ROUTES */}
+          <Route path="brands" element={<BrandList />} />
 
-              <Route path="/products" element={<Product />} />
+          {/* Products */}
+          <Route path="products" element={<Product />} />
+          <Route path="size-management" element={<SizeManagement />} />
+          <Route path="color-management" element={<ColorManagement />} />
 
-              <Route path="/variants" element={<VariantTable />} />
+          {/* Attributes - Nested Example */}
+          <Route path="attributes">
+            <Route index element={<AttributeList />} />
+            <Route path="create" element={<AttributeForm />} />
+            <Route path=":id/edit" element={<AttributeForm />} />
+            <Route path=":id/values" element={<AttributeValues />} />
+          </Route>
 
-              {/* inventory */}
-              <Route path="/inventory" element={<InventoryMaster />} />
-              <Route path="/inventory/warehouses" element={<WarehouseManagement />} />
-              <Route path="/inventory/transfers" element={<StockTransferManagement />} />
-              <Route path="/inventory/audits" element={<CycleCountManagement />} />
+          <Route path="variant-mapping" element={<ProductVariantMapping />} />
+          <Route path="variant-builder/:productId" element={<VariantBuilder />} />
+          <Route path="variants" element={<VariantTable />} />
 
-              {/* CATEGORY SELECTOR DEMO */}
-              <Route path="/category-selector-demo" element={<CategorySelectorDemo />} />
+          {/* Inventory */}
+          <Route path="inventory">
+            <Route index element={<InventoryMaster />} />
+            <Route path="warehouses" element={<WarehouseManagement />} />
+            <Route path="transfers" element={<StockTransferManagement />} />
+            <Route path="audits" element={<CycleCountManagement />} />
+          </Route>
 
-              {/* SIZE & COLOR MANAGEMENT */}
-              <Route path="/size-management" element={<SizeManagement />} />
-              <Route path="/color-management" element={<ColorManagement />} />
+          {/* Demos */}
+          <Route path="category-selector-demo" element={<CategorySelectorDemo />} />
 
+        </Route>
 
-              {/* VARIANT MAPPING */}
-              <Route path="/variant-mapping" element={<ProductVariantMapping />} />
-              <Route path="/variant-builder/:productId" element={<VariantBuilder />} />
-            </Routes>
-          </main>
-        </div>
-      </div>
+        {/* Catch all - Redirect to Dashboard */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
 
-      {/* TOAST NOTIFICATIONS */}
+      {/* Global Toaster */}
       <Toaster
         position="top-right"
         toastOptions={{
           duration: 3000,
           style: {
-            background: "#363636",
+            background: "#1E293B",
             color: "#fff",
+            borderRadius: "0.5rem",
+            fontSize: "0.875rem",
           },
           success: {
             duration: 3000,
             iconTheme: {
-              primary: "#4ade80",
+              primary: "#10B981", // Emerald-500
               secondary: "#fff",
             },
           },
           error: {
             duration: 4000,
             iconTheme: {
-              primary: "#ef4444",
+              primary: "#EF4444", // Red-500
               secondary: "#fff",
             },
           },

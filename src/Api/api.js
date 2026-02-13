@@ -81,4 +81,26 @@ export const inventoryAPI = {
     getLedger: (variantId, params) => api.get(`/inventory/${variantId}/ledger`, { params }),
 };
 
+// Attribute Type APIs
+export const attributeTypeAPI = {
+    getAll: (params) => api.get('/attribute-types', { params }),
+    getById: (id) => api.get(`/attribute-types/${id}`),
+    getByCategory: (categoryId) => api.get(`/attribute-types/category/${categoryId}`),
+    create: (data) => api.post('/attribute-types', data),
+    update: (id, data) => api.put(`/attribute-types/${id}`, data),
+    delete: (id) => api.delete(`/attribute-types/${id}`),
+};
+
+// Attribute Value APIs
+export const attributeValueAPI = {
+    getAll: (params) => api.get('/attribute-values', { params }),
+    getByType: (typeId) => api.get(`/attribute-values/type/${typeId}`),
+    getById: (id) => api.get(`/attribute-values/${id}`),
+    create: (data) => api.post('/attribute-values', data),
+    update: (id, data) => api.put(`/attribute-values/${id}`, data),
+    delete: (id) => api.delete(`/attribute-values/${id}`),
+    bulkCreate: (data) => api.post('/attribute-values/bulk', data),
+    reorder: (data) => api.put('/attribute-values/reorder', data),
+};
+
 export default api;
