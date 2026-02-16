@@ -297,6 +297,14 @@ const attributeValueSchema = new mongoose.Schema({
             default: 'none'
         },
 
+        priceModifier: {
+            type: {
+                type: String,
+                enum: ['fixed', 'percentage']
+            },
+            value: Number
+        },
+
         value: {
             type: Number,
             default: 0
@@ -756,6 +764,15 @@ attributeValueSchema.methods.isIncompatibleWith = function (otherAttributeValue)
     );
 
     return !!incompatible;
+};
+
+attributeValueSchema.statics.validateActive = async function (ids) {
+    const count = await this.countDocuments({
+        _id: { $in: ids },
+        isDeleted: false,
+        status: 'active'
+    });
+    return count === ids.length;
 };
 
 const AttributeValue = mongoose.models.AttributeValue || mongoose.model('AttributeValue', attributeValueSchema);

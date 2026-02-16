@@ -1,4 +1,3 @@
-
 import VariantMaster from '../models/VariantMaster.js';
 import mongoose from 'mongoose';
 

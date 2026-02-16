@@ -30,6 +30,13 @@ const colorSchema = new mongoose.Schema(
             trim: true,
             match: [/^rgb\(\d{1,3},\s*\d{1,3},\s*\d{1,3}\)$/i, 'Please provide a valid RGB color code']
         },
+
+        // Link to Unified Attribute System
+        linkedAttributeType: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'AttributeType'
+        },
+
         applicableCategories: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Category'

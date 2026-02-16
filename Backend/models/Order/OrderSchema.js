@@ -5,17 +5,32 @@ import mongoose from "mongoose";
 
 const orderItemSchema = new mongoose.Schema({
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
-    variantId: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductVariant' },
+    variantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Variant' }, // Updated ref to correct Model Name
 
-    // Snapshot Data (In case product is deleted later)
+    // Snapshot Data (Deep Isolation)
     productName: { type: String, required: true },
     sku: { type: String, required: true },
-    variantAttributes: { type: Map, of: String }, // e.g. { size: "XL" }
+
+    // Human Readable Snapshot (e.g. { "Size": "XL", "Color": "Red", "Fabric": "Cotton" })
+    // Used for rendering the order receipt without joining DB
+    attributeSnapshot: {
+        type: Map,
+        of: String
+    },
+
+    // Reference IDs for Analytics/Audit (e.g. { "Size": "ID_OF_XL", "Color": "ID_OF_RED" })
+    // Used for "Buy it Again" functionality or analytics if names change
+    attributeIds: {
+        type: Map,
+        of: mongoose.Schema.Types.ObjectId
+    },
+
     image: String,
 
     // Financials
     quantity: { type: Number, required: true, min: 1 },
-    price: { type: Number, required: true }, // Unit Price at purchase
+    pricePaid: { type: Number, required: true }, // The final price actually paid per unit
+    mrpSnapshot: { type: Number }, // The MRP at time of purchase
     tax: { type: Number, default: 0 },
     total: { type: Number, required: true }  // (Price + Tax) * Qty
 });

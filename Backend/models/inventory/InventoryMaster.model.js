@@ -36,6 +36,16 @@ const inventoryMasterSchema = new mongoose.Schema({
         required: true
     },
 
+    // CRITICAL FIX: Computed field for shard-safe queries
+    // This replaces $expr usage and is indexable
+    availableStock: {
+        type: Number,
+        default: 0,
+        min: 0,
+        required: true,
+        index: true  // ✅ INDEXABLE (unlike $expr)
+    },
+
     // Configuration / Metadata
     lowStockThreshold: {
         type: Number,
@@ -95,13 +105,12 @@ const inventoryMasterSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-// Virtual for available stock
-inventoryMasterSchema.virtual('availableStock').get(function () {
-    return Math.max(0, this.totalStock - this.reservedStock);
-});
-
-// Pre-save to update status
+// Pre-save to update status and sync availableStock
 inventoryMasterSchema.pre('save', async function (next) {
+    // CRITICAL: Keep availableStock in sync
+    this.availableStock = Math.max(0, this.totalStock - this.reservedStock);
+
+    // Update status based on total stock
     if (this.totalStock === 0) {
         this.status = 'OUT_OF_STOCK';
     } else if (this.totalStock <= this.lowStockThreshold) {
@@ -109,13 +118,9 @@ inventoryMasterSchema.pre('save', async function (next) {
     } else {
         this.status = 'IN_STOCK';
     }
-    this.lastUpdated = new Date();
-    // In Mongoose 6+, if async, next is optional, but if defined in args, we must call it.
-    // If we simply return, it handles it. 
-    // Let's stick to calling next() if provided, or not providing it if async.
-    // Best practice modern:
 
-    // Explicitly calling next() for compatibility
+    this.lastUpdated = new Date();
+
     if (typeof next === 'function') {
         next();
     }

@@ -123,20 +123,7 @@ const sizeSchema = new mongoose.Schema(
         // Size chart metadata
         sizeChartMetadata: sizeChartMetadataSchema,
 
-        // Electronics: Structured Dimensions (backward compatible)
-        ram: {
-            type: Number, // e.g. 8, 12, 16
-            default: 0
-        },
-        storage: {
-            type: Number, // e.g. 128, 256, 512, 1024
-            default: 0
-        },
-        storageUnit: {
-            type: String,
-            enum: ['MB', 'GB', 'TB'],
-            default: 'GB'
-        },
+        // Electronics-specific fields removed as part of unified attribute refactor
 
         applicableCategories: [{
             type: mongoose.Schema.Types.ObjectId,
