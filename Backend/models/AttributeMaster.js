@@ -49,8 +49,8 @@ const attributeSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Index for active attributes
-attributeSchema.index({ isActive: 1 });
+// Index for active attributes - REMOVED DUPLICATE
+// attributeSchema.index({ isActive: 1 });
 
 // Method to get active values
 attributeSchema.methods.getActiveValues = function () {

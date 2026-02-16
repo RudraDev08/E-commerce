@@ -1,351 +1,192 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 
-const variantImageSchema = new mongoose.Schema({
-    url: {
-        type: String,
-        required: true
-    },
-    thumbnailUrl: {
-        type: String
-    },
-    isPrimary: {
-        type: Boolean,
-        default: false
-    },
-    sortOrder: {
-        type: Number,
-        default: 0
-    },
-    altText: {
-        type: String
-    }
-}, { _id: true });
+// ==========================================
+// ENTERPRISE VARIANT MASTER (DETERMINISTIC)
+// ==========================================
+// This model acts as the "Configurator State" and "Global Registry".
+// It ensures that no two variants exist with the same configuration.
+// It is SEPARATE from the transactional "Variant" model used for carts/orders (which is lightweight).
 
-const variantSizeSchema = new mongoose.Schema({
-    sizeId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'SizeMaster',
-        required: true
-    },
-    category: {
-        type: String,
-        required: true
-    },
-    value: {
-        type: String,
-        required: true
-    }
-}, { _id: false });
-
-const variantAttributeSchema = new mongoose.Schema({
-    attributeId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'AttributeMaster',
-        required: true
-    },
-    valueId: {
-        type: mongoose.Schema.Types.ObjectId
-    },
-    customValue: {
-        type: String
-    }
-}, { _id: false });
-
-const variantSchema = new mongoose.Schema({
-    // Product Identity & Grouping
-    productGroup: {
-        type: String,
-        required: true,
-        index: true,
-        trim: true
-    },
-    productName: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    brand: {
-        type: String,
-        required: true,
-        index: true,
-        trim: true
-    },
-    category: {
-        type: String,
-        required: true,
-        index: true,
-        trim: true
-    },
-    subcategory: {
-        type: String,
-        trim: true
-    },
-
-    // Variant Configuration
+const variantMasterSchema = new mongoose.Schema({
+    // ==================== IDENTITY ====================
     sku: {
         type: String,
         required: true,
         unique: true,
-        index: true,
         uppercase: true,
-        trim: true
+        trim: true,
+        description: "Globally unique, human-readable SKU (e.g. NKE-TSH-BLK-XL-001)",
+        index: true
     },
+
+    productId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product',
+        required: true,
+        index: true
+    },
+
+    productGroup: {
+        type: String, // Group ID from Product
+        required: true,
+        index: true
+    },
+
+    barcode: {
+        type: String,
+        sparse: true,
+        unique: true,
+        trim: true,
+        description: "EAN-13, UPC-A, or GTIN-14"
+    },
+
+    // ==================== DETERMINISTIC CONFIGURATION ====================
+    // The "DNA" of the variant. Hashed to prevent duplicates.
     configHash: {
         type: String,
         required: true,
-        unique: true,
+        unique: true, // THE HOLY GRAIL CONSTRAINT
+        index: true,
+        description: "SHA-256 Hash of sorted attribute value IDs + Product Group"
+    },
+
+    // Normalized Snapshot of Attributes (for faster read/indexing without heavy population)
+    normalizedAttributes: [{
+        typeId: { type: mongoose.Schema.Types.ObjectId, ref: 'AttributeType', required: true },
+        valueId: { type: mongoose.Schema.Types.ObjectId, ref: 'AttributeValue', required: true },
+        typeSlug: String,
+        valueSlug: String,
+        valueName: String, // e.g. "XL"
+        sortOrder: Number
+    }],
+
+    // Legacy Support (Optional, can be removed in pure v2)
+    legacySizeId: { type: mongoose.Schema.Types.ObjectId, ref: 'SizeMaster' },
+    legacyColorId: { type: mongoose.Schema.Types.ObjectId, ref: 'ColorMaster' },
+
+    // ==================== PRICING & INVENTORY SUMMARY ====================
+    // Denormalized for high-speed listing. 
+    // real-time checks should hit Inventory Service, but this is used for filtering "In Stock" facets.
+
+    price: {
+        amount: { type: Number, required: true, min: 0 },
+        currency: { type: String, default: 'USD' },
+        compareAt: { type: Number, min: 0 },
+        cost: { type: Number, min: 0 } // For margin calc
+    },
+
+    inventorySummary: {
+        totalQuantity: { type: Number, default: 0, index: true },
+        reservedQuantity: { type: Number, default: 0 },
+        availableQuantity: { type: Number, default: 0, index: true }, // Virtual: total - reserved
+
+        // Distribution of stock across warehouses (simplified for search)
+        locations: [{
+            warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse' },
+            quantity: Number
+        }]
+    },
+
+    // ==================== SEGMENTATION & AVAILABILITY ====================
+    availableChannels: {
+        type: [String],
+        enum: ['WEB', 'POS', 'B2B', 'APP', 'MARKETPLACE'],
+        default: ['WEB'],
         index: true
     },
-    color: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'ColorMaster'
-    },
-    sizes: [variantSizeSchema],
-    attributes: [variantAttributeSchema],
 
-    // Pricing
-    price: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-    compareAtPrice: {
-        type: Number,
-        min: 0
-    },
-    costPrice: {
-        type: Number,
-        min: 0
+    availableRegions: {
+        type: [String],
+        enum: ['US', 'EU', 'APAC', 'GLOBAL'],
+        default: ['GLOBAL'],
+        index: true
     },
 
-    // Physical Properties
-    weight: {
-        type: Number,
-        min: 0
-    },
-    dimensions: {
-        length: Number,
-        width: Number,
-        height: Number,
-        unit: {
-            type: String,
-            enum: ['cm', 'in', 'mm'],
-            default: 'cm'
-        }
-    },
+    launchDate: { type: Date, default: Date.now },
 
-    // Content
-    description: {
-        type: String
-    },
-    specifications: {
-        type: mongoose.Schema.Types.Mixed
-    },
-
-    // Images
-    images: [variantImageSchema],
-
-    // Status
+    // ==================== LIFECYCLE & GOVERNANCE ====================
     status: {
         type: String,
-        enum: ['active', 'inactive', 'deleted'],
-        default: 'active',
+        enum: ['DRAFT', 'ACTIVE', 'DISCONTINUED', 'ARCHIVED'],
+        default: 'DRAFT',
         index: true
-    }
+    },
+
+    lifecycleState: {
+        type: String,
+        enum: ['NEW', 'MATURE', 'CLEARANCE', 'EUL'], // End of Life
+        default: 'NEW'
+    },
+
+    isLocked: {
+        type: Boolean,
+        default: false,
+        description: "If locked, pricing and attributes cannot be changed by automated syncs"
+    },
+
+    // ==================== AUDIT & VERSIONING ====================
+    version: { type: Number, default: 1 },
+
+    auditLog: [{
+        action: String, // 'PRICE_CHANGE', 'STOCK_UPDATE', 'STATUS_CHANGE'
+        by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        at: { type: Date, default: Date.now },
+        diff: mongoose.Schema.Types.Mixed
+    }]
+
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
 });
 
-// ========================================
-// INDEXES FOR PERFORMANCE
-// ========================================
+// ==================== COMPOUND INDEXES ====================
+// 1. Uniqueness Guard (Fallback if field-level unique fails, but Mongo 5+ field level is fine)
+// variantMasterSchema.index({ configHash: 1 }, { unique: true }); // Redundant w/ field def
 
-// ========================================
-// INDEXES FOR PERFORMANCE & INTEGRITY
-// ========================================
+// 2. High-Speed Category Browsing (Product + Filters)
+variantMasterSchema.index({ productGroup: 1, status: 1 });
 
-// Compound index for product group queries & duplicate prevention
-variantSchema.index({ productGroup: 1, configHash: 1 }, { unique: true });
+// 3. Faceted Search Support (Wildcard for attribute values)
+variantMasterSchema.index({ "normalizedAttributes.valueSlug": 1 });
+variantMasterSchema.index({ "normalizedAttributes.valueId": 1 });
 
-// Compound index for category browsing
-variantSchema.index({ category: 1, subcategory: 1, status: 1 });
+// 4. Price Filtering within Categories
+variantMasterSchema.index({ productGroup: 1, "price.amount": 1 });
 
-// Compound index for brand filtering
-variantSchema.index({ brand: 1, status: 1 });
+// 5. SKU Lookup (Barcode fallback)
+variantMasterSchema.index({ barcode: 1 }, { sparse: true, unique: true });
 
-// SKU should be unique system-wide
-variantSchema.index({ sku: 1 }, { unique: true });
+// ==================== STATIC METHOD: DETERMINISTIC GENERATION ====================
+variantMasterSchema.statics.generateConfigHash = function (productId, attributeValueIds) {
+    if (!productId) throw new Error("Product ID required for hash generation");
 
-// Text search index
-variantSchema.index({ productName: 'text', description: 'text' });
+    // 1. Sort Attributes Deterministically
+    const sortedIds = [...attributeValueIds].sort().join('|');
 
-// ========================================
-// STATIC METHODS
-// ========================================
+    // 2. Combine with Product Identity
+    const rawString = `${productId.toString()}:${sortedIds}`;
 
-/**
- * Generate deterministic configuration hash
- * Prevents duplicate variant configurations
- */
-variantSchema.statics.generateConfigHash = function (productGroup, sizeIds, colorId, attributeIds) {
-    const sortedSizes = [...(sizeIds || [])].sort().join(',');
-    const sortedAttrs = [...(attributeIds || [])].sort().join(',');
-    const hashInput = `${productGroup}|${sortedSizes}|${colorId || ''}|${sortedAttrs}`;
-
-    return crypto
-        .createHash('sha256')
-        .update(hashInput)
-        .digest('hex')
-        .substring(0, 32);
+    // 3. Hash
+    return crypto.createHash('sha256').update(rawString).digest('hex');
 };
 
-/**
- * Generate unique SKU
- */
-variantSchema.statics.generateSKU = async function (brand, productGroup, sizeValues, colorName) {
-    const brandPrefix = brand.substring(0, 3).toUpperCase();
-    const groupSuffix = productGroup.substring(0, 6).toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-    // Create size part
-    const sizePart = sizeValues.slice(0, 2).join('-').substring(0, 10).toUpperCase();
-
-    // Create color part
-    const colorPart = colorName ? colorName.substring(0, 3).toUpperCase() : 'STD';
-
-    // Add random suffix to ensure uniqueness
-    const randomSuffix = Math.random().toString(36).substring(2, 5).toUpperCase();
-
-    let sku = `${brandPrefix}-${groupSuffix}-${sizePart}-${colorPart}-${randomSuffix}`;
-
-    // Ensure uniqueness
-    let counter = 1;
-    while (await this.findOne({ sku })) {
-        sku = `${brandPrefix}-${groupSuffix}-${sizePart}-${colorPart}-${randomSuffix}${counter}`;
-        counter++;
+// ==================== MIDDLEWARE: COLLISION PREVENTION ====================
+variantMasterSchema.pre('save', async function (next) {
+    // 1. Ensure Hash Consistency
+    if (this.isModified('normalizedAttributes') || this.isModified('productId')) {
+        const valueIds = this.normalizedAttributes.map(a => a.valueId.toString());
+        this.configHash = this.constructor.generateConfigHash(this.productId, valueIds);
     }
 
-    return sku;
-};
-
-/**
- * Get variants by product group with stock
- */
-variantSchema.statics.getByProductGroup = async function (productGroup, includeStock = false) {
-    const query = this.find({ productGroup, status: 'active' })
-        .populate('color')
-        .populate('sizes.sizeId')
-        .lean();
-
-    const variants = await query;
-
-    if (includeStock) {
-        const VariantInventory = mongoose.model('VariantInventory');
-        const variantIds = variants.map(v => v._id);
-
-        const inventory = await VariantInventory.aggregate([
-            { $match: { variant: { $in: variantIds } } },
-            {
-                $group: {
-                    _id: '$variant',
-                    totalStock: { $sum: { $subtract: ['$quantity', '$reservedQuantity'] } }
-                }
-            }
-        ]);
-
-        const stockMap = {};
-        inventory.forEach(inv => {
-            stockMap[inv._id.toString()] = inv.totalStock;
-        });
-
-        variants.forEach(v => {
-            v.totalStock = stockMap[v._id.toString()] || 0;
-            v.inStock = v.totalStock > 0;
-        });
-    }
-
-    return variants;
-};
-
-// ========================================
-// INSTANCE METHODS
-// ========================================
-
-/**
- * Get primary image
- */
-variantSchema.methods.getPrimaryImage = function () {
-    const primary = this.images.find(img => img.isPrimary);
-    return primary || this.images[0] || null;
-};
-
-/**
- * Check if variant is available
- */
-variantSchema.methods.isAvailable = async function () {
-    if (this.status !== 'active') return false;
-
-    const VariantInventory = mongoose.model('VariantInventory');
-    const inventory = await VariantInventory.find({ variant: this._id });
-
-    const totalAvailable = inventory.reduce((sum, inv) => {
-        return sum + (inv.quantity - inv.reservedQuantity);
-    }, 0);
-
-    return totalAvailable > 0;
-};
-
-// ========================================
-// MIDDLEWARE
-// ========================================
-
-// Pre-save: Generate configHash if not provided
-variantSchema.pre('save', async function (next) {
-    if (this.isNew || this.isModified('sizes') || this.isModified('color') || this.isModified('attributes')) {
-        const sizeIds = this.sizes.map(s => s.sizeId.toString());
-        const colorId = this.color ? this.color.toString() : null;
-        const attrIds = this.attributes.map(a => a.attributeId.toString());
-
-        this.configHash = this.constructor.generateConfigHash(
-            this.productGroup,
-            sizeIds,
-            colorId,
-            attrIds
-        );
-    }
-
-    // Ensure only one primary image
-    if (this.images && this.images.length > 0) {
-        const primaryCount = this.images.filter(img => img.isPrimary).length;
-        if (primaryCount === 0) {
-            this.images[0].isPrimary = true;
-        } else if (primaryCount > 1) {
-            let foundFirst = false;
-            this.images.forEach(img => {
-                if (img.isPrimary && !foundFirst) {
-                    foundFirst = true;
-                } else {
-                    img.isPrimary = false;
-                }
-            });
-        }
+    // 2. Stock Consistency
+    if (this.inventorySummary) {
+        this.inventorySummary.availableQuantity =
+            this.inventorySummary.totalQuantity - this.inventorySummary.reservedQuantity;
     }
 
     next();
 });
 
-// ========================================
-// VIRTUALS
-// ========================================
-
-variantSchema.virtual('discountPercentage').get(function () {
-    if (this.compareAtPrice && this.compareAtPrice > this.price) {
-        return Math.round(((this.compareAtPrice - this.price) / this.compareAtPrice) * 100);
-    }
-    return 0;
-});
-
-variantSchema.set('toJSON', { virtuals: true });
-variantSchema.set('toObject', { virtuals: true });
-
-export default mongoose.models.VariantMaster || mongoose.model('VariantMaster', variantSchema);
+export default mongoose.models.VariantMaster || mongoose.model('VariantMaster', variantMasterSchema);

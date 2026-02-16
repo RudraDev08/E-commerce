@@ -90,7 +90,6 @@ const variantSchema = new mongoose.Schema(
     },
     indexedPrice: {
       type: Number,
-      index: true,
       description: "Price used for sorting loops"
     },
     mrp: {
@@ -164,8 +163,7 @@ const variantSchema = new mongoose.Schema(
 variantSchema.index({ product: 1, size: 1, color: 1 }, { unique: true, sparse: true });
 // Wildcard index for scalable attribute filtering
 variantSchema.index({ "filterIndex.$**": 1 });
-// Enforce SKU unique
-variantSchema.index({ sku: 1 }, { unique: true });
+
 
 // SEARCH & PRICE INDEXING (Updated for Production Scale)
 // NOTE: Text index on filterIndex.$** REMOVED to reduce RAM pressure
@@ -173,7 +171,6 @@ variantSchema.index({ sku: 1 }, { unique: true });
 // variantSchema.index({ sku: 'text', 'filterIndex.$**': 'text' }); // DEPRECATED
 
 // Price Index for Sorting
-variantSchema.index({ indexedPrice: 1 });
 // Segmentation Index
 variantSchema.index({ availableChannels: 1, availableRegions: 1, status: 1 });
 
