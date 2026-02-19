@@ -1,0 +1,9 @@
+Connecting to MongoDB...
+Connected.
+Using test ID: 6996ace61f92e4ca8d0249aa
+Creating dummy size for testing...
+✅ Dummy size created. Canonical ID: SZ_0001
+Final Cleanup...
+✅ Cleanup successful.
+
+--- ALL REPRO TESTS PASSED ---

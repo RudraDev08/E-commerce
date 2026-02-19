@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import Size from '../models/Size.model.js';
+import SizeMaster from '../models/masters/SizeMaster.enterprise.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -7,329 +7,271 @@ dotenv.config();
 const sampleSizes = [
     // Clothing Alpha - Men's
     {
-        name: 'XS',
-        code: 'CLOTH-ALPHA-XS-M',
-        fullName: 'Extra Small',
-        abbreviation: 'XS',
-        category: 'clothing_alpha',
-        sizeGroup: "Men's Clothing",
-        gender: 'men',
-        displayOrder: 1,
+        value: 'XS',
+        displayName: 'Extra Small',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 10,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            chest: 86,
-            waist: 76,
-            hip: 91,
-            shoulder: 42
-        },
-        status: 'active'
+            unit: 'CM',
+            min: 86,
+            max: 91,
+            typical: 88,
+            equivalentCm: 88,
+            equivalentInch: 34
+        }
     },
     {
-        name: 'S',
-        code: 'CLOTH-ALPHA-S-M',
-        fullName: 'Small',
-        abbreviation: 'S',
-        category: 'clothing_alpha',
-        sizeGroup: "Men's Clothing",
-        gender: 'men',
-        displayOrder: 2,
+        value: 'S',
+        displayName: 'Small',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 20,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            chest: 91,
-            waist: 81,
-            hip: 96,
-            shoulder: 44
-        },
-        status: 'active'
+            unit: 'CM',
+            min: 91,
+            max: 96,
+            typical: 93,
+            equivalentCm: 93,
+            equivalentInch: 36
+        }
     },
     {
-        name: 'M',
-        code: 'CLOTH-ALPHA-M-M',
-        fullName: 'Medium',
-        abbreviation: 'M',
-        category: 'clothing_alpha',
-        sizeGroup: "Men's Clothing",
-        gender: 'men',
-        displayOrder: 3,
+        value: 'M',
+        displayName: 'Medium',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 30,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            chest: 96,
-            waist: 86,
-            hip: 101,
-            shoulder: 46
-        },
-        status: 'active'
+            unit: 'CM',
+            min: 96,
+            max: 101,
+            typical: 98,
+            equivalentCm: 98,
+            equivalentInch: 38
+        }
     },
     {
-        name: 'L',
-        code: 'CLOTH-ALPHA-L-M',
-        fullName: 'Large',
-        abbreviation: 'L',
-        category: 'clothing_alpha',
-        sizeGroup: "Men's Clothing",
-        gender: 'men',
-        displayOrder: 4,
+        value: 'L',
+        displayName: 'Large',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 40,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            chest: 101,
-            waist: 91,
-            hip: 106,
-            shoulder: 48
-        },
-        status: 'active'
+            unit: 'CM',
+            min: 101,
+            max: 106,
+            typical: 103,
+            equivalentCm: 103,
+            equivalentInch: 40
+        }
     },
     {
-        name: 'XL',
-        code: 'CLOTH-ALPHA-XL-M',
-        fullName: 'Extra Large',
-        abbreviation: 'XL',
-        category: 'clothing_alpha',
-        sizeGroup: "Men's Clothing",
-        gender: 'men',
-        displayOrder: 5,
+        value: 'XL',
+        displayName: 'Extra Large',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 50,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            chest: 106,
-            waist: 96,
-            hip: 111,
-            shoulder: 50
-        },
-        status: 'active'
+            unit: 'CM',
+            min: 106,
+            max: 111,
+            typical: 108,
+            equivalentCm: 108,
+            equivalentInch: 42
+        }
     },
     {
-        name: 'XXL',
-        code: 'CLOTH-ALPHA-XXL-M',
-        fullName: 'Double Extra Large',
-        abbreviation: 'XXL',
-        category: 'clothing_alpha',
-        sizeGroup: "Men's Clothing",
-        gender: 'men',
-        displayOrder: 6,
+        value: 'XXL',
+        displayName: 'Double Extra Large',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 60,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            chest: 111,
-            waist: 101,
-            hip: 116,
-            shoulder: 52
-        },
-        status: 'active'
+            unit: 'CM',
+            min: 111,
+            max: 116,
+            typical: 113,
+            equivalentCm: 113,
+            equivalentInch: 44
+        }
     },
 
-    // Clothing Numeric - Men's
+    // Clothing Numeric - Men's (Pants)
     {
-        name: '28',
-        code: 'CLOTH-NUM-28-M',
-        fullName: 'Size 28',
-        abbreviation: '28',
-        category: 'clothing_numeric',
-        sizeGroup: "Men's Pants",
-        gender: 'men',
-        displayOrder: 1,
+        value: '28',
+        displayName: 'Size 28',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 28,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            waist: 71,
-            hip: 86
-        },
-        status: 'active'
+            unit: 'IN',
+            equivalentInch: 28,
+            equivalentCm: 71
+        }
     },
     {
-        name: '30',
-        code: 'CLOTH-NUM-30-M',
-        fullName: 'Size 30',
-        abbreviation: '30',
-        category: 'clothing_numeric',
-        sizeGroup: "Men's Pants",
-        gender: 'men',
-        displayOrder: 2,
+        value: '30',
+        displayName: 'Size 30',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 30,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            waist: 76,
-            hip: 91
-        },
-        status: 'active'
+            unit: 'IN',
+            equivalentInch: 30,
+            equivalentCm: 76
+        }
     },
     {
-        name: '32',
-        code: 'CLOTH-NUM-32-M',
-        fullName: 'Size 32',
-        abbreviation: '32',
-        category: 'clothing_numeric',
-        sizeGroup: "Men's Pants",
-        gender: 'men',
-        displayOrder: 3,
+        value: '32',
+        displayName: 'Size 32',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 32,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            waist: 81,
-            hip: 96
-        },
-        status: 'active'
+            unit: 'IN',
+            equivalentInch: 32,
+            equivalentCm: 81
+        }
     },
     {
-        name: '34',
-        code: 'CLOTH-NUM-34-M',
-        fullName: 'Size 34',
-        abbreviation: '34',
-        category: 'clothing_numeric',
-        sizeGroup: "Men's Pants",
-        gender: 'men',
-        displayOrder: 4,
+        value: '34',
+        displayName: 'Size 34',
+        category: 'CLOTHING',
+        gender: 'MEN',
+        primaryRegion: 'US',
+        normalizedRank: 34,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            waist: 86,
-            hip: 101
-        },
-        status: 'active'
+            unit: 'IN',
+            equivalentInch: 34,
+            equivalentCm: 86
+        }
     },
 
-    // Shoes UK - Men's
+    // Footwear UK - Men's
     {
-        name: '6',
-        code: 'SHOE-UK-6-M',
-        fullName: 'UK Size 6',
-        abbreviation: '6',
-        category: 'shoe_uk',
-        sizeGroup: "Men's Footwear",
-        gender: 'men',
-        displayOrder: 1,
+        value: '6',
+        displayName: 'UK Size 6',
+        category: 'FOOTWEAR',
+        gender: 'MEN',
+        primaryRegion: 'UK',
+        normalizedRank: 60,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            footLength: 24.5
+            unit: 'CM',
+            equivalentCm: 24.5
         },
-        internationalConversions: {
-            uk: '6',
-            us: '7',
-            eu: '39',
-            cm: 24.5
-        },
-        status: 'active'
+        conversions: [
+            { region: 'US', value: '7' },
+            { region: 'EU', value: '39' }
+        ]
     },
     {
-        name: '7',
-        code: 'SHOE-UK-7-M',
-        fullName: 'UK Size 7',
-        abbreviation: '7',
-        category: 'shoe_uk',
-        sizeGroup: "Men's Footwear",
-        gender: 'men',
-        displayOrder: 2,
+        value: '7',
+        displayName: 'UK Size 7',
+        category: 'FOOTWEAR',
+        gender: 'MEN',
+        primaryRegion: 'UK',
+        normalizedRank: 70,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            footLength: 25.5
+            unit: 'CM',
+            equivalentCm: 25.5
         },
-        internationalConversions: {
-            uk: '7',
-            us: '8',
-            eu: '40',
-            cm: 25.5
-        },
-        status: 'active'
+        conversions: [
+            { region: 'US', value: '8' },
+            { region: 'EU', value: '40' }
+        ]
     },
     {
-        name: '8',
-        code: 'SHOE-UK-8-M',
-        fullName: 'UK Size 8',
-        abbreviation: '8',
-        category: 'shoe_uk',
-        sizeGroup: "Men's Footwear",
-        gender: 'men',
-        displayOrder: 3,
+        value: '8',
+        displayName: 'UK Size 8',
+        category: 'FOOTWEAR',
+        gender: 'MEN',
+        primaryRegion: 'UK',
+        normalizedRank: 80,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            footLength: 26.5
+            unit: 'CM',
+            equivalentCm: 26.5
         },
-        internationalConversions: {
-            uk: '8',
-            us: '9',
-            eu: '42',
-            cm: 26.5
-        },
-        status: 'active'
+        conversions: [
+            { region: 'US', value: '9' },
+            { region: 'EU', value: '42' }
+        ]
     },
     {
-        name: '9',
-        code: 'SHOE-UK-9-M',
-        fullName: 'UK Size 9',
-        abbreviation: '9',
-        category: 'shoe_uk',
-        sizeGroup: "Men's Footwear",
-        gender: 'men',
-        displayOrder: 4,
+        value: '9',
+        displayName: 'UK Size 9',
+        category: 'FOOTWEAR',
+        gender: 'MEN',
+        primaryRegion: 'UK',
+        normalizedRank: 90,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            footLength: 27.5
+            unit: 'CM',
+            equivalentCm: 27.5
         },
-        internationalConversions: {
-            uk: '9',
-            us: '10',
-            eu: '43',
-            cm: 27.5
-        },
-        status: 'active'
+        conversions: [
+            { region: 'US', value: '10' },
+            { region: 'EU', value: '43' }
+        ]
     },
     {
-        name: '10',
-        code: 'SHOE-UK-10-M',
-        fullName: 'UK Size 10',
-        abbreviation: '10',
-        category: 'shoe_uk',
-        sizeGroup: "Men's Footwear",
-        gender: 'men',
-        displayOrder: 5,
+        value: '10',
+        displayName: 'UK Size 10',
+        category: 'FOOTWEAR',
+        gender: 'MEN',
+        primaryRegion: 'UK',
+        normalizedRank: 100,
+        lifecycleState: 'ACTIVE',
         measurements: {
-            footLength: 28.5
+            unit: 'CM',
+            equivalentCm: 28.5
         },
-        internationalConversions: {
-            uk: '10',
-            us: '11',
-            eu: '44',
-            cm: 28.5
-        },
-        status: 'active'
+        conversions: [
+            { region: 'US', value: '11' },
+            { region: 'EU', value: '44' }
+        ]
     },
 
-    // Generic Sizes
+    // Generic
     {
-        name: 'SMALL',
-        code: 'GENERIC-SMALL',
-        fullName: 'Small',
-        abbreviation: 'S',
-        category: 'generic',
-        sizeGroup: 'Generic',
-        gender: 'unisex',
-        displayOrder: 1,
-        status: 'active'
+        value: 'ONE SIZE',
+        displayName: 'One Size Fits All',
+        category: 'ACCESSORIES',
+        gender: 'UNISEX',
+        primaryRegion: 'GLOBAL',
+        normalizedRank: 1,
+        lifecycleState: 'ACTIVE'
     },
     {
-        name: 'MEDIUM',
-        code: 'GENERIC-MEDIUM',
-        fullName: 'Medium',
-        abbreviation: 'M',
-        category: 'generic',
-        sizeGroup: 'Generic',
-        gender: 'unisex',
-        displayOrder: 2,
-        status: 'active'
-    },
-    {
-        name: 'LARGE',
-        code: 'GENERIC-LARGE',
-        fullName: 'Large',
-        abbreviation: 'L',
-        category: 'generic',
-        sizeGroup: 'Generic',
-        gender: 'unisex',
-        displayOrder: 3,
-        status: 'active'
-    },
-
-    // Custom Sizes
-    {
-        name: 'ONE SIZE',
-        code: 'CUSTOM-ONE-SIZE',
-        fullName: 'One Size Fits All',
-        abbreviation: 'OS',
-        category: 'custom',
-        sizeGroup: 'Universal',
-        gender: 'unisex',
-        displayOrder: 1,
-        status: 'active'
-    },
-    {
-        name: 'FREE SIZE',
-        code: 'CUSTOM-FREE-SIZE',
-        fullName: 'Free Size',
-        abbreviation: 'FS',
-        category: 'custom',
-        sizeGroup: 'Universal',
-        gender: 'unisex',
-        displayOrder: 2,
-        status: 'active'
+        value: 'FREE SIZE',
+        displayName: 'Free Size',
+        category: 'CLOTHING',
+        gender: 'UNISEX',
+        primaryRegion: 'GLOBAL',
+        normalizedRank: 1,
+        lifecycleState: 'ACTIVE'
     }
 ];
 
@@ -339,39 +281,44 @@ const seedSizes = async () => {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('✅ Connected to MongoDB');
 
-        // Clear existing sizes
-        await Size.deleteMany({});
-        console.log('🗑️  Cleared existing sizes');
+        // Clear existing sizes (optional, or use update)
+        // await SizeMaster.deleteMany({});
+        // console.log('🗑️  Cleared existing sizes');
 
-        // Generate slugs for all sizes
-        const sizesWithSlugs = sampleSizes.map(size => ({
-            ...size,
-            slug: `${size.category}-${size.name.toLowerCase().replace(/\s+/g, '-')}-${size.gender}`
-        }));
+        // Upsert sizes
+        let count = 0;
 
-        // Insert sample sizes
-        const insertedSizes = await Size.insertMany(sizesWithSlugs);
-        console.log(`✅ Inserted ${insertedSizes.length} sample sizes`);
 
-        // Display summary
-        const summary = await Size.aggregate([
-            {
-                $group: {
-                    _id: '$category',
-                    count: { $sum: 1 }
-                }
+        for (const sizeData of sampleSizes) {
+            let size = await SizeMaster.findOne({
+                value: sizeData.value,
+                category: sizeData.category,
+                gender: sizeData.gender,
+                primaryRegion: sizeData.primaryRegion
+            });
+
+            if (!size) {
+                // Determine if we need to set canonical ID manually if middleware fails or just rely on it
+                // Using new SizeMaster() should trigger pre('validate') on save()
+                size = new SizeMaster(sizeData);
+            } else {
+                Object.assign(size, sizeData);
             }
-        ]);
 
-        console.log('\n📊 Size Summary by Category:');
-        summary.forEach(item => {
-            console.log(`   ${item._id}: ${item.count} sizes`);
-        });
+            await size.save();
+            count++;
+        }
 
-        console.log('\n✅ Size Master seeding completed successfully!');
+        console.log(`✅ Upserted ${count} sample sizes`);
+
         process.exit(0);
     } catch (error) {
-        console.error('❌ Error seeding sizes:', error);
+        console.error('❌ Error seeding sizes:', error.message);
+        if (error.errors) {
+            Object.keys(error.errors).forEach(key => {
+                console.error(`Field '${key}': ${error.errors[key].message}`);
+            });
+        }
         process.exit(1);
     }
 };

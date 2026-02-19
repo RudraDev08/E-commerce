@@ -1,6 +1,6 @@
 import { getDynamicFilters } from '../services/filterService.js';
 import { parseSearchQuery } from '../services/searchParser.service.js';
-import VariantMaster from '../models/VariantMaster.js';
+import VariantMaster from '../models/masters/VariantMaster.enterprise.js';
 
 // Get Dynamic Facets/Filters
 export const getExploreFilters = async (req, res) => {

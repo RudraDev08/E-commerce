@@ -1,7 +1,7 @@
 import Variant from "../../models/variant/variantSchema.js";
 import Product from "../../src/modules/product/product.model.js";
-import Size from "../../models/Size.model.js";
-import Color from "../../models/Color.model.js";
+import SizeMaster from "../../models/masters/SizeMaster.enterprise.js";
+import ColorMaster from "../../models/masters/ColorMaster.enterprise.js";
 
 /* ---------------- CREATE (MULTIPLE VARIANTS) ---------------- */
 export const createVariants = async (req, res) => {
@@ -193,8 +193,8 @@ export const getAllVariants = async (req, res) => {
 
     const variants = await Variant.find(query)
       .populate("product", "name sku")
-      .populate("size", "name code")
-      .populate("color", "name hexCode");
+      .populate("size", "displayName value canonicalId")
+      .populate("color", "displayName name hexCode");
 
     res.json({
       success: true,
@@ -218,8 +218,8 @@ export const getVariantsByProduct = async (req, res) => {
       product: productId, // Schema field: product
       isDeleted: { $ne: true }
     })
-      .populate("size", "name code") // Schema field: size
-      .populate("color", "name hexCode") // Schema field: color
+      .populate("size", "displayName value canonicalId") // Schema field: size
+      .populate("color", "displayName name hexCode") // Schema field: color
       .sort({ "attributes.size": 1, "attributes.color": 1 });
 
     res.json({

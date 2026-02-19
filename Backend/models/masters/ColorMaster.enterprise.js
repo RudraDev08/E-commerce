@@ -26,7 +26,6 @@ const colorMasterSchema = new mongoose.Schema({
         lowercase: true,
         trim: true,
         immutable: true,
-        index: true,
         description: "Permanent URL-safe identifier (never changes)"
     },
 
@@ -66,8 +65,7 @@ const colorMasterSchema = new mongoose.Schema({
         required: true,
         uppercase: true,
         match: /^#[0-9A-F]{6}$/,
-        description: "Standard hex value for web display",
-        index: true
+        description: "Standard hex value for web display"
     },
 
     rgbCode: {
@@ -308,7 +306,7 @@ colorMasterSchema.statics.validateTransition = function (currentState, newState)
 };
 
 // ==================== MIDDLEWARE ====================
-colorMasterSchema.pre('save', async function (next) {
+colorMasterSchema.pre('save', async function () {
     // Generate canonical ID
     if (this.isNew && !this.canonicalId) {
         const familyCode = this.colorFamily.substring(0, 3);
@@ -377,8 +375,6 @@ colorMasterSchema.pre('save', async function (next) {
             throw new Error(`Cannot modify locked color. Modified fields: ${modifiedFields.join(', ')}`);
         }
     }
-
-    next();
 });
 
 // Prevent deletion if in use

@@ -4,10 +4,10 @@
  * This file shows how to use the new Variant.model.js in your controllers
  */
 
-import Variant from '../models/Variant.model.js';
-import Size from '../models/Size.model.js';
-import Color from '../models/Color.model.js';
-import Product from '../models/Product/ProductSchema.js';
+import Variant from '../models/masters/VariantMaster.enterprise.js';
+import Size from '../models/masters/SizeMaster.enterprise.js';
+import Color from '../models/masters/ColorMaster.enterprise.js';
+import Product from '../src/modules/product/product.model.js';
 
 // ============================================================================
 // 1. CREATE VARIANT (Admin Panel)

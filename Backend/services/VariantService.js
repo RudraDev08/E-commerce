@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import Redis from 'ioredis';
 import Variant from '../models/variant/variantSchema.js';
 import Product from '../models/Product.js';
-import SearchDocument from '../models/SearchDocument.model.js';
+import SearchDocument from '../models/masters/SearchDocument.enterprise.js';
 import AttributeValue from '../models/AttributeValue.model.js';
 import logger from '../config/logger.js';
 

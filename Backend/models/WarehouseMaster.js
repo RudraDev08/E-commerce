@@ -35,14 +35,13 @@ const warehouseSchema = new mongoose.Schema({
 });
 
 // Ensure only one default warehouse
-warehouseSchema.pre('save', async function (next) {
+warehouseSchema.pre('save', async function () {
     if (this.isDefault && this.isModified('isDefault')) {
         await this.constructor.updateMany(
             { _id: { $ne: this._id } },
             { isDefault: false }
         );
     }
-    next();
 });
 
 export default mongoose.model('WarehouseMaster', warehouseSchema);

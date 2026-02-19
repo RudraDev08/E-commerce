@@ -1,0 +1,562 @@
+﻿
+Backend\models\AttributeAnalytics.model.
+js:29:export default 
+mongoose.model('AttributeAnalytics', 
+attributeAnalyticsSchema);
+Backend\models\AttributeDependency.model
+.js:23:export default 
+mongoose.model('AttributeDependency', 
+dependencySchema);
+Backend\models\AttributeMaster.js:63:mod
+ule.exports = 
+mongoose.model('AttributeMaster', 
+attributeSchema);
+Backend\models\AttributeType.model.js:44
+6:const AttributeType = 
+mongoose.models.AttributeType || 
+mongoose.model('AttributeType', 
+attributeTypeSchema);
+Backend\models\AttributeValue.model.js:7
+78:const AttributeValue = 
+mongoose.models.AttributeValue || 
+mongoose.model('AttributeValue', 
+attributeValueSchema);
+Backend\models\citySchema.js:13:const 
+City = mongoose.model("City", 
+citySchema);
+Backend\models\Counter.js:9:const 
+Counter = mongoose.models.Counter || 
+mongoose.model('Counter', 
+counterSchema);
+Backend\models\Country.js:18:const 
+Country = mongoose.model("Country", 
+countrySchema);
+Backend\models\InventoryReservation.mode
+l.js:40:export default 
+mongoose.model('InventoryReservation', 
+reservationSchema);
+Backend\models\InventoryTransaction.js:7
+8:module.exports = 
+mongoose.model('InventoryTransaction', 
+transactionSchema);
+Backend\models\OrderItemSnapshot.enterpr
+ise.js:449:export default 
+mongoose.models.OrderItemSnapshot || 
+mongoose.model('OrderItemSnapshot', 
+orderItemSnapshotSchema);
+Backend\models\pincodeSchema.js:22:expor
+t default mongoose.model("Pincode", 
+pincodeSchema);
+Backend\models\SearchDocument.enterprise
+.js:554:export default 
+mongoose.models.SearchDocument || 
+mongoose.model('SearchDocument', 
+searchDocumentSchema);
+Backend\models\stateSchema.js:24:export 
+default mongoose.model("State", 
+stateSchema);
+Backend\models\VariantInventory.js:194: 
+       const InventoryTransaction = 
+mongoose.models.InventoryTransaction || 
+mongoose.model('InventoryTransaction');
+Backend\models\VariantInventory.js:218:e
+xport default 
+mongoose.model('VariantInventory', 
+inventorySchema);
+Backend\models\WarehouseMaster.js:47:exp
+ort default 
+mongoose.model('WarehouseMaster', 
+warehouseSchema);
+Backend\models\attribute\attributeSchema
+.js:23:export default 
+mongoose.model("AttributeValue", 
+attributeValueSchema);
+Backend\models\Brands\BrandsSchema.js:50
+:export default mongoose.model("Brand", 
+brandSchema);
+Backend\models\Cart\CartSchema.js:62:exp
+ort default mongoose.model("Cart", 
+cartSchema);
+Backend\models\Category\CategorySchema.j
+s:70:export default 
+mongoose.model("Category", 
+categorySchema);
+Backend\models\inventory\BinLocation.mod
+el.js:59:const BinLocation = 
+mongoose.model('BinLocation', 
+binLocationSchema);
+Backend\models\inventory\CycleCount.mode
+l.js:76:const CycleCount = 
+mongoose.model('CycleCount', 
+cycleCountSchema);
+Backend\models\inventory\InventoryLedger
+.model.js:348:const InventoryLedger = 
+mongoose.model('InventoryLedger', 
+inventoryLedgerSchema);
+Backend\models\inventory\inventoryLedger
+Schema.js:117:const InventoryLedger = 
+mongoose.model('InventoryLedger', 
+inventoryLedgerSchema);
+Backend\models\inventory\InventoryMaster
+.model.js:125:const InventoryMaster = 
+mongoose.model('InventoryMaster', 
+inventoryMasterSchema);
+Backend\models\inventory\StockTransfer.m
+odel.js:56:const StockTransfer = 
+mongoose.model('StockTransfer', 
+stockTransferSchema);
+Backend\models\inventory\Warehouse.model
+.js:65:const Warehouse = 
+mongoose.model('Warehouse', 
+warehouseSchema);
+Backend\models\masters\ColorMaster.enter
+prise.js:391:export default 
+mongoose.models.ColorMaster || 
+mongoose.model('ColorMaster', 
+colorMasterSchema);
+Backend\models\masters\SizeMaster.enterp
+rise.js:326:export default 
+mongoose.models.SizeMaster || 
+mongoose.model('SizeMaster', 
+sizeMasterSchema);
+Backend\models\masters\VariantMaster.ent
+erprise.js:507:export default 
+mongoose.models.VariantMaster || 
+mongoose.model('VariantMaster', 
+variantMasterSchema);
+Backend\models\Order\OrderSchema.js:108:
+export default mongoose.model("Order", 
+orderSchema);
+Backend\models\ProductType\productTypeSc
+hema.js:30:export default 
+mongoose.model("ProductType", 
+productTypeSchema);
+Backend\models\variant\variantSchema.js:
+312:export default 
+mongoose.model("Variant", 
+variantSchema);
+Backend\node_modules\mongoose\lib\connec
+tion.js:438: *     const Test = 
+mongoose.model('Test', new Schema({ 
+name: String }));
+Backend\node_modules\mongoose\lib\connec
+tion.js:827: * @param {Boolean} 
+[noTimeout=false] if set, don't put a 
+timeout on the operation. Used 
+internally so `mongoose.model()` 
+doesn't leave open handles.
+Backend\node_modules\mongoose\lib\connec
+tion.js:1457:    throw new Error('The 
+2nd parameter to `mongoose.model()` 
+should be a ' +
+Backend\node_modules\mongoose\lib\docume
+nt.js:975: *     const TestModel = 
+mongoose.model('Test', new Schema({ 
+name: String }, { timestamps: true }));
+Backend\node_modules\mongoose\lib\docume
+nt.js:2118: *     const Model = 
+mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\docume
+nt.js:2142: *     const Model = 
+mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\docume
+nt.js:2354: *     MyModel = 
+mongoose.model('test', { name: { type: 
+String, default: 'Val '} });
+Backend\node_modules\mongoose\lib\docume
+nt.js:4085: *     const TestModel = 
+mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\docume
+nt.js:4123: *     const Group = 
+mongoose.model('Group', groupSchema);
+Backend\node_modules\mongoose\lib\docume
+nt.js:4933: *     const User = 
+mongoose.model('User', userSchema);
+Backend\node_modules\mongoose\lib\model.
+js:89: * [`mongoose.model()`](https://mo
+ngoosejs.com/docs/api/mongoose.html#Mong
+oose.prototype.model()) and
+Backend\node_modules\mongoose\lib\model.
+js:96: *     const UserModel = 
+mongoose.model('User', new Schema({ 
+name: String }));
+Backend\node_modules\mongoose\lib\model.
+js:121:      '**not** a schema. Make 
+sure you\'re calling 
+`mongoose.model()`, not ' +
+Backend\node_modules\mongoose\lib\model.
+js:122:      '`mongoose.Model()`.');
+Backend\node_modules\mongoose\lib\model.
+js:126:      '**not** a string. Make 
+sure you\'re calling 
+`mongoose.model()`, not ' +
+Backend\node_modules\mongoose\lib\model.
+js:127:      '`mongoose.Model()`.');
+Backend\node_modules\mongoose\lib\model.
+js:156: * This function is most useful 
+for changing the Connection that a 
+Model defined using `mongoose.model()` 
+uses
+Backend\node_modules\mongoose\lib\model.
+js:162: *     const UserModel = 
+mongoose.model('User', 
+mongoose.Schema({ name: String }));
+Backend\node_modules\mongoose\lib\model.
+js:172: *     mongoose.model('User'); 
+// Throws 'MissingSchemaError'
+Backend\node_modules\mongoose\lib\model.
+js:901: *     const Person = 
+mongoose.model('Person', PersonSchema);
+Backend\node_modules\mongoose\lib\model.
+js:1017: * [`mongoose.model()`](https://
+mongoosejs.com/docs/api/mongoose.html#Mo
+ngoose.prototype.model()) or
+Backend\node_modules\mongoose\lib\model.
+js:1030: *     const Event = 
+mongoose.model('Event', eventSchema);
+Backend\node_modules\mongoose\lib\model.
+js:1132: *     const User = 
+mongoose.model('User', userSchema);
+Backend\node_modules\mongoose\lib\model.
+js:1220: *     const Customer = 
+mongoose.model('Customer', schema);
+Backend\node_modules\mongoose\lib\model.
+js:1278: *     const Customer = 
+mongoose.model('Customer', schema);
+Backend\node_modules\mongoose\lib\model.
+js:1301: *     const Customer = 
+mongoose.model('Customer', schema);
+Backend\node_modules\mongoose\lib\model.
+js:1323: *     const Customer = 
+mongoose.model('Customer', schema);
+Backend\node_modules\mongoose\lib\model.
+js:1344: *     const Customer = 
+mongoose.model('Customer', schema);
+Backend\node_modules\mongoose\lib\model.
+js:1557: *     const Event = 
+mongoose.model('Event', eventSchema);
+Backend\node_modules\mongoose\lib\model.
+js:1738: *     const Product = 
+mongoose.model('Product', schema);
+Backend\node_modules\mongoose\lib\model.
+js:3555: *     const User = 
+mongoose.model('User', userSchema);
+Backend\node_modules\mongoose\lib\model.
+js:3588: *     const User = 
+mongoose.model('User', userSchema);
+Backend\node_modules\mongoose\lib\model.
+js:3622: *     const Test = 
+mongoose.model('Test', Schema({ num: 
+Number }));
+Backend\node_modules\mongoose\lib\model.
+js:4077: *     const Model = 
+mongoose.model('Test', Schema({
+Backend\node_modules\mongoose\lib\model.
+js:4212: *     const Dog = 
+mongoose.model('Dog', new Schema({ 
+name: String, breed: String }));
+Backend\node_modules\mongoose\lib\model.
+js:4213: *     const Person = 
+mongoose.model('Person', new Schema({
+Backend\node_modules\mongoose\lib\model.
+js:4788: * call `setDriver()` after 
+creating a model using 
+`mongoose.model()`.
+Backend\node_modules\mongoose\lib\model.
+js:4901: *     const TestModel = 
+mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\model.
+js:4938: *     const MyModel = 
+mongoose.model('Test', Schema({ name: 
+String }));
+Backend\node_modules\mongoose\lib\mongoo
+se.js:226: * - `autoCreate`: Set to 
+`true` to make Mongoose call [`Model.cre
+ateCollection()`](https://mongoosejs.com
+/docs/api/model.html#Model.createCollect
+ion()) automatically when you create a 
+model with `mongoose.model()` or 
+`conn.model()`. This is useful for 
+testing transactions, change streams, 
+and other features that require the 
+collection to exist.
+Backend\node_modules\mongoose\lib\mongoo
+se.js:235: * - `overwriteModels`: Set 
+to `true` to default to overwriting 
+models with the same name when calling 
+`mongoose.model()`, as opposed to 
+throwing an `OverwriteModelError`.
+Backend\node_modules\mongoose\lib\mongoo
+se.js:519: * If you call 
+`mongoose.model()` with twice the same 
+name but a different schema,
+Backend\node_modules\mongoose\lib\mongoo
+se.js:520: * you will get an 
+`OverwriteModelError`. If you call 
+`mongoose.model()` with
+Backend\node_modules\mongoose\lib\mongoo
+se.js:529: *     
+mongoose.model('Actor', schema);
+Backend\node_modules\mongoose\lib\mongoo
+se.js:556: *     const M = 
+mongoose.model('Actor', schema, 
+collectionName);
+Backend\node_modules\mongoose\lib\mongoo
+se.js:587:    throw new 
+_mongoose.Error('The 2nd parameter to 
+`mongoose.model()` should be a ' +
+Backend\node_modules\mongoose\lib\mongoo
+se.js:697: *     mongoose.model('User', 
+new Schema({ name: String }));
+Backend\node_modules\mongoose\lib\mongoo
+se.js:698: *     
+console.log(mongoose.model('User')); // 
+Model object
+Backend\node_modules\mongoose\lib\mongoo
+se.js:700: *     
+console.log(mongoose.model('User')); // 
+undefined
+Backend\node_modules\mongoose\lib\mongoo
+se.js:1356: *     const User = 
+mongoose.model('User', userSchema);
+Backend\node_modules\mongoose\lib\query.
+js:1198: *     const UserModel = 
+mongoose.model('User', userSchema);
+Backend\node_modules\mongoose\lib\query.
+js:1235: *     const UserModel = 
+mongoose.model('User', userSchema);
+Backend\node_modules\mongoose\lib\query.
+js:1384: *     await 
+mongoose.model('Person').findOne({ 
+name: 'Axl Rose' }).session(s);
+Backend\node_modules\mongoose\lib\query.
+js:1427: *     await 
+mongoose.model('Person').
+Backend\node_modules\mongoose\lib\query.
+js:1468: *     await 
+mongoose.model('Person').
+Backend\node_modules\mongoose\lib\query.
+js:1510: *     await 
+mongoose.model('Person').deleteOne({ 
+name: 'Ned Stark' }).j(true);
+Backend\node_modules\mongoose\lib\query.
+js:1555: *     await 
+mongoose.model('Person').
+Backend\node_modules\mongoose\lib\schema
+.js:52: *     const Tree = 
+mongoose.model('Tree', schema);
+Backend\node_modules\mongoose\lib\schema
+.js:662: *     const Event = 
+mongoose.model('Event', eventSchema);
+Backend\node_modules\mongoose\lib\schema
+.js:1059: *     const Toy = 
+mongoose.model('Toy', toySchema);
+Backend\node_modules\mongoose\lib\schema
+.js:2048: *     const Model = 
+mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\schema
+.js:2139: *     const Model = 
+mongoose.model('Model', schema);
+Backend\node_modules\mongoose\lib\schema
+.js:2186: *     mongoose.model('Test', 
+s); // Prints 'name'
+Backend\node_modules\mongoose\lib\schema
+.js:2192: *     mongoose.model('Test', 
+s); // Prints 'Schema Path Name: name'
+Backend\node_modules\mongoose\lib\schema
+.js:2232: *     const Kitty = 
+mongoose.model('Kitty', schema);
+Backend\node_modules\mongoose\lib\schema
+.js:2280: *     const Drink = 
+mongoose.model('Drink', schema);
+Backend\node_modules\mongoose\lib\schema
+.js:2290: *     const Drink = 
+mongoose.model('Drink', schema);
+Backend\node_modules\mongoose\lib\schema
+Type.js:599: *     const Model = 
+mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\schema
+Type.js:650: *     const Model = 
+mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\schema
+Type.js:1161: *     const User = 
+mongoose.model('User', userSchema);
+Backend\node_modules\mongoose\lib\virtua
+lType.js:117: *     const Model = 
+mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\error\
+index.js:9: *     const Model = 
+mongoose.model('Test', new 
+mongoose.Schema({ answer: Number }));
+Backend\node_modules\mongoose\lib\error\
+index.js:29: * - `MissingSchemaError`: 
+You tried to access a model with [`mongo
+ose.model()`](https://mongoosejs.com/doc
+s/api/mongoose.html#Mongoose.model()) 
+that was not defined
+Backend\node_modules\mongoose\lib\error\
+index.js:36: * - `OverwriteModelError`: 
+Thrown when you call [`mongoose.model()`
+](https://mongoosejs.com/docs/api/mongoo
+se.html#Mongoose.model()) to re-define 
+a model that was already defined.
+Backend\node_modules\mongoose\lib\error\
+index.js:111: *     const Model = 
+mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\error\
+missingSchema.js:20:            + 'Use 
+mongoose.model(name, schema)';
+Backend\node_modules\mongoose\lib\option
+s\schemaNumberOptions.js:83: *     
+const Parent = mongoose.model('Parent', 
+schema);
+Backend\node_modules\mongoose\lib\option
+s\schemaObjectIdOptions.js:46: *     
+const Parent = mongoose.model('Parent', 
+schema);
+Backend\node_modules\mongoose\lib\option
+s\schemaSubdocumentOptions.js:52: *     
+const ParentModel = 
+mongoose.model('Parent', parentSchema);
+Backend\node_modules\mongoose\lib\option
+s\schemaTypeOptions.js:68: *     const 
+Model = mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\option
+s\schemaTypeOptions.js:227: *     const 
+Model = mongoose.model('Test', schema);
+Backend\node_modules\mongoose\lib\schema
+\array.js:160: *     const User = 
+mongoose.model('User', new Schema({ 
+test: Array }));
+Backend\node_modules\mongoose\lib\schema
+\array.js:207: *     const M = 
+mongoose.model({ arr: { type: Array, 
+required: true } });
+Backend\node_modules\mongoose\lib\schema
+\boolean.js:57: *     const Order = 
+mongoose.model('Order', new Schema({ 
+isPaid: Boolean }));
+Backend\node_modules\mongoose\lib\schema
+\boolean.js:79: *     const Order = 
+mongoose.model('Order', new Schema({ 
+isPaid: Boolean }));
+Backend\node_modules\mongoose\lib\schema
+\boolean.js:176: *     const M = 
+mongoose.model('Test', new Schema({ b: 
+Boolean }));
+Backend\node_modules\mongoose\lib\schema
+\boolean.js:198: *     const M = 
+mongoose.model('Test', new Schema({ b: 
+Boolean }));
+Backend\node_modules\mongoose\lib\schema
+\buffer.js:63: *     const User = 
+mongoose.model('User', new Schema({ 
+test: Buffer }));
+Backend\node_modules\mongoose\lib\schema
+\buffer.js:86: *     const Model = 
+mongoose.model('Test', new Schema({ 
+buf: Buffer } }));
+Backend\node_modules\mongoose\lib\schema
+\buffer.js:107: *     const M = 
+mongoose.model({ buf: { type: Buffer, 
+required: true } });
+Backend\node_modules\mongoose\lib\schema
+\date.js:63: *     const User = 
+mongoose.model('User', new Schema({ 
+test: Date }));
+Backend\node_modules\mongoose\lib\schema
+\date.js:86: *     const Model = 
+mongoose.model('Test', new Schema({ 
+date: { type: Date, default: () => new 
+Date() } }));
+Backend\node_modules\mongoose\lib\schema
+\date.js:200: *     const M = 
+mongoose.model({ str: { type: String, 
+required: true } });
+Backend\node_modules\mongoose\lib\schema
+\date.js:253: *     const M = 
+mongoose.model('M', schema);
+Backend\node_modules\mongoose\lib\schema
+\date.js:315: *     const M = 
+mongoose.model('M', schema);
+Backend\node_modules\mongoose\lib\schema
+\decimal128.js:58: *     const User = 
+mongoose.model('User', new Schema({ 
+test: mongoose.Decimal128 }));
+Backend\node_modules\mongoose\lib\schema
+\mixed.js:66: *     const Model = 
+mongoose.model('Test', new Schema({ 
+test: {} }));
+Backend\node_modules\mongoose\lib\schema
+\mixed.js:86: *     const User = 
+mongoose.model('User', new Schema({ 
+test: mongoose.Mixed }));
+Backend\node_modules\mongoose\lib\schema
+\number.js:41: *     const Model = 
+mongoose.model('Test', new Schema({ 
+test: Number }));
+Backend\node_modules\mongoose\lib\schema
+\number.js:61: *     const Order = 
+mongoose.model('Order', new Schema({ 
+amount: Number }));
+Backend\node_modules\mongoose\lib\schema
+\number.js:204: *     const M = 
+mongoose.model('Measurement', schema);
+Backend\node_modules\mongoose\lib\schema
+\number.js:258: *     const M = 
+mongoose.model('Measurement', schema);
+Backend\node_modules\mongoose\lib\schema
+\objectId.js:67: *     const Model = 
+mongoose.model('Test', new Schema({}));
+Backend\node_modules\mongoose\lib\schema
+\objectId.js:87: *     const Order = 
+mongoose.model('Order', new Schema({ 
+userId: ObjectId }));
+Backend\node_modules\mongoose\lib\schema
+\objectId.js:185: *     const M = 
+mongoose.model({ str: { type: String, 
+required: true } });
+Backend\node_modules\mongoose\lib\schema
+\string.js:116: *     const Model = 
+mongoose.model('Test', new Schema({ 
+test: String }));
+Backend\node_modules\mongoose\lib\schema
+\string.js:136: *     const User = 
+mongoose.model('User', new Schema({ 
+name: String }));
+Backend\node_modules\mongoose\lib\schema
+\string.js:166: *     const M = 
+mongoose.model({ str: { type: String, 
+required: true } });
+Backend\node_modules\mongoose\lib\schema
+\string.js:399: *     const Address = 
+mongoose.model('Address', schema);
+Backend\node_modules\mongoose\lib\schema
+\string.js:455: *     const Address = 
+mongoose.model('Address', schema);
+Backend\node_modules\mongoose\lib\schema
+\uuid.js:78: *     const Model = 
+mongoose.model('Test', new Schema({ 
+test: 'UUID' }));
+Backend\node_modules\mongoose\lib\schema
+\uuid.js:98: *     const User = 
+mongoose.model('User', new Schema({ 
+test: mongoose.UUID }));
+Backend\node_modules\mongoose\lib\types\
+arraySubdocument.js:187: *     const 
+Test = mongoose.model('Test', new 
+Schema({
+Backend\node_modules\mongoose\lib\types\
+array\methods\index.js:696:   *     
+const Model = mongoose.model('Test', 
+schema);
+Backend\node_modules\mongoose\lib\types\
+array\methods\index.js:788:   *     
+const Doc = mongoose.model('Doc', new 
+Schema({ array: [Number] }));
+Backend\src\modules\product\product.mode
+l.js:198:const Product = 
+mongoose.model('Product', 
+productSchema);
+
+

@@ -1,0 +1,32 @@
+﻿[dotenv@17.2.3] injecting env (10) from .env -- tip: ≡ƒôí add observability to secrets: https://dotenvx.com/ops
+node : file:///C:/Users/Dell/Desktop/Tes
+ting-panel/Backend/routes/size/sizeRoute
+s.js:10
+At line:1 char:1
++ node src/server.js 2>&1 | Out-File 
+-Encoding utf8 server_error.log
++ ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecif 
+   ied: (file:///C:/User...izeRoutes.j  
+  s:10:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCom 
+   mandError
+ 
+    updateLifecycle,
+    ^^^^^^^^^^^^^^^
+SyntaxError: The requested module '../..
+/controllers/sizeMaster.controller.js' 
+does not provide an export named 
+'updateLifecycle'
+    at ModuleJob._instantiate (node:inte
+rnal/modules/esm/module_job:220:21)
+    at async ModuleJob.run (node:interna
+l/modules/esm/module_job:321:5)
+    at async 
+onImport.tracePromise.__proto__ (node:in
+ternal/modules/esm/loader:644:26)
+    at async file:///C:/Users/Dell/Deskt
+op/Testing-panel/Backend/src/server.js:1
+4:26
+
+Node.js v22.17.0

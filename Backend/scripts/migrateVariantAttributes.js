@@ -2,8 +2,9 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 
 // Import models
-const Variant = require('../models/Variant');
-const Color = require('../models/Color');
+// Import models
+const Variant = require('../models/masters/VariantMaster.enterprise.js').default || require('../models/masters/VariantMaster.enterprise.js');
+const Color = require('../models/masters/ColorMaster.enterprise.js').default || require('../models/masters/ColorMaster.enterprise.js');
 
 /**
  * Migration Script: Convert variant attributes from 'color' to 'colorId'

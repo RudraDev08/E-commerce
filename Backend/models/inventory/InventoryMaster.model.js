@@ -106,7 +106,7 @@ const inventoryMasterSchema = new mongoose.Schema({
 });
 
 // Pre-save to update status and sync availableStock
-inventoryMasterSchema.pre('save', async function (next) {
+inventoryMasterSchema.pre('save', async function () {
     // CRITICAL: Keep availableStock in sync
     this.availableStock = Math.max(0, this.totalStock - this.reservedStock);
 
@@ -120,10 +120,6 @@ inventoryMasterSchema.pre('save', async function (next) {
     }
 
     this.lastUpdated = new Date();
-
-    if (typeof next === 'function') {
-        next();
-    }
 });
 
 const InventoryMaster = mongoose.model('InventoryMaster', inventoryMasterSchema);

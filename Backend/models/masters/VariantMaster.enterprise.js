@@ -137,7 +137,6 @@ const variantMasterSchema = new mongoose.Schema({
         type: String,
         required: true,
         unique: true,
-        index: true,
         description: "SHA-256 hash of canonicalized attribute configuration"
     },
 
@@ -433,70 +432,64 @@ variantMasterSchema.statics.findByProductGroup = function (productGroup, filters
 };
 
 // ==================== MIDDLEWARE ====================
-variantMasterSchema.pre('save', async function (next) {
-    try {
-        // 1. Generate canonical ID
-        if (this.isNew && !this.canonicalId) {
-            this.canonicalId = `VAR-${this.sku}`;
-        }
+variantMasterSchema.pre('save', async function () {
+    // 1. Generate canonical ID
+    if (this.isNew && !this.canonicalId) {
+        this.canonicalId = `VAR-${this.sku}`;
+    }
 
-        // 2. Ensure config hash consistency
-        if (this.isModified('normalizedAttributes') || this.isModified('productId')) {
-            const valueIds = this.normalizedAttributes.map(a => a.valueId);
-            this.configHash = this.constructor.generateConfigHash(this.productId, valueIds);
-            this.configSignature = this.constructor.generateConfigSignature(this.normalizedAttributes);
-        }
+    // 2. Ensure config hash consistency
+    if (this.isModified('normalizedAttributes') || this.isModified('productId')) {
+        const valueIds = this.normalizedAttributes.map(a => a.valueId);
+        this.configHash = this.constructor.generateConfigHash(this.productId, valueIds);
+        this.configSignature = this.constructor.generateConfigSignature(this.normalizedAttributes);
+    }
 
-        // 3. Calculate inventory availability
-        if (this.inventorySummary) {
-            this.inventorySummary.availableQuantity =
-                this.inventorySummary.totalQuantity - this.inventorySummary.reservedQuantity;
-        }
+    // 3. Calculate inventory availability
+    if (this.inventorySummary) {
+        this.inventorySummary.availableQuantity =
+            this.inventorySummary.totalQuantity - this.inventorySummary.reservedQuantity;
+    }
 
-        // 4. Calculate price margins
-        if (this.currentPrice && this.currentPrice.cost) {
-            this.currentPrice.margin = this.currentPrice.amount - this.currentPrice.cost;
-            this.currentPrice.marginPercent =
-                ((this.currentPrice.margin / this.currentPrice.amount) * 100).toFixed(2);
-        }
+    // 4. Calculate price margins
+    if (this.currentPrice && this.currentPrice.cost) {
+        this.currentPrice.margin = this.currentPrice.amount - this.currentPrice.cost;
+        this.currentPrice.marginPercent =
+            ((this.currentPrice.margin / this.currentPrice.amount) * 100).toFixed(2);
+    }
 
-        // 5. Update min/max price cache
-        if (this.currentPrice) {
-            this.minVariantPrice = this.currentPrice.amount;
-            this.maxVariantPrice = this.currentPrice.compareAt || this.currentPrice.amount;
-        }
+    // 5. Update min/max price cache
+    if (this.currentPrice) {
+        this.minVariantPrice = this.currentPrice.amount;
+        this.maxVariantPrice = this.currentPrice.compareAt || this.currentPrice.amount;
+    }
 
-        // 6. Lifecycle validation
-        if (this.isModified('lifecycleState')) {
-            const oldState = this._original?.lifecycleState || 'DRAFT';
-            if (!this.constructor.validateTransition(oldState, this.lifecycleState)) {
-                throw new Error(`Invalid lifecycle transition: ${oldState} → ${this.lifecycleState}`);
-            }
+    // 6. Lifecycle validation
+    if (this.isModified('lifecycleState')) {
+        const oldState = this._original?.lifecycleState || 'DRAFT';
+        if (!this.constructor.validateTransition(oldState, this.lifecycleState)) {
+            throw new Error(`Invalid lifecycle transition: ${oldState} → ${this.lifecycleState}`);
         }
+    }
 
-        // 7. Lock enforcement
-        if (this.isLocked && !this.isNew && this.isModified()) {
-            const allowedFields = [
-                'updatedBy', 'isLocked', 'auditLog', 'inventorySummary',
-                'analytics', 'searchProjection.lastIndexedAt'
-            ];
-            const modifiedFields = this.modifiedPaths().filter(p =>
-                !allowedFields.some(allowed => p.startsWith(allowed))
-            );
-            if (modifiedFields.length > 0) {
-                throw new Error(`Cannot modify locked variant. Modified fields: ${modifiedFields.join(', ')}`);
-            }
+    // 7. Lock enforcement
+    if (this.isLocked && !this.isNew && this.isModified()) {
+        const allowedFields = [
+            'updatedBy', 'isLocked', 'auditLog', 'inventorySummary',
+            'analytics', 'searchProjection.lastIndexedAt'
+        ];
+        const modifiedFields = this.modifiedPaths().filter(p =>
+            !allowedFields.some(allowed => p.startsWith(allowed))
+        );
+        if (modifiedFields.length > 0) {
+            throw new Error(`Cannot modify locked variant. Modified fields: ${modifiedFields.join(', ')}`);
         }
+    }
 
-        // 8. Auto-activate if approved
-        if (this.isModified('approvedBy') && this.approvedBy && this.lifecycleState === 'PENDING_APPROVAL') {
-            this.lifecycleState = 'ACTIVE';
-            this.isActive = true;
-        }
-
-        next();
-    } catch (error) {
-        next(error);
+    // 8. Auto-activate if approved
+    if (this.isModified('approvedBy') && this.approvedBy && this.lifecycleState === 'PENDING_APPROVAL') {
+        this.lifecycleState = 'ACTIVE';
+        this.isActive = true;
     }
 });
 

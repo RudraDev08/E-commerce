@@ -9,17 +9,17 @@ const variantSchema = new mongoose.Schema(
       required: true,
     },
 
-    // structured attributes - LEGACY SUPPORT (Optional)
+    // structured attributes - ENTERPRISE MASTERS
     size: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Size",
-      required: false, // MADE OPTIONAL
+      ref: "SizeMaster",
+      required: false,
       index: true
     },
     color: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Color", // Single color mode
-      required: false, // MADE OPTIONAL
+      ref: "ColorMaster",
+      required: false,
       index: true
     },
 
@@ -54,7 +54,7 @@ const variantSchema = new mongoose.Schema(
     colorwayName: { type: String },
     colorParts: [{
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Color"
+      ref: "ColorMaster"
     }],
 
     material: { type: String },

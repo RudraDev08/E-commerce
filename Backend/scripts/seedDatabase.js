@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
-const SizeMaster = require('../models/SizeMaster');
-const ColorMaster = require('../models/ColorMaster');
+const SizeMaster = require('../models/masters/SizeMaster.enterprise.js').default;
+const ColorMaster = require('../models/masters/ColorMaster.enterprise.js').default || require('../models/masters/ColorMaster.enterprise.js');
 const WarehouseMaster = require('../models/WarehouseMaster');
-const VariantMaster = require('../models/VariantMaster');
+const VariantMaster = require('../models/masters/VariantMaster.enterprise.js').default || require('../models/masters/VariantMaster.enterprise.js');
 const VariantInventory = require('../models/VariantInventory');
 
 async function seedDatabase() {

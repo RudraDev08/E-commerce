@@ -1,4 +1,4 @@
-import Color from '../models/Color.model.js';
+import Color from '../models/masters/ColorMaster.enterprise.js';
 
 // @desc    Create new color
 // @route   POST /api/colors

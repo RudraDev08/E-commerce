@@ -1,4 +1,4 @@
-import VariantMaster from '../models/VariantMaster.js';
+import VariantMaster from '../models/masters/VariantMaster.enterprise.js';
 import mongoose from 'mongoose';
 
 /**

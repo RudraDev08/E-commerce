@@ -1,0 +1,115 @@
+﻿Found 38 model files.
+File: Backend\models\attribute\attributeSchema.js
+  Model: AttributeValue
+  Collection (Default): attributevalues
+File: Backend\models\AttributeAnalytics.model.js
+  Model: AttributeAnalytics
+  Collection (Default): attributeanalyticss
+File: Backend\models\AttributeDependency.model.js
+  Model: AttributeDependency
+  Collection (Default): attributedependencys
+File: Backend\models\AttributeMaster.js
+  Model: AttributeMaster
+  Collection (Default): attributemasters
+File: Backend\models\AttributeType.model.js
+  Model: AttributeType
+  Collection (Default): attributetypes
+File: Backend\models\AttributeValue.model.js
+  Model: AttributeValue
+  Collection (Default): attributevalues
+File: Backend\models\Brands\BrandsSchema.js
+  Model: Brand
+  Collection (Default): brands
+File: Backend\models\Cart\CartSchema.js
+  Model: Cart
+  Collection (Default): carts
+File: Backend\models\Category\CategorySchema.js
+  Model: Category
+  Collection (Default): categorys
+File: Backend\models\citySchema.js
+  Model: City
+  Collection (Default): citys
+File: Backend\models\Color.model.js
+  Model: Color
+  Collection (Default): colors
+File: Backend\models\ColorMaster.js
+  Model: ColorMaster
+  Collection (Default): colormasters
+File: Backend\models\Counter.js
+  Model: Counter
+  Collection (Default): counters
+File: Backend\models\Country.js
+  Model: Country
+  Collection (Default): countrys
+File: Backend\models\inventory\BinLocation.model.js
+  Model: BinLocation
+  Collection (Default): binlocations
+File: Backend\models\inventory\CycleCount.model.js
+  Model: CycleCount
+  Collection (Default): cyclecounts
+File: Backend\models\inventory\InventoryLedger.model.js
+  Model: InventoryLedger
+  Collection (Default): inventoryledgers
+File: Backend\models\inventory\inventoryLedgerSchema.js
+  Model: InventoryLedger
+  Collection (Default): inventoryledgers
+File: Backend\models\inventory\InventoryMaster.model.js
+  Model: InventoryMaster
+  Collection (Default): inventorymasters
+File: Backend\models\inventory\StockTransfer.model.js
+  Model: StockTransfer
+  Collection (Default): stocktransfers
+File: Backend\models\inventory\Warehouse.model.js
+  Model: Warehouse
+  Collection (Default): warehouses
+File: Backend\models\InventoryReservation.model.js
+  Model: InventoryReservation
+  Collection (Default): inventoryreservations
+File: Backend\models\InventoryTransaction.js
+  Model: InventoryTransaction
+  Collection (Default): inventorytransactions
+File: Backend\models\masters\ColorMaster.enterprise.js
+  Model: ColorMaster
+  Collection: colormasters
+File: Backend\models\masters\SizeMaster.enterprise.js
+  Model: SizeMaster
+  Collection: sizes
+File: Backend\models\masters\VariantMaster.enterprise.js
+  Model: VariantMaster
+  Collection: variantmasters
+File: Backend\models\Order\OrderSchema.js
+  Model: Order
+  Collection (Default): orders
+File: Backend\models\OrderItemSnapshot.enterprise.js
+  Model: OrderItemSnapshot
+  Collection: orderitemsnapshots
+File: Backend\models\pincodeSchema.js
+  Model: Pincode
+  Collection (Default): pincodes
+File: Backend\models\ProductType\productTypeSchema.js
+  Model: ProductType
+  Collection (Default): producttypes
+File: Backend\models\SearchDocument.enterprise.js
+  Model: SearchDocument
+  Collection: searchdocuments
+File: Backend\models\SearchDocument.model.js
+  Model: SearchDocument
+  Collection (Default): searchdocuments
+File: Backend\models\Size.model.js
+  Model: Size
+  Collection (Default): sizes
+File: Backend\models\stateSchema.js
+  Model: State
+  Collection (Default): states
+File: Backend\models\variant\variantSchema.js
+  Model: Variant
+  Collection (Default): variants
+File: Backend\models\VariantInventory.js
+  Model: InventoryTransaction
+  Collection (Default): inventorytransactions
+File: Backend\models\VariantMaster.js
+  Model: VariantMaster
+  Collection (Default): variantmasters
+File: Backend\models\WarehouseMaster.js
+  Model: WarehouseMaster
+  Collection (Default): warehousemasters

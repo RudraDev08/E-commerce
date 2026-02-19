@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import VariantMaster from '../models/masters/VariantMaster.enterprise.js';
-import SearchDocument from '../models/SearchDocument.enterprise.js';
+import SearchDocument from '../models/masters/SearchDocument.enterprise.js';
 import CanonicalHashGenerator from '../utils/CanonicalHashGenerator.js';
 import { MasterDataEventEmitter } from '../events/MasterDataEventEmitter.js';
 

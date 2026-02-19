@@ -5,37 +5,28 @@ import {
     getSize,
     updateSize,
     deleteSize,
+    toggleLock,
     toggleStatus,
-    bulkCreateSizes,
-    restoreSize,
-    getSizeGroups,
-    getSizesByCategory,
-    reorderSizes,
-    convertSize
-} from '../../controllers/size.controller.js';
+
+    bulkCreateSizes
+} from '../../controllers/sizeMaster.controller.js';
 
 const router = express.Router();
 
-// Size Master specific routes (must come before /:id routes)
-router.get('/groups', getSizeGroups);
-router.get('/convert', convertSize);
-router.get('/category/:sizeCategory', getSizesByCategory);
-router.put('/reorder', reorderSizes);
-
-// Create routes
-router.post('/', createSize);
+// Bulk operations (must come before /:id routes)
 router.post('/bulk', bulkCreateSizes);
 
-// Read routes
+// CRUD routes
+router.post('/', createSize);
 router.get('/', getSizes);
 router.get('/:id', getSize);
-
-// Update routes
 router.put('/:id', updateSize);
-router.patch('/:id/toggle-status', toggleStatus);
-router.patch('/:id/restore', restoreSize);
-
-// Delete routes
 router.delete('/:id', deleteSize);
 
+// Governance routes
+router.patch('/:id/lock', toggleLock);
+router.patch('/:id/toggle-status', toggleStatus);
+
+
 export default router;
+

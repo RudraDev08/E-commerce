@@ -1,0 +1,32 @@
+﻿
+Backend\VARIANT_CONTROLLER_GUIDE.js:8:im
+port Size from 
+'../models/Size.model.js';
+Backend\VARIANT_CONTROLLER_GUIDE.js:9:im
+port Color from 
+'../models/Color.model.js';
+Backend\controllers\color.controller.js:
+1:import Color from 
+'../models/Color.model.js';
+Backend\controllers\discovery.controller
+.js:3:import VariantMaster from 
+'../models/VariantMaster.js';
+Backend\scripts\fix_variant_data.js:5:im
+port Size from 
+'../models/Size.model.js';
+Backend\scripts\seedSizes.js:2:import 
+Size from '../models/Size.model.js';
+Backend\services\filterService.js:1:impo
+rt VariantMaster from 
+'../models/VariantMaster.js';
+Backend\services\variantCombinationGener
+ator.service.js:1:import VariantMaster 
+from '../models/VariantMaster.js';
+Backend\services\variantCombinationGener
+ator.service.js:3:import ColorMaster 
+from '../models/ColorMaster.js';
+Backend\services\VariantService.js:15:im
+port SearchDocument from 
+'../models/SearchDocument.model.js';
+
+
