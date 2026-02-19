@@ -160,7 +160,10 @@ const sizeMasterSchema = new mongoose.Schema({
     },
 
     auditLog: [{
-        action: { type: String, enum: ['CREATED', 'UPDATED', 'DEPRECATED', 'LOCKED', 'UNLOCKED'] },
+        action: {
+            type: String,
+            enum: ['CREATED', 'UPDATED', 'LIFECYCLE_CHANGED', 'LOCKED', 'UNLOCKED', 'ARCHIVED']
+        },
         by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         at: { type: Date, default: Date.now },
         changes: mongoose.Schema.Types.Mixed
@@ -226,7 +229,8 @@ sizeMasterSchema.virtual('isDeprecated').get(function () {
 });
 
 sizeMasterSchema.virtual('canDelete').get(function () {
-    return this.usageCount === 0 && this.lifecycleState === 'ARCHIVED';
+    // Matches controller rule: ARCHIVED or DRAFT with zero usage
+    return this.usageCount === 0 && ['ARCHIVED', 'DRAFT'].includes(this.lifecycleState);
 });
 
 // ==================== STATIC METHODS ====================
@@ -239,17 +243,21 @@ sizeMasterSchema.statics.findActiveByCategory = function (category, gender = 'UN
     }).sort({ normalizedRank: 1 });
 };
 
+// SINGLE SOURCE OF TRUTH — mirrored in frontend VALID_TRANSITIONS constant
 const VALID_TRANSITIONS = {
-    'DRAFT': ['ACTIVE', 'ARCHIVED'],
-    'ACTIVE': ['DEPRECATED', 'ARCHIVED'],
-    'DEPRECATED': ['ACTIVE', 'ARCHIVED'], // Allow reactivation
-    'ARCHIVED': ['DRAFT', 'DEPRECATED']   // Allow restoration (DRAFT allows re-work)
+    DRAFT: ['ACTIVE', 'ARCHIVED'],
+    ACTIVE: ['DEPRECATED', 'ARCHIVED', 'DRAFT'],
+    DEPRECATED: ['ACTIVE', 'ARCHIVED', 'DRAFT'],
+    ARCHIVED: ['DRAFT', 'ACTIVE']  // Allow restoration
 };
 
 sizeMasterSchema.statics.validateTransition = function (currentState, newState) {
-    if (currentState === newState) return true;
+    if (currentState === newState) return false; // No-op transitions are not valid
     return VALID_TRANSITIONS[currentState]?.includes(newState) || false;
 };
+
+// Expose the map so controllers can read allowed transitions per state
+sizeMasterSchema.statics.VALID_TRANSITIONS = VALID_TRANSITIONS;
 
 // ATOMIC ID GENERATION
 sizeMasterSchema.statics.generateCanonicalId = async function () {
@@ -267,57 +275,53 @@ sizeMasterSchema.statics.incrementUsage = async function (sizeId) {
 };
 
 sizeMasterSchema.statics.decrementUsage = async function (sizeId) {
-    return this.findByIdAndUpdate(sizeId, { $inc: { usageCount: -1 } });
+    // $max guard prevents usageCount from going below 0 (avoids negative drift)
+    return this.findByIdAndUpdate(sizeId, [
+        { $set: { usageCount: { $max: [{ $subtract: ['$usageCount', 1] }, 0] } } }
+    ]);
 };
 
 
 // ==================== MIDDLEWARE ====================
-// Generate canonical ID BEFORE validation runs
-
-// Generate canonical ID BEFORE validation runs
-// Generate canonical ID BEFORE validation runs
+// Generate canonical ID BEFORE validation runs (single declaration)
 sizeMasterSchema.pre('validate', async function () {
-    console.log('Running pre-validate (async). isNew:', this.isNew, 'canonicalId:', this.canonicalId);
-
     if (this.isModified('lifecycleState')) {
         this.isActive = this.lifecycleState === 'ACTIVE';
     }
 
     if (this.isNew && !this.canonicalId) {
-        console.log('Generating canonicalId (async call)...');
         try {
             this.canonicalId = await this.constructor.generateCanonicalId();
-            console.log('Generated canonicalId:', this.canonicalId);
         } catch (err) {
-            console.error('Error generating canonicalId:', err);
-            throw err;
+            throw new Error(`canonicalId generation failed: ${err.message}`);
         }
     }
 });
 
 sizeMasterSchema.pre('save', async function () {
-    // 1. Lifecycle Validation (Strict Enforcement)
+    // 1. Lifecycle Transition Validation — fetch actual DB state to prevent illegal transitions
     if (this.isModified('lifecycleState') && !this.isNew) {
-        // Optimistic concurrency handles the version check, 
-        // but we double check strict state machine here.
-        const oldState = this._original?.lifecycleState || 'DRAFT'; // Requires loading doc with .init() or manual check
-
-        // Better: Validate against DB state if we suspect race condition, 
-        // but explicit state machine map is safer.
-        // NOTE: Mongoose 6+ doesn't easily expose 'old' value in pre-save without fetching.
-        // We rely on controller to have fetched it, or optimistic locking to fail if changed.
-
-        // For strict validation map access:
-        // We assume the controller logic is sound, but we can re-verify if needed.
+        const current = await this.constructor
+            .findById(this._id)
+            .select('lifecycleState')
+            .lean();
+        if (current) {
+            const isValid = (VALID_TRANSITIONS[current.lifecycleState] || []).includes(this.lifecycleState);
+            if (!isValid) {
+                throw new Error(
+                    `Invalid lifecycle transition: "${current.lifecycleState}" → "${this.lifecycleState}". ` +
+                    `Allowed: [${(VALID_TRANSITIONS[current.lifecycleState] || []).join(', ') || 'none'}]`
+                );
+            }
+        }
     }
 
-    // 2. Lock Enforcement (Security)
+    // 2. Lock Enforcement — only usageCount and auditLog allowed on locked docs
     if (this.isLocked && !this.isNew && this.isModified()) {
-        const allowedFields = ['updatedBy', 'isLocked', 'auditLog', 'updatedAt', 'usageCount']; // usageCount is system managed
+        const allowedFields = ['updatedBy', 'isLocked', 'auditLog', 'updatedAt', 'usageCount'];
         const modifiedFields = this.modifiedPaths().filter(p => !allowedFields.includes(p));
-
         if (modifiedFields.length > 0) {
-            throw new Error(`Cannot modify locked size. Modified fields: ${modifiedFields.join(', ')}`);
+            throw new Error(`Cannot modify locked size. Attempted fields: ${modifiedFields.join(', ')}`);
         }
     }
 });

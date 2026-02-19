@@ -9,14 +9,16 @@ const api = axios.create({
     },
 });
 
-// Size APIs
+// Fix #10 — Added toggleLock
 export const sizeAPI = {
-    getAll: (params) => api.get('/sizes', { params }),
+    getAll: (params) => api.get(`/sizes`, { params }),
     getById: (id) => api.get(`/sizes/${id}`),
     create: (data) => api.post('/sizes', data),
     update: (id, data) => api.put(`/sizes/${id}`, data),
     delete: (id) => api.delete(`/sizes/${id}`),
-    toggleStatus: (id) => api.patch(`/sizes/${id}/toggle-status`),
+    // body must include { targetState } — backend validates via state machine
+    toggleStatus: (id, body) => api.patch(`/sizes/${id}/toggle-status`, body),
+    toggleLock: (id) => api.patch(`/sizes/${id}/lock`),
     bulkCreate: (data) => api.post('/sizes/bulk', data),
 };
 
@@ -102,5 +104,28 @@ export const attributeValueAPI = {
     bulkCreate: (data) => api.post('/attribute-values/bulk', data),
     reorder: (data) => api.put('/attribute-values/reorder', data),
 };
+
+// Fix #9 — Global response interceptor: surface 409/403/network errors uniformly
+api.interceptors.response.use(
+    response => response,
+    error => {
+        if (!error.response) {
+            // Network error or server unreachable
+            error.message = 'Network error — please check your connection.';
+            return Promise.reject(error);
+        }
+        const { status, data } = error.response;
+        if (status === 409) {
+            // Optimistic concurrency conflict or duplicate entry — surface cleanly
+            error.message = data?.message || 'Conflict: record was modified. Please refresh.';
+        } else if (status === 403) {
+            // Locked resource or forbidden operation
+            error.message = data?.message || 'Forbidden: you do not have permission to perform this action.';
+        } else if (status === 422) {
+            error.message = data?.message || 'Validation failed.';
+        }
+        return Promise.reject(error);
+    }
+);
 
 export default api;

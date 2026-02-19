@@ -44,10 +44,12 @@ const AdminLayout = () => {
 
                 {/* 4. Page Content / Outlet */}
                 <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F8FAFC] scroll-smooth">
-                    {/* The nested routes will render here */}
-                    <Outlet />
+                    {/* Gap between sidebar and content */}
+                    <div className="pl-3 h-full">
+                        <Outlet />
 
-                    {/* Add footer here if needed in future */}
+                        {/* Add footer here if needed in future */}
+                    </div>
                 </main>
 
             </div>

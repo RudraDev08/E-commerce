@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const VariantMaster = require('../models/masters/VariantMaster.enterprise.js').default || require('../models/masters/VariantMaster.enterprise.js');
 const VariantInventory = require('../models/VariantInventory');
 const ColorMaster = require('../models/masters/ColorMaster.enterprise.js').default || require('../models/masters/ColorMaster.enterprise.js');
@@ -202,22 +203,22 @@ exports.getStock = async (req, res) => {
  * POST /api/admin/variants
  */
 exports.create = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
         const variantData = req.body;
 
-        // Validate required fields
         if (!variantData.productGroup || !variantData.productName || !variantData.price) {
+            await session.abortTransaction();
             return res.status(400).json({
                 success: false,
                 message: 'Missing required fields: productGroup, productName, price'
             });
         }
 
-        // Generate SKU if not provided
         if (!variantData.sku) {
             const sizeValues = variantData.sizes?.map(s => s.value) || [];
-            const color = variantData.color ? await ColorMaster.findById(variantData.color) : null;
-
+            const color = variantData.color ? await ColorMaster.findById(variantData.color).session(session) : null;
             variantData.sku = await VariantMaster.generateSKU(
                 variantData.brand,
                 variantData.productGroup,
@@ -226,44 +227,47 @@ exports.create = async (req, res) => {
             );
         }
 
-        // Create variant
         const variant = new VariantMaster(variantData);
-        await variant.save();
+        await variant.save({ session });
 
-        // Initialize inventory for default warehouse
-        const defaultWarehouse = await WarehouseMaster.findOne({ isDefault: true });
+        // Increment usageCount for every size assigned to this variant
+        const sizeIds = variantData.sizes?.map(s => s.sizeId).filter(Boolean) || [];
+        if (sizeIds.length > 0) {
+            await Promise.all(
+                sizeIds.map(sizeId => SizeMaster.incrementUsage(sizeId).session(session))
+            );
+        }
+
+        const defaultWarehouse = await WarehouseMaster.findOne({ isDefault: true }).session(session);
         if (defaultWarehouse) {
-            await VariantInventory.create({
+            await VariantInventory.create([{
                 variant: variant._id,
                 warehouse: defaultWarehouse._id,
                 quantity: 0,
                 reservedQuantity: 0
-            });
+            }], { session });
         }
 
-        res.status(201).json({
+        await session.commitTransaction();
+
+        return res.status(201).json({
             success: true,
             message: 'Variant created successfully',
             data: variant
         });
     } catch (error) {
-        console.error('Error creating variant:', error);
-
-        // Handle duplicate errors
+        await session.abortTransaction();
+        console.error('[variant.create] error:', error);
         if (error.code === 11000) {
-            const field = Object.keys(error.keyPattern)[0];
+            const field = Object.keys(error.keyPattern || {})[0];
             return res.status(409).json({
                 success: false,
-                message: `Duplicate ${field}. This configuration already exists.`,
-                error: error.message
+                message: `Duplicate ${field}. This configuration already exists.`
             });
         }
-
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create variant',
-            error: error.message
-        });
+        return res.status(500).json({ success: false, message: 'Failed to create variant', error: error.message });
+    } finally {
+        session.endSession();
     }
 };
 
@@ -316,34 +320,42 @@ exports.update = async (req, res) => {
  * DELETE /api/admin/variants/:id
  */
 exports.delete = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
         const { id } = req.params;
 
-        const variant = await VariantMaster.findByIdAndUpdate(
-            id,
-            { status: 'deleted' },
-            { new: true }
-        );
-
+        const variant = await VariantMaster.findById(id).session(session);
         if (!variant) {
-            return res.status(404).json({
-                success: false,
-                message: 'Variant not found'
-            });
+            await session.abortTransaction();
+            return res.status(404).json({ success: false, message: 'Variant not found' });
         }
 
-        res.json({
+        // Soft delete
+        variant.status = 'deleted';
+        await variant.save({ session });
+
+        // Decrement usageCount for all sizes this variant held
+        const sizeIds = variant.sizes?.map(s => s.sizeId).filter(Boolean) || [];
+        if (sizeIds.length > 0) {
+            await Promise.all(
+                sizeIds.map(sizeId => SizeMaster.decrementUsage(sizeId).session(session))
+            );
+        }
+
+        await session.commitTransaction();
+
+        return res.json({
             success: true,
             message: 'Variant deleted successfully',
             data: variant
         });
     } catch (error) {
-        console.error('Error deleting variant:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete variant',
-            error: error.message
-        });
+        await session.abortTransaction();
+        console.error('[variant.delete] error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to delete variant', error: error.message });
+    } finally {
+        session.endSession();
     }
 };
 

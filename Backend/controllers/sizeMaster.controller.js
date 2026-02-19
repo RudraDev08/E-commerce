@@ -3,8 +3,35 @@ import mongoose from 'mongoose';
 
 // ============================================================================
 // ENTERPRISE SIZE MASTER CONTROLLER
-// Feature Set: Cursor Pagination, Text Search, Optimistic Locking
+// Feature Set: Cursor Pagination, Text Search, Optimistic Locking, Audit Log
 // ============================================================================
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   HELPERS
+   ───────────────────────────────────────────────────────────────────────────── */
+const safeUpper = (val) => (typeof val === 'string' ? val.toUpperCase() : null);
+
+/**
+ * Compute a field-level diff between old and new values.
+ * Returns only the keys that actually changed.
+ */
+const diffFields = (oldDoc, newValues) => {
+    const changes = {};
+    for (const [key, next] of Object.entries(newValues)) {
+        const prev = oldDoc[key];
+        // Shallow compare — deep objects (measurements, conversions) are captured as-is
+        if (JSON.stringify(prev) !== JSON.stringify(next)) {
+            changes[key] = { from: prev, to: next };
+        }
+    }
+    return changes;
+};
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CURSOR PAGINATION CONSTANTS
+   ───────────────────────────────────────────────────────────────────────────── */
+// Allowlisted sort fields — prevents injection via sort param
+const VALID_SORT_FIELDS = ['normalizedRank', 'displayName', 'createdAt', 'value'];
 
 /**
  * @desc    Get all sizes with enterprise cursor pagination
@@ -17,7 +44,9 @@ export const getSizes = async (req, res) => {
             category,
             gender,
             region,
-            status,
+            lifecycleState,
+            status,       // alias for lifecycleState for backward compat
+            isLocked,
             search,
             cursor,
             limit: rawLimit,
@@ -25,48 +54,43 @@ export const getSizes = async (req, res) => {
         } = req.query;
 
         // 1. Sanitization & Defaults
-        const limit = Math.min(Math.max(parseInt(rawLimit) || 20, 1), 100); // Clamp 1-100
-        const safeUpper = (val) => (typeof val === 'string' ? val.toUpperCase() : null);
+        const limit = Math.min(Math.max(parseInt(rawLimit) || 20, 1), 100);
 
         // 2. Query Construction
         const query = {};
         if (category) query.category = safeUpper(category);
         if (gender) query.gender = safeUpper(gender);
         if (region) query.primaryRegion = safeUpper(region);
-        if (status) query.lifecycleState = safeUpper(status);
-
-        // 3. Text Search (Scalable)
-        if (search && typeof search === 'string' && search.trim().length > 0) {
-            query.$text = { $search: search };
+        // Accept both ?lifecycleState= and legacy ?status=
+        const lc = lifecycleState || status;
+        if (lc) query.lifecycleState = safeUpper(lc);
+        if (isLocked !== undefined && isLocked !== '') {
+            query.isLocked = isLocked === 'true' || isLocked === true;
         }
 
-        // 4. Sort Configuration
-        const validSortFields = ['normalizedRank', 'displayName', 'createdAt', 'updatedAt', 'value'];
-        const sortField = validSortFields.includes(sort) ? sort : 'normalizedRank';
-        // For text search to be relevant, we might want to sort by score, but usually users want deterministic sort.
-        // If searching, we usually prioritize score, but here strict sorting is requested.
+        // 3. Text Search (MongoDB Atlas / standard text index)
+        if (search && typeof search === 'string' && search.trim().length > 0) {
+            query.$text = { $search: search.trim() };
+        }
 
+        // 4. Sort Configuration — allowlisted only
+        const sortField = VALID_SORT_FIELDS.includes(sort) ? sort : 'normalizedRank';
+        // Dates DESC, everything else ASC
         const sortDir = (sortField === 'createdAt' || sortField === 'updatedAt') ? -1 : 1;
-        // Logic: Dates usually DESC, Rank usually ASC.
-        // Can be overridden by query param if needed, but enforcing defaults for consistency.
 
-        // 5. Cursor Pagination Logic (Directional)
+        // 5. Cursor Pagination — directional with _id tie-breaker for stability
         if (cursor) {
             try {
                 const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
-                if (decoded.val === undefined || !decoded.id) throw new Error('Invalid cursor');
+                if (decoded.val === undefined || !decoded.id) throw new Error('Malformed cursor payload');
 
-                // Directional Operator Selection
                 const op = sortDir === 1 ? '$gt' : '$lt';
-
                 query.$or = [
                     { [sortField]: { [op]: decoded.val } },
-                    {
-                        [sortField]: decoded.val,
-                        _id: { [op]: decoded.id }
-                    }
+                    // Tie-breaker: same sortField value, but different _id
+                    { [sortField]: decoded.val, _id: { [op]: new mongoose.Types.ObjectId(decoded.id) } }
                 ];
-            } catch (err) {
+            } catch {
                 return res.status(400).json({
                     success: false,
                     message: 'Invalid pagination cursor. Please refresh the page.'
@@ -74,11 +98,10 @@ export const getSizes = async (req, res) => {
             }
         }
 
-        // 6. Execute Query
-        // Use leand() for performance.
+        // 6. Execute — lean() for read performance
         const docs = await SizeMaster.find(query)
-            .sort({ [sortField]: sortDir, _id: sortDir }) // Stable Sort
-            .limit(limit + 1) // Fetch one extra to check hasNextPage
+            .sort({ [sortField]: sortDir, _id: sortDir }) // stable sort
+            .limit(limit + 1)                             // +1 to detect next page
             .lean();
 
         // 7. Pagination Meta
@@ -87,43 +110,36 @@ export const getSizes = async (req, res) => {
 
         let nextCursor = null;
         if (hasNextPage && data.length > 0) {
-            const lastDoc = data[data.length - 1];
+            const last = data[data.length - 1];
             nextCursor = Buffer.from(JSON.stringify({
-                val: lastDoc[sortField],
-                id: lastDoc._id
+                val: last[sortField],
+                id: last._id.toString()
             })).toString('base64');
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             data,
-            pageInfo: {
-                hasNextPage,
-                nextCursor,
-                limit
-            }
+            pageInfo: { hasNextPage, nextCursor, limit, count: data.length }
         });
 
     } catch (error) {
-        console.error('Get sizes error:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Failed to fetch sizes'
-        });
+        console.error('[getSizes] error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Failed to fetch sizes' });
     }
 };
 
 /**
- * @desc    Get single size
+ * @desc    Get single size by ID
  * @route   GET /api/sizes/:id
  */
 export const getSize = async (req, res) => {
     try {
         const size = await SizeMaster.findById(req.params.id).lean();
         if (!size) return res.status(404).json({ success: false, message: 'Size not found' });
-        res.status(200).json({ success: true, data: size });
+        return res.status(200).json({ success: true, data: size });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
@@ -133,7 +149,6 @@ export const getSize = async (req, res) => {
  */
 export const createSize = async (req, res) => {
     try {
-        // Strict Input Allowlisting
         const {
             value, displayName, category, gender, primaryRegion,
             normalizedRank, lifecycleState, measurements, conversions
@@ -145,9 +160,16 @@ export const createSize = async (req, res) => {
             createdBy: req.user?._id
         });
 
+        // Audit: CREATED
+        size.auditLog.push({
+            action: 'CREATED',
+            by: req.user?._id,
+            at: new Date()
+        });
+
         await size.save();
 
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             message: 'Size created successfully',
             data: size
@@ -157,49 +179,62 @@ export const createSize = async (req, res) => {
         if (error.code === 11000) {
             return res.status(409).json({
                 success: false,
-                message: 'Duplicate size definition detected.',
+                message: 'Duplicate size definition detected. A size with that category/gender/region/value combination already exists.',
                 error: 'DUPLICATE_ENTRY'
             });
         }
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
 /**
- * @desc    Update size
+ * @desc    Update size (field-level allowlist + audit diff)
  * @route   PUT /api/sizes/:id
  * @access  Admin
  */
 export const updateSize = async (req, res) => {
     try {
-        // 1. Fetch document (Not lean, we need save() for middleware)
         const size = await SizeMaster.findById(req.params.id);
         if (!size) return res.status(404).json({ success: false, message: 'Size not found' });
 
-        // 2. Apply updates
+        // Fix #7: lifecycleState removed — must use PATCH /toggle-status to enforce state machine
         const allowedUpdates = [
             'value', 'displayName', 'category', 'gender', 'primaryRegion',
-            'normalizedRank', 'lifecycleState', 'measurements', 'conversions'
+            'normalizedRank', 'measurements', 'conversions'
         ];
+        const upperFields = new Set(['category', 'gender', 'primaryRegion', 'lifecycleState', 'value']);
+
+        // Capture pre-update snapshot for diff
+        const before = {};
+        allowedUpdates.forEach(f => { before[f] = size[f]; });
 
         allowedUpdates.forEach(field => {
             if (req.body[field] !== undefined) {
-                // Formatting handled by setters/middleware if strictly typed
-                // Helper to ensure upper case for enums
-                if (['category', 'gender', 'primaryRegion', 'lifecycleState', 'value'].includes(field)) {
-                    size[field] = req.body[field].toUpperCase();
-                } else {
-                    size[field] = req.body[field];
-                }
+                size[field] = upperFields.has(field)
+                    ? req.body[field].toString().toUpperCase()
+                    : req.body[field];
             }
         });
 
         size.updatedBy = req.user?._id;
 
-        // 3. Save with Optimistic Concurrency
+        // Compute diff — only log fields that actually changed
+        const changes = diffFields(before, allowedUpdates.reduce((acc, f) => {
+            acc[f] = size[f]; return acc;
+        }, {}));
+
+        if (Object.keys(changes).length > 0) {
+            size.auditLog.push({
+                action: 'UPDATED',
+                by: req.user?._id,
+                at: new Date(),
+                changes
+            });
+        }
+
         await size.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: 'Size updated successfully',
             data: size
@@ -215,17 +250,16 @@ export const updateSize = async (req, res) => {
         if (error.code === 11000) {
             return res.status(409).json({ success: false, message: 'Duplicate entry detected.' });
         }
-        if (error.message.includes('locked')) {
+        if (error.message?.includes('locked')) {
             return res.status(403).json({ success: false, message: error.message });
         }
-
-        console.error('Update error:', error);
-        res.status(500).json({ success: false, message: error.message });
+        console.error('[updateSize] error:', error);
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
 /**
- * @desc    Delete size
+ * @desc    Hard delete — only ARCHIVED or DRAFT sizes with zero usage
  * @route   DELETE /api/sizes/:id
  */
 export const deleteSize = async (req, res) => {
@@ -233,82 +267,109 @@ export const deleteSize = async (req, res) => {
         const size = await SizeMaster.findById(req.params.id);
         if (!size) return res.status(404).json({ success: false, message: 'Size not found' });
 
-        // Check Logic is now in Pre-Delete Middleware for safety
-        // But we can fail fast here too
+        // ── Hard delete rules (controller layer + middleware double-enforced) ──
         if (size.usageCount > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Cannot delete active size with ${size.usageCount} references.`
+                message: `Cannot delete size — ${size.usageCount} active variant(s) reference it. Deprecate or archive it first.`
+            });
+        }
+        if (!['ARCHIVED', 'DRAFT'].includes(size.lifecycleState)) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot delete a size in "${size.lifecycleState}" state. Only ARCHIVED or DRAFT sizes can be permanently deleted.`
             });
         }
 
-        await size.deleteOne(); // Triggers middleware
+        // Fix #4 — Write deletion audit record BEFORE destroying the document
+        // Stored separately so it survives after the document is gone.
+        // Uses a lightweight in-memory log; replace with AuditArchive model if needed.
+        const deletionRecord = {
+            action: 'HARD_DELETED',
+            entity: 'SizeMaster',
+            entityId: size._id.toString(),
+            canonicalId: size.canonicalId,
+            snapshot: {
+                value: size.value,
+                displayName: size.displayName,
+                category: size.category,
+                lifecycleState: size.lifecycleState,
+                usageCount: size.usageCount,
+            },
+            by: req.user?._id ?? 'system',
+            at: new Date().toISOString(),
+        };
+        console.info('[AUDIT] Hard delete:', JSON.stringify(deletionRecord));
+        // TODO: persist deletionRecord to AuditArchive collection when available
 
-        res.status(200).json({
+        await size.deleteOne(); // triggers pre('deleteOne') middleware for double-safety
+
+        return res.status(200).json({
             success: true,
-            message: 'Size deleted successfully'
+            message: 'Size permanently deleted',
+            canonicalId: deletionRecord.canonicalId
         });
 
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error('[deleteSize] error:', error);
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
 /**
- * @desc    Toggle lock
- * @route   PATCH /api/sizes/:id/lock
- */
-export const toggleLock = async (req, res) => {
-    try {
-        const size = await SizeMaster.findById(req.params.id);
-        if (!size) return res.status(404).json({ success: false, message: 'Size not found' });
-
-        size.isLocked = !size.isLocked;
-        size.updatedBy = req.user?._id;
-        await size.save();
-
-        res.status(200).json({
-            success: true,
-            message: `Size ${size.isLocked ? 'locked' : 'unlocked'}`,
-            data: size
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-/**
- * @desc    Toggle Status
+ * @desc    Lifecycle transition — accepts explicit targetState (no auto-advance)
  * @route   PATCH /api/sizes/:id/toggle-status
+ * @body    { targetState: 'ACTIVE' | 'DEPRECATED' | 'ARCHIVED' | 'DRAFT' }
  */
 export const toggleStatus = async (req, res) => {
     try {
-        const size = await SizeMaster.findById(req.params.id);
-        if (!size) return res.status(404).json({ success: false, message: 'Size not found' });
+        const { targetState } = req.body;
 
-        // State Machine Logic
-        const transitionMap = {
-            'DRAFT': 'ACTIVE',
-            'ACTIVE': 'DEPRECATED',
-            'DEPRECATED': 'ACTIVE',
-            'ARCHIVED': 'DEPRECATED'
-        };
-
-        const newState = transitionMap[size.lifecycleState];
-        if (!newState) {
+        if (!targetState) {
             return res.status(400).json({
                 success: false,
-                message: `Cannot toggle from state ${size.lifecycleState}`
+                message: 'targetState is required in request body (e.g. { "targetState": "ACTIVE" })'
             });
         }
 
-        size.lifecycleState = newState;
+        const size = await SizeMaster.findById(req.params.id);
+        if (!size) return res.status(404).json({ success: false, message: 'Size not found' });
+
+        // Fix #5 — Return clean 403 instead of letting model throw a 500
+        if (size.isLocked) {
+            return res.status(403).json({
+                success: false,
+                message: 'Cannot change the lifecycle state of a locked size. Unlock it first.'
+            });
+        }
+
+        const current = size.lifecycleState;
+        const target = targetState.toString().toUpperCase();
+
+        // Validate via centralized model static — single source of truth
+        if (!SizeMaster.validateTransition(current, target)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid lifecycle transition: "${current}" → "${target}". Allowed from ${current}: [${(SizeMaster.VALID_TRANSITIONS?.[current] || []).join(', ') || 'none'}]`
+            });
+        }
+
+        size.lifecycleState = target;
         size.updatedBy = req.user?._id;
+
+        // Audit
+        size.auditLog.push({
+            action: 'LIFECYCLE_CHANGED',
+            by: req.user?._id,
+            at: new Date(),
+            changes: { lifecycleState: { from: current, to: target } }
+        });
+
         await size.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
-            message: `Size moved to ${newState}`,
+            message: `Lifecycle transition: ${current} → ${target}`,
             data: size
         });
 
@@ -316,45 +377,106 @@ export const toggleStatus = async (req, res) => {
         if (error.name === 'VersionError') {
             return res.status(409).json({
                 success: false,
-                message: 'Conflict: State changed by another user.'
+                message: 'Conflict: Lifecycle state was changed by another user. Please refresh.'
             });
         }
-        res.status(500).json({ success: false, message: error.message });
+        console.error('[toggleStatus] error:', error);
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
 
 /**
- * @desc    Bulk Create
+ * @desc    Toggle isLocked flag with audit
+ * @route   PATCH /api/sizes/:id/lock
+ */
+export const toggleLock = async (req, res) => {
+    try {
+        const size = await SizeMaster.findById(req.params.id);
+        if (!size) return res.status(404).json({ success: false, message: 'Size not found' });
+
+        const wasLocked = size.isLocked;
+        size.isLocked = !wasLocked;
+        size.updatedBy = req.user?._id;
+
+        // Audit
+        size.auditLog.push({
+            action: wasLocked ? 'UNLOCKED' : 'LOCKED',
+            by: req.user?._id,
+            at: new Date()
+        });
+
+        await size.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `Size ${size.isLocked ? 'locked' : 'unlocked'} successfully`,
+            data: size
+        });
+    } catch (error) {
+        // Fix #6 — Concurrent lock toggle returns 409 not 500
+        if (error.name === 'VersionError') {
+            return res.status(409).json({
+                success: false,
+                message: 'Conflict: Lock state was changed by another process. Please refresh and try again.'
+            });
+        }
+        console.error('[toggleLock] error:', error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * @desc    Bulk Create (insertMany — partial success, unordered)
  * @route   POST /api/sizes/bulk
  */
 export const bulkCreateSizes = async (req, res) => {
+    // Fix #1 — insertMany bypasses pre('validate') middleware, so we must:
+    //   a) pre-generate canonicalIds atomically
+    //   b) set isActive from lifecycleState manually
+    //   c) ensure auditLog is seeded
     try {
         const { sizes } = req.body;
         if (!Array.isArray(sizes) || !sizes.length) {
-            return res.status(400).json({ success: false, message: 'Invalid input' });
+            return res.status(400).json({ success: false, message: 'sizes array is required and must not be empty' });
         }
 
-        // Sanitized Map
-        const docs = sizes.map(s => ({
-            ...s,
-            value: s.value?.toUpperCase(),
-            category: s.category?.toUpperCase(),
-            gender: s.gender?.toUpperCase(),
-            primaryRegion: s.primaryRegion?.toUpperCase(),
-            lifecycleState: s.lifecycleState?.toUpperCase() || 'DRAFT',
-            createdBy: req.user?._id
+        // Pre-generate one canonicalId per entry using the atomic counter
+        const docs = await Promise.all(sizes.map(async s => {
+            const canonicalId = await SizeMaster.generateCanonicalId();
+            const lifecycleState = s.lifecycleState?.toString().toUpperCase() || 'DRAFT';
+            return {
+                ...s,
+                canonicalId,
+                value: s.value?.toString().toUpperCase(),
+                category: s.category?.toString().toUpperCase(),
+                gender: s.gender?.toString().toUpperCase(),
+                primaryRegion: s.primaryRegion?.toString().toUpperCase(),
+                lifecycleState,
+                // Sync isActive — mirrors pre('validate') logic
+                isActive: lifecycleState === 'ACTIVE',
+                createdBy: req.user?._id,
+                auditLog: [{ action: 'CREATED', by: req.user?._id, at: new Date() }]
+            };
         }));
 
         const result = await SizeMaster.insertMany(docs, { ordered: false });
 
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
-            message: `${result.length} sizes created`,
+            message: `${result.length} of ${docs.length} sizes created`,
             data: result
         });
 
     } catch (error) {
-        // Partial success handling could be added here
-        res.status(500).json({ success: false, message: error.message });
+        // ordered: false → partial success may have occurred
+        if (error.name === 'BulkWriteError') {
+            const inserted = error.result?.nInserted ?? 0;
+            return res.status(207).json({
+                success: false,
+                message: `Partial bulk insert: ${inserted} created, ${sizes?.length - inserted} failed (likely duplicates)`,
+                error: 'PARTIAL_BULK_FAILURE'
+            });
+        }
+        return res.status(500).json({ success: false, message: error.message });
     }
 };
