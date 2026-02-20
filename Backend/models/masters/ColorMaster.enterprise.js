@@ -3,25 +3,18 @@ import mongoose from 'mongoose';
 /**
  * ENTERPRISE COLOR MASTER (HARDENED & VALIDATION SAFE)
  * Scope: Multi-tenant global color palette registry
- * Scale: 100k+ color definitions (High Concurrency)
- * Constraints: OCC, Immutable Identity, Schema-Level Governance, Audit Trails
  */
 
 const colorMasterSchema = new mongoose.Schema({
-    // ==================== TENANCY ====================
     tenantId: {
         type: String,
         default: 'GLOBAL',
         index: true,
-        immutable: true,
-        description: "Partition key for multi-tenant support"
+        immutable: true
     },
 
-    // ==================== IDENTIFIERS ====================
     canonicalId: {
         type: String,
-        // REQUIRED but generated in pre('validate')
-        // We keep required: true to ensure it exists before DB save
         required: true,
         uppercase: true,
         immutable: true,
@@ -32,19 +25,17 @@ const colorMasterSchema = new mongoose.Schema({
         type: String,
         lowercase: true,
         trim: true,
-        immutable: true,
-        unique: true
+        immutable: true
     },
 
+    // 1. SKU Code: Removed 'required: true' to allow backend auto-generation
     code: {
         type: String,
-        required: true,
         uppercase: true,
         trim: true,
-        description: "Internal SKU segment (e.g., 'BLU-MID-001')"
+        index: true
     },
 
-    // ==================== DISPLAY & INPUT ====================
     name: {
         type: String,
         required: true,
@@ -65,8 +56,6 @@ const colorMasterSchema = new mongoose.Schema({
         match: /^#[0-9A-F]{6}$/
     },
 
-    // ==================== DERIVED VISUAL DATA (Auto-Generated) ====================
-    // Note: NOT required because they are computed from hexCode
     rgbCode: {
         r: { type: Number, min: 0, max: 255 },
         g: { type: Number, min: 0, max: 255 },
@@ -89,7 +78,6 @@ const colorMasterSchema = new mongoose.Schema({
         black: Number
     },
 
-    // ==================== CATEGORIZATION ====================
     colorFamily: {
         type: String,
         required: true,
@@ -104,7 +92,6 @@ const colorMasterSchema = new mongoose.Schema({
         index: true
     },
 
-    // ==================== GOVERNANCE ====================
     lifecycleState: {
         type: String,
         enum: ['DRAFT', 'ACTIVE', 'DEPRECATED', 'LOCKED', 'ARCHIVED'],
@@ -117,11 +104,7 @@ const colorMasterSchema = new mongoose.Schema({
     isLocked: { type: Boolean, default: false },
     usageCount: { type: Number, default: 0, min: 0 },
 
-    // ==================== AUDIT ====================
-    createdBy: {
-        type: mongoose.Schema.Types.Mixed, // Relaxed to allow "admin" string or ObjectId
-        description: "User ID or System Identifier"
-    },
+    createdBy: { type: mongoose.Schema.Types.Mixed },
     updatedBy: { type: mongoose.Schema.Types.Mixed },
 
     auditLog: [{
@@ -139,13 +122,12 @@ const colorMasterSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-// ==================== INDEXES ====================
+// Indexes
 colorMasterSchema.index({ tenantId: 1, slug: 1 }, { unique: true, partialFilterExpression: { slug: { $exists: true } } });
 colorMasterSchema.index({ tenantId: 1, hexCode: 1 }, { unique: true });
 colorMasterSchema.index({ tenantId: 1, code: 1 }, { unique: true });
-colorMasterSchema.index({ canonicalId: 1 }, { unique: true }); // Global unique ID
 
-// ==================== HELPER: VISUAL CALCULATION ====================
+// Visual Calculator
 const calculateVisualData = (hex) => {
     if (!hex || !/^#[0-9A-F]{6}$/.test(hex)) return null;
 
@@ -169,40 +151,59 @@ const calculateVisualData = (hex) => {
         }
     }
 
-    // Luminance & Contrast
     const luminanceTerms = [rAttributes, gAttributes, bAttributes].map(v =>
         v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
     );
     const L = 0.2126 * luminanceTerms[0] + 0.7152 * luminanceTerms[1] + 0.0722 * luminanceTerms[2];
-
-    const whiteRatio = (1.0 + 0.05) / (L + 0.05);
-    const blackRatio = (L + 0.05) / (0.0 + 0.05);
 
     return {
         rgbCode: { r, g, b },
         hslCode: { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) },
         brightness: l < 0.33 ? 'DARK' : l < 0.67 ? 'MEDIUM' : 'LIGHT',
         contrastRatio: {
-            white: parseFloat(whiteRatio.toFixed(2)),
-            black: parseFloat(blackRatio.toFixed(2))
+            white: parseFloat(((1.0 + 0.05) / (L + 0.05)).toFixed(2)),
+            black: parseFloat(((L + 0.05) / (0.0 + 0.05)).toFixed(2))
         }
     };
 };
 
-// ==================== CRITICAL: PRE-VALIDATION HOOK (Auto-Generation) ====================
-// Runs BEFORE 'required' checks. Solves the "Chicken & Egg" problem.
-colorMasterSchema.pre('validate', function (next) {
-    // 1. Generate Canonical ID if missing
-    if (this.isNew && !this.canonicalId) {
-        // Fallback for missing name/family to prevent crash, though validations will catch them later
-        const familyCode = (this.colorFamily || 'GEN').substring(0, 3).toUpperCase();
-        const nameCode = (this.name || 'UNKNOWN').replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
-        this.canonicalId = `COLOR-${familyCode}-${nameCode}-${Date.now().toString().slice(-6)}`;
+// 8. Optional Auto-Detection for colorFamily from HSL Hue
+const detectColorFamily = (h, s, l) => {
+    if (l < 12) return 'BLACK';
+    if (l > 88) return 'WHITE';
+    if (s < 10) return 'GREY';
+
+    // Hue ranges for major families
+    if (h < 15 || h >= 345) return 'RED';
+    if (h < 45) return 'ORANGE';
+    if (h < 75) return 'YELLOW';
+    if (h < 165) return 'GREEN';
+    if (h < 260) return 'BLUE';
+    if (h < 300) return 'PURPLE';
+    if (h < 345) return 'PINK';
+
+    return 'GREY'; // Fallback
+};
+
+/**
+ * PRE('VALIDATE') - Automatic Generation Hook
+ */
+colorMasterSchema.pre('validate', function () {
+    // 1. Hex Normalization
+    if (this.hexCode) {
+        const hex = this.hexCode.trim().toUpperCase();
+        if (/^#[0-9A-F]{3}$/.test(hex)) {
+            const [, r, g, b] = hex.split('');
+            this.hexCode = `#${r}${r}${g}${g}${b}${b}`;
+        } else {
+            this.hexCode = hex;
+        }
     }
 
-    // 2. Generate Visual Data
+    // 2. Visual Data Generation
+    let visual = null;
     if (this.hexCode && (this.isNew || this.isModified('hexCode'))) {
-        const visual = calculateVisualData(this.hexCode);
+        visual = calculateVisualData(this.hexCode);
         if (visual) {
             this.rgbCode = visual.rgbCode;
             this.hslCode = visual.hslCode;
@@ -211,34 +212,50 @@ colorMasterSchema.pre('validate', function (next) {
         }
     }
 
-    // 3. Auto-Slug (optional but good for URL safety)
+    // 3. Auto-Detect Color Family (if missing or hex changed)
+    if (!this.colorFamily && visual) {
+        this.colorFamily = detectColorFamily(visual.hslCode.h, visual.hslCode.s, visual.hslCode.l);
+    }
+
+    // 4. SKU Auto-Generation Strategy (Sequence based fallback to timestamp)
+    if (this.isNew && !this.code) {
+        const familyPrefix = (this.colorFamily || 'GEN').substring(0, 3).toUpperCase();
+        const shortName = (this.name || 'CLR').replace(/[^a-zA-Z0-9]/g, '').substring(0, 3).toUpperCase();
+        // Strategy: [FAMILY]-[NAME]-[TIMESTAMP_SLICE]
+        // Example: RED-SCR-982341
+        this.code = `${familyPrefix}-${shortName}-${Date.now().toString().slice(-6)}`;
+    }
+
+    // 5. Canonical ID
+    if (this.isNew && !this.canonicalId) {
+        const familyCode = (this.colorFamily || 'GEN').substring(0, 3).toUpperCase();
+        const hexSuffix = (this.hexCode || '#000000').replace('#', '').substring(0, 6);
+        this.canonicalId = `COLOR-${familyCode}-${hexSuffix}-${Date.now().toString().slice(-4)}`;
+    }
+
+    // 6. Auto-Slug
     if (!this.slug && this.name) {
         this.slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     }
-
-    next();
 });
 
-// ==================== GOVERNANCE: PRE-SAVE HOOK ====================
-// Runs AFTER validation. Handles locks, transitions, and isolation.
-colorMasterSchema.pre('save', async function (next) {
-    // Only fetch for updates
+/**
+ * PRE('SAVE') - Async Governance
+ */
+colorMasterSchema.pre('save', async function () {
     let current = null;
     if (!this.isNew) {
         current = await this.constructor.findById(this._id).select('lifecycleState isLocked hexCode tenantId').lean();
     }
 
-    // 1. Tenant Isolation
     if (current && this.tenantId !== current.tenantId) throw new Error('Cannot move color between tenants');
 
-    // 2. Lock Enforcement
     if (current?.isLocked && this.isLocked !== false) {
         const safe = ['updatedBy', 'isLocked', 'auditLog', 'usageCount', 'lastUsedAt', 'updatedAt'];
         const modified = this.modifiedPaths().filter(p => !safe.includes(p));
         if (modified.length > 0) throw new Error(`LOCKED: Cannot modify ${modified.join(', ')}`);
     }
 
-    // 3. Lifecycle Validation
     if (current && this.isModified('lifecycleState')) {
         const VALID_TRANSITIONS = {
             DRAFT: ['ACTIVE', 'ARCHIVED'],
@@ -249,29 +266,17 @@ colorMasterSchema.pre('save', async function (next) {
         };
         const allowed = VALID_TRANSITIONS[current.lifecycleState];
         if (!allowed?.includes(this.lifecycleState)) throw new Error(`Invalid Transition: ${current.lifecycleState} -> ${this.lifecycleState}`);
-
         this.isActive = this.lifecycleState === 'ACTIVE';
         if (this.lifecycleState === 'LOCKED') this.isLocked = true;
     }
 });
 
-// ==================== SAFE DELETION ====================
-colorMasterSchema.pre('deleteOne', { document: true, query: false }, async function () {
-    if (this.usageCount > 0) throw new Error(`Dependency Error: Used by ${this.usageCount} variants.`);
-    if (this.lifecycleState !== 'ARCHIVED' && this.lifecycleState !== 'DRAFT') throw new Error('Only ARCHIVED/DRAFT colors can be deleted.');
-    if (this.isLocked) throw new Error('Locked colors cannot be deleted.');
-});
-
-// ==================== RAW UPDATE SECURITY ====================
-// Prevents bypassing validation via findOneAndUpdate
-const blockRawUpdates = function (next) {
+// RAW UPDATE SECURITY
+const blockRawUpdates = function () {
     const update = this.getUpdate();
     const unsafe = ['hexCode', 'lifecycleState', 'isLocked', 'name', 'slug'];
     const hasUnsafe = unsafe.some(k => (update.$set && update.$set[k]) || update[k]);
-
-    // Whitelist $inc for usageCount
     if (hasUnsafe) throw new Error('SECURITY: Use doc.save() for content updates.');
-    next();
 };
 colorMasterSchema.pre('findOneAndUpdate', blockRawUpdates);
 colorMasterSchema.pre('updateOne', blockRawUpdates);

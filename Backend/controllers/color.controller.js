@@ -1,72 +1,114 @@
 import Color from '../models/masters/ColorMaster.enterprise.js';
 
+/**
+ * Expand 3-digit hex shorthand to 6-digit.
+ * #FFF  →  #FFFFFF
+ * #FFFFFF  →  #FFFFFF   (no-op)
+ * Invalid  →  returned as-is (schema match will reject it cleanly)
+ */
+const expandHex = (raw = '') => {
+    const hex = raw.trim().toUpperCase();
+    if (/^#[0-9A-F]{3}$/.test(hex)) {
+        const [, r, g, b] = hex.split('');
+        return `#${r}${r}${g}${g}${b}${b}`;
+    }
+    return hex; // already 6-digit or invalid
+};
+
 // @desc    Create new color
 // @route   POST /api/colors
 // @access  Admin
 export const createColor = async (req, res) => {
     try {
-        const { name, hexCode, status, priority, description } = req.body;
+        const {
+            name,
+            displayName,
+            code,
+            hexCode,
+            colorFamily,
+            visualCategory,
+            status,
+            priority,
+            description
+        } = req.body;
 
-        // Check if hex code already exists
-        const existingColor = await Color.findOne({ hexCode: hexCode.toUpperCase() });
-        if (existingColor) {
-            if (existingColor.isDeleted) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Color with this hex code exists but is deleted. Please restore it.'
-                });
-            }
+        // 1. Basic presence check (Pre-validation)
+        // Note: 'code' and 'colorFamily' can now be auto-generated/detected by the model
+        const requiredFields = ['name', 'displayName', 'hexCode'];
+        const missingFields = requiredFields.filter(field => !req.body[field]);
+
+        if (missingFields.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Color with this hex code already exists'
+                message: `Missing required fields: ${missingFields.join(', ')}`,
+                errors: missingFields.reduce((acc, field) => ({ ...acc, [field]: 'This field is required' }), {})
             });
         }
 
-        if (!hexCode) {
-            return res.status(400).json({ success: false, message: 'Hex code is required' });
+        // 2. Normalize hex for the uniqueness check
+        const normalizedHex = expandHex(hexCode);
+
+        // 3. Collision Check (Pre-emptive)
+        const existingColor = await Color.findOne({ hexCode: normalizedHex });
+
+        if (existingColor) {
+            return res.status(409).json({
+                success: false,
+                message: 'A color with this hex code already exists'
+            });
         }
 
-        // Generate slug
-        const slug = name
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-
-        // Format hex code
-        let formattedHex = hexCode.toUpperCase();
-        if (!formattedHex.startsWith('#')) {
-            formattedHex = '#' + formattedHex;
-        }
-
-        // Create color
+        // 4. Persistence
         const color = await Color.create({
             name,
-            slug,
-            hexCode: formattedHex,
-            status: status || 'active',
+            displayName,
+            code: code ? code.toUpperCase() : undefined,
+            hexCode: normalizedHex,
+            colorFamily: colorFamily ? colorFamily.toUpperCase() : undefined,
+            visualCategory: visualCategory || 'SOLID',
             priority: priority || 0,
             description,
+            lifecycleState: 'DRAFT',
             createdBy: 'admin'
         });
 
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             message: 'Color created successfully',
             data: color
         });
-    } catch (error) {
-        console.error('Create color error:', error);
 
-        if (error.code === 11000) {
+    } catch (error) {
+        console.error('CREATE_COLOR_ERROR:', error);
+
+        // A. Handle Mongoose Validation Errors (HTTP 400)
+        if (error.name === 'ValidationError') {
+            const errors = Object.values(error.errors).reduce((acc, err) => ({
+                ...acc,
+                [err.path]: err.message
+            }), {});
+
             return res.status(400).json({
                 success: false,
-                message: 'Color with this name, slug, or hex code already exists'
+                message: 'Validation Failed',
+                errors
             });
         }
 
-        res.status(500).json({
+        // B. Handle Duplicate Key Errors (HTTP 409)
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: 'Duplicate record found: Data conflicts with an existing color.'
+            });
+        }
+
+        // C. Fallback (HTTP 500)
+        return res.status(500).json({
             success: false,
-            message: error.message || 'Failed to create color'
+            message: process.env.NODE_ENV === 'production'
+                ? 'Internal server error'
+                : error.message
         });
     }
 };
@@ -77,28 +119,25 @@ export const createColor = async (req, res) => {
 export const getColors = async (req, res) => {
     try {
         const {
-            status,
-            category,
             search,
             page = 1,
             limit = 50,
             sort = 'priority'
         } = req.query;
 
-        // Build query
-        const query = { isDeleted: false };
+        // Build query - Align with Enterprise Schema (Lifecycle Governance)
+        // We filter out ARCHIVED records by default
+        const query = { lifecycleState: { $ne: 'ARCHIVED' } };
 
-        if (status) {
-            query.status = status;
-        }
-
-        if (category) {
-            query.applicableCategories = category;
+        // Support filtering by lifecycleState (e.g. ?lifecycleState=ACTIVE)
+        if (req.query.lifecycleState) {
+            query.lifecycleState = req.query.lifecycleState;
         }
 
         if (search) {
             query.$or = [
                 { name: { $regex: search, $options: 'i' } },
+                { code: { $regex: search, $options: 'i' } },
                 { hexCode: { $regex: search, $options: 'i' } }
             ];
         }
@@ -124,7 +163,6 @@ export const getColors = async (req, res) => {
 
         // Execute query
         const colors = await Color.find(query)
-            .populate('applicableCategories', 'name slug')
             .sort(sortOption)
             .limit(parseInt(limit))
             .skip(skip);
@@ -156,9 +194,7 @@ export const getColors = async (req, res) => {
 // @access  Public
 export const getColor = async (req, res) => {
     try {
-        const color = await Color.findOne({ _id: req.params.id, isDeleted: false })
-            .populate('applicableCategories', 'name slug')
-            .populate('productCount');
+        const color = await Color.findOne({ _id: req.params.id, lifecycleState: { $ne: 'ARCHIVED' } });
 
         if (!color) {
             return res.status(404).json({
@@ -185,10 +221,21 @@ export const getColor = async (req, res) => {
 // @access  Admin
 export const updateColor = async (req, res) => {
     try {
-        const { name, hexCode, status, priority, description } = req.body;
+        const {
+            name,
+            displayName,
+            code,
+            hexCode,
+            colorFamily,
+            visualCategory,
+            lifecycleState,
+            priority,
+            description
+        } = req.body;
 
-        // Find color
-        const color = await Color.findOne({ _id: req.params.id, isDeleted: false });
+        // 1. Find the resource (ARCHIVED colors are editable — metadata only)
+        const color = await Color.findById(req.params.id);
+
         if (!color) {
             return res.status(404).json({
                 success: false,
@@ -196,30 +243,46 @@ export const updateColor = async (req, res) => {
             });
         }
 
-        // Check if hex code is being changed and if new code exists
-        if (hexCode && hexCode.toUpperCase() !== color.hexCode) {
-            const existingColor = await Color.findOne({
-                hexCode: hexCode.toUpperCase(),
-                _id: { $ne: req.params.id },
-                isDeleted: false
+        // Block lifecycle changes on ARCHIVED via this endpoint — use POST /restore instead
+        if (lifecycleState && color.lifecycleState === 'ARCHIVED' && lifecycleState !== 'ARCHIVED') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot change lifecycle of an ARCHIVED color via update. Use the restore endpoint.'
             });
+        }
 
-            if (existingColor) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Color with this hex code already exists'
+        // 2. Handle Hex Change & Duplicate Check
+        if (hexCode) {
+            const normalizedHex = expandHex(hexCode);
+            if (normalizedHex !== color.hexCode) {
+                const existingColor = await Color.findOne({
+                    hexCode: normalizedHex,
+                    _id: { $ne: req.params.id }
                 });
+
+                if (existingColor) {
+                    return res.status(409).json({
+                        success: false,
+                        message: 'Another color with this hex code already exists'
+                    });
+                }
+                color.hexCode = normalizedHex;
             }
         }
 
-        // Update fields
+        // 3. Update fields (Governance and hooks will handle the rest)
         if (name) color.name = name;
-        if (hexCode) color.hexCode = hexCode.toUpperCase();
-        if (status) color.status = status;
+        if (displayName) color.displayName = displayName;
+        if (code) color.code = code.toUpperCase();
+        if (colorFamily) color.colorFamily = colorFamily.toUpperCase();
+        if (visualCategory) color.visualCategory = visualCategory;
+        if (lifecycleState) color.lifecycleState = lifecycleState;
         if (priority !== undefined) color.priority = priority;
         if (description !== undefined) color.description = description;
+
         color.updatedBy = 'admin';
 
+        // 4. Save and return (this triggers pre-save hooks)
         await color.save();
 
         res.status(200).json({
@@ -228,8 +291,8 @@ export const updateColor = async (req, res) => {
             data: color
         });
     } catch (error) {
-        console.error('Update color error:', error);
-        res.status(500).json({
+        console.error('UPDATE_COLOR_ERROR:', error);
+        res.status(400).json({
             success: false,
             message: error.message || 'Failed to update color'
         });
@@ -241,7 +304,7 @@ export const updateColor = async (req, res) => {
 // @access  Admin
 export const deleteColor = async (req, res) => {
     try {
-        const color = await Color.findOne({ _id: req.params.id, isDeleted: false });
+        const color = await Color.findOne({ _id: req.params.id, lifecycleState: { $ne: 'ARCHIVED' } });
 
         if (!color) {
             return res.status(404).json({
@@ -250,8 +313,11 @@ export const deleteColor = async (req, res) => {
             });
         }
 
-        // Soft delete
-        await color.softDelete('admin');
+        // Enterprise soft delete: Move to ARCHIVED state
+        color.lifecycleState = 'ARCHIVED';
+        color.isActive = false;
+        color.updatedBy = 'admin';
+        await color.save();
 
         res.status(200).json({
             success: true,
@@ -271,7 +337,7 @@ export const deleteColor = async (req, res) => {
 // @access  Admin
 export const toggleStatus = async (req, res) => {
     try {
-        const color = await Color.findOne({ _id: req.params.id, isDeleted: false });
+        const color = await Color.findOne({ _id: req.params.id, lifecycleState: { $ne: 'ARCHIVED' } });
 
         if (!color) {
             return res.status(404).json({
@@ -280,19 +346,28 @@ export const toggleStatus = async (req, res) => {
             });
         }
 
-        // Toggle status
-        color.status = color.status === 'active' ? 'inactive' : 'active';
+        // State Machine Logic
+        // ACTIVE -> DEPRECATED
+        // DEPRECATED/DRAFT -> ACTIVE
+        if (color.lifecycleState === 'ACTIVE') {
+            color.lifecycleState = 'DEPRECATED';
+            color.isActive = false;
+        } else {
+            color.lifecycleState = 'ACTIVE';
+            color.isActive = true;
+        }
+
         color.updatedBy = 'admin';
         await color.save();
 
         res.status(200).json({
             success: true,
-            message: `Color ${color.status === 'active' ? 'activated' : 'deactivated'} successfully`,
+            message: `Color is now ${color.lifecycleState}`,
             data: color
         });
     } catch (error) {
         console.error('Toggle status error:', error);
-        res.status(500).json({
+        res.status(400).json({
             success: false,
             message: error.message || 'Failed to toggle status'
         });
@@ -342,7 +417,7 @@ export const bulkCreateColors = async (req, res) => {
 // @access  Admin
 export const restoreColor = async (req, res) => {
     try {
-        const color = await Color.findOne({ _id: req.params.id, isDeleted: true });
+        const color = await Color.findOne({ _id: req.params.id, lifecycleState: 'ARCHIVED' });
 
         if (!color) {
             return res.status(404).json({
@@ -351,7 +426,11 @@ export const restoreColor = async (req, res) => {
             });
         }
 
-        await color.restore();
+        // Enterprise Restore: Move back to DRAFT state
+        color.lifecycleState = 'DRAFT';
+        color.isActive = true;
+        color.updatedBy = 'admin';
+        await color.save();
 
         res.status(200).json({
             success: true,

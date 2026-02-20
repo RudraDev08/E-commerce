@@ -29,6 +29,7 @@ export const colorAPI = {
     create: (data) => api.post('/colors', data),
     update: (id, data) => api.put(`/colors/${id}`, data),
     delete: (id) => api.delete(`/colors/${id}`),
+    restore: (id) => api.patch(`/colors/${id}/restore`),
     toggleStatus: (id) => api.patch(`/colors/${id}/toggle-status`),
     bulkCreate: (data) => api.post('/colors/bulk', data),
 };
