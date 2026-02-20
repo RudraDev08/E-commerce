@@ -84,12 +84,23 @@ export const getSizes = async (req, res) => {
                 const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
                 if (decoded.val === undefined || !decoded.id) throw new Error('Malformed cursor payload');
 
+                // Cast date strings back to Date objects for accurate comparison
+                let cursorVal = decoded.val;
+                if (['createdAt', 'updatedAt'].includes(sortField)) {
+                    cursorVal = new Date(cursorVal);
+                }
+
                 const op = sortDir === 1 ? '$gt' : '$lt';
-                query.$or = [
-                    { [sortField]: { [op]: decoded.val } },
-                    // Tie-breaker: same sortField value, but different _id
-                    { [sortField]: decoded.val, _id: { [op]: new mongoose.Types.ObjectId(decoded.id) } }
-                ];
+                const paginationCondition = {
+                    $or: [
+                        { [sortField]: { [op]: cursorVal } },
+                        { [sortField]: cursorVal, _id: { [op]: new mongoose.Types.ObjectId(decoded.id) } }
+                    ]
+                };
+
+                // Safely add to query using $and to avoid overwriting existing $or (e.g. from search)
+                query.$and = query.$and || [];
+                query.$and.push(paginationCondition);
             } catch {
                 return res.status(400).json({
                     success: false,
