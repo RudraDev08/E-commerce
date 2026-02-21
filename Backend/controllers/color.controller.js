@@ -125,13 +125,15 @@ export const getColors = async (req, res) => {
             sort = 'priority'
         } = req.query;
 
-        // Build query - Align with Enterprise Schema (Lifecycle Governance)
-        // We filter out ARCHIVED records by default
-        const query = { lifecycleState: { $ne: 'ARCHIVED' } };
+        // Build query
+        const query = {};
 
-        // Support filtering by lifecycleState (e.g. ?lifecycleState=ACTIVE)
-        if (req.query.lifecycleState) {
+        // Support filtering by lifecycleState
+        if (req.query.lifecycleState && req.query.lifecycleState !== 'all') {
             query.lifecycleState = req.query.lifecycleState;
+        } else if (req.query.lifecycleState !== 'all') {
+            // If explicit "all" is NOT sent, hide archives by default to keep the main view clean
+            query.lifecycleState = { $ne: 'ARCHIVED' };
         }
 
         if (search) {
@@ -299,12 +301,13 @@ export const updateColor = async (req, res) => {
     }
 };
 
-// @desc    Delete color (soft delete)
+// @desc    Delete or Archive color
 // @route   DELETE /api/colors/:id
 // @access  Admin
 export const deleteColor = async (req, res) => {
     try {
-        const color = await Color.findOne({ _id: req.params.id, lifecycleState: { $ne: 'ARCHIVED' } });
+        const color = await Color.findById(req.params.id);
+        const { force } = req.query;
 
         if (!color) {
             return res.status(404).json({
@@ -313,15 +316,23 @@ export const deleteColor = async (req, res) => {
             });
         }
 
+        if (force === 'true' || color.lifecycleState === 'ARCHIVED') {
+            // Hard delete if already archived or if force flag is present
+            await color.deleteOne();
+            return res.status(200).json({
+                success: true,
+                message: 'Color permanently deleted'
+            });
+        }
+
         // Enterprise soft delete: Move to ARCHIVED state
         color.lifecycleState = 'ARCHIVED';
-        color.isActive = false;
         color.updatedBy = 'admin';
         await color.save();
 
         res.status(200).json({
             success: true,
-            message: 'Color deleted successfully'
+            message: 'Color archived successfully'
         });
     } catch (error) {
         console.error('Delete color error:', error);

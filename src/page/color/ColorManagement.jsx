@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     PlusIcon,
     MagnifyingGlassIcon,
     PencilIcon,
-    TrashIcon,
+    ArchiveBoxIcon,
     FunnelIcon,
     ArrowsUpDownIcon,
     SwatchIcon,
@@ -17,9 +18,105 @@ import {
     ClipboardIcon,
     ArrowRightIcon,
     Cog6ToothIcon,
+    ExclamationTriangleIcon,
+    CheckCircleIcon,
+    ArrowUturnLeftIcon,
+    TrashIcon,
 } from '@heroicons/react/24/outline';
 import { colorAPI } from '../../Api/api';
 import toast from 'react-hot-toast';
+
+const ICON_MAP = {
+    'bg-red-600 hover:bg-red-700': { icon: '🗑️', label: 'Destructive action' },
+    'bg-amber-600 hover:bg-amber-700': { icon: '📦', label: 'Archive action' },
+    'bg-indigo-600 hover:bg-indigo-700': { icon: '↩️', label: 'Restore action' },
+    'bg-slate-800 hover:bg-slate-900': { icon: '🔒', label: 'Lock action' },
+};
+
+const customConfirm = (message, onConfirm, confirmText = 'Confirm', confirmColor = 'bg-indigo-600 hover:bg-indigo-700') => {
+    const meta = ICON_MAP[confirmColor] || { icon: '⚡', label: 'Action' };
+    toast((t) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '240px' }}>
+            {/* Header row */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <span style={{ fontSize: '18px', lineHeight: 1, flexShrink: 0 }}>{meta.icon}</span>
+                <span style={{
+                    fontSize: '13.5px',
+                    fontWeight: 600,
+                    color: '#F1F5F9',
+                    lineHeight: '1.4',
+                    flex: 1,
+                }}>
+                    {message}
+                </span>
+            </div>
+
+            {/* Divider */}
+            <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '0 -2px' }} />
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button
+                    onClick={() => toast.dismiss(t.id)}
+                    style={{
+                        padding: '6px 14px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#94A3B8',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.target.style.background = 'rgba(255,255,255,0.11)'}
+                    onMouseLeave={e => e.target.style.background = 'rgba(255,255,255,0.06)'}
+                >
+                    Cancel
+                </button>
+                <button
+                    onClick={() => { toast.dismiss(t.id); onConfirm(); }}
+                    style={{
+                        padding: '6px 14px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        color: '#fff',
+                        background: confirmColor.includes('red') ? '#DC2626'
+                            : confirmColor.includes('amber') ? '#D97706'
+                                : confirmColor.includes('slate') ? '#1E293B'
+                                    : '#4F46E5',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                        transition: 'opacity 0.15s',
+                    }}
+                    onMouseEnter={e => e.target.style.opacity = '0.85'}
+                    onMouseLeave={e => e.target.style.opacity = '1'}
+                >
+                    {confirmText}
+                </button>
+            </div>
+        </div>
+    ), {
+        duration: Infinity,
+        style: {
+            background: '#0F172A',
+            color: '#F1F5F9',
+            borderRadius: '16px',
+            padding: '16px 18px',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.07)',
+            maxWidth: '380px',
+            border: 'none',
+            borderLeft: '3px solid ' + (
+                confirmColor.includes('red') ? '#F87171'
+                    : confirmColor.includes('amber') ? '#FBBF24'
+                        : confirmColor.includes('slate') ? '#64748B'
+                            : '#818CF8'
+            ),
+        },
+    });
+};
 
 // ─── HEX UTILITIES ────────────────────────────────────────────────────────────
 
@@ -35,7 +132,156 @@ const normalizeHex = (raw = '') => {
 
 const isSafeHex = (hex) => /^#[0-9A-F]{6}$/i.test(hex);
 
+// ─── WCAG CONTRAST UTILITY ────────────────────────────────────────────────────
+
+const getWcagWarning = (hex) => {
+    if (!isSafeHex(hex)) return null;
+    const h = hex.replace('#', '');
+    const toLinear = (v) => { const n = parseInt(v, 16) / 255; return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4); };
+    const L = 0.2126 * toLinear(h.slice(0, 2)) + 0.7152 * toLinear(h.slice(2, 4)) + 0.0722 * toLinear(h.slice(4, 6));
+    const vsWhite = parseFloat(((1.05) / (L + 0.05)).toFixed(2));
+    const vsBlack = parseFloat(((L + 0.05) / (0.05)).toFixed(2));
+    if (vsWhite < 4.5 && vsBlack < 4.5) return { level: 'error', msg: `Fails WCAG AA on both White (${vsWhite}:1) & Black (${vsBlack}:1) text` };
+    if (vsWhite < 4.5) return { level: 'warn', msg: `Low contrast on White text (${vsWhite}:1) — use Black text overlay.` };
+    if (vsBlack < 4.5) return { level: 'warn', msg: `Low contrast on Black text (${vsBlack}:1) — use White text overlay.` };
+    return null;
+};
+
+// ─── MODAL DROPDOWN (portal-safe — renders at fixed coords, no overflow clipping) ────
+
+const ModalDropdown = ({ label, value, options, onChange, required }) => {
+    const [open, setOpen] = useState(false);
+    const btnRef = useRef(null);
+    const listRef = useRef(null);
+    const [pos, setPos] = useState(null);
+    const selected = options.find(o => o.value === value) ?? options[0];
+
+    const updatePosition = useCallback(() => {
+        if (!btnRef.current) return;
+        const r = btnRef.current.getBoundingClientRect();
+
+        // Auto-close if the input scrolls completely out of view
+        if (r.bottom < 0 || r.top > window.innerHeight) {
+            setOpen(false);
+            return;
+        }
+
+        const estimatedH = Math.min(options.length * 40 + 8, 240); // 240px is our max-height
+        const spaceBelow = window.innerHeight - r.bottom;
+
+        // Flip upwards if no space below
+        if (spaceBelow >= estimatedH || spaceBelow > r.top) {
+            setPos({ top: r.bottom + 4, bottom: null, left: r.left, width: r.width });
+        } else {
+            setPos({ top: null, bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width });
+        }
+    }, [options.length]);
+
+    useEffect(() => {
+        if (!open) {
+            setPos(null);
+            return;
+        }
+
+        updatePosition();
+
+        const close = (e) => {
+            if (!listRef.current?.contains(e.target) && !btnRef.current?.contains(e.target)) setOpen(false);
+        };
+        const onScrollOrResize = () => requestAnimationFrame(updatePosition);
+
+        document.addEventListener('mousedown', close);
+        window.addEventListener('resize', onScrollOrResize, { passive: true });
+        // Use capturing phase so internal modal scrolling recalculates dropdown position instantly
+        window.addEventListener('scroll', onScrollOrResize, true);
+
+        return () => {
+            document.removeEventListener('mousedown', close);
+            window.removeEventListener('resize', onScrollOrResize, { passive: true });
+            window.removeEventListener('scroll', onScrollOrResize, true);
+        };
+    }, [open, updatePosition]);
+
+    return (
+        <div>
+            {label && (
+                <label className="block text-[11px] font-bold text-slate-500 mb-1.5">
+                    {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+                </label>
+            )}
+            <button ref={btnRef} type="button" onClick={() => setOpen(p => !p)}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold transition-all focus:outline-none focus:ring-4 focus:ring-indigo-500/10 ${open ? 'border-indigo-400 text-indigo-900 bg-indigo-50/30' : 'border-slate-200 text-slate-900 hover:border-slate-300'}`}>
+                <span>{selected?.label ?? 'Select…'}</span>
+                <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180 text-indigo-500' : ''}`} />
+            </button>
+            {typeof document !== 'undefined' && createPortal(
+                <AnimatePresence>
+                    {open && pos && (
+                        <motion.ul ref={listRef}
+                            initial={{ opacity: 0, y: pos.bottom ? 4 : -4, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: pos.bottom ? 4 : -4, scale: 0.98 }}
+                            transition={{ duration: 0.12 }}
+                            style={{
+                                position: 'fixed',
+                                ...(pos.bottom != null ? { bottom: pos.bottom } : { top: pos.top }),
+                                left: pos.left,
+                                width: pos.width,
+                                zIndex: 999999
+                            }}
+                            // IMPORTANT: Scroll bounds so the user doesn't get clipped
+                            className="bg-white rounded-xl shadow-2xl ring-1 ring-slate-200 py-1 overflow-x-hidden overflow-y-auto max-h-[240px] custom-scrollbar">
+                            {options.map(opt => (
+                                <li key={opt.value}>
+                                    <button type="button" onClick={() => { onChange(opt.value); setOpen(false); }}
+                                        className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-semibold transition-colors ${value === opt.value ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                                        {opt.label}
+                                        {value === opt.value && <CheckIcon className="w-3.5 h-3.5 text-indigo-500" />}
+                                    </button>
+                                </li>
+                            ))}
+                        </motion.ul>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
+        </div>
+    );
+};
+
+// ─── BULK ACTION BAR ──────────────────────────────────────────────────────────
+
+const BulkActionBar = ({ selectedIds, onClear, onBulkArchive, onBulkLock }) => (
+    <AnimatePresence>
+        {selectedIds.length > 0 && (
+            <motion.div
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.18, ease: 'easeOut' }}
+                className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[99999] flex items-center gap-3 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl ring-1 ring-slate-700">
+                <CheckCircleIcon className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                <span className="text-sm font-bold text-slate-300">
+                    <span className="text-white">{selectedIds.length}</span> selected
+                </span>
+                <div className="w-px h-5 bg-slate-700" />
+                <button onClick={onBulkLock}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold transition-colors">
+                    <LockClosedIcon className="w-3.5 h-3.5" /> Lock All
+                </button>
+                <button onClick={onBulkArchive}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-bold transition-colors">
+                    <ArchiveBoxIcon className="w-3.5 h-3.5" /> Archive All
+                </button>
+                <button onClick={onClear}
+                    className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors ml-1">
+                    <XMarkIcon className="w-4 h-4" />
+                </button>
+            </motion.div>
+        )}
+    </AnimatePresence>
+);
+
 // ─── MODULE-LEVEL CONSTANTS (avoid per-render allocations) ────────────────────
+
 
 const EMPTY_FORM = {
     name: '', displayName: '', code: '', hexCode: '#3B82F6',
@@ -129,47 +375,61 @@ const LifecycleTransitionPanel = ({ color, onTransition }) => {
     const PANEL_WIDTH = 224;
 
     // Compute fixed viewport coordinates so the panel never affects layout
-    const openPanel = () => {
+    const updatePosition = useCallback(() => {
         if (!btnRef.current) return;
         const r = btnRef.current.getBoundingClientRect();
+
+        // Closes automatically if scrolled completely out of viewport bounds
+        if (r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) {
+            setIsOpen(false);
+            return;
+        }
+
         const estimatedH = allowed.length * 68 + 72;
         const spaceBelow = window.innerHeight - r.bottom;
-        // Align left edge with button, clamp within viewport
+
+        // Default anchor left, clamp to viewport edges
         let left = r.left;
         if (left + PANEL_WIDTH > window.innerWidth - 8) left = window.innerWidth - PANEL_WIDTH - 8;
+        if (left < 8) left = 8;
 
-        if (spaceBelow >= estimatedH) {
-            setPanelPos({ top: r.bottom + 6, left });
+        // Collision logic: flip upwards if absolutely no room below
+        if (spaceBelow >= estimatedH || spaceBelow > r.top) {
+            setPanelPos({ top: r.bottom + 6, left, bottom: null });
         } else {
-            setPanelPos({ bottom: window.innerHeight - r.top + 6, left });
+            setPanelPos({ bottom: window.innerHeight - r.top + 6, left, top: null });
         }
-        setIsOpen(true);
-    };
+    }, [allowed.length]);
 
     useEffect(() => {
-        if (!isOpen) return;
+        if (!isOpen) {
+            setPanelPos(null); // Reset position gracefully when closed
+            return;
+        }
+
+        updatePosition(); // Initial calculation
+
         const close = () => setIsOpen(false);
         const onOutside = (e) => {
-            if (
-                !panelRef.current?.contains(e.target) &&
-                !btnRef.current?.contains(e.target)
-            ) close();
+            // Check if click was entirely outside both the triggering button AND the portal panel
+            if (!panelRef.current?.contains(e.target) && !btnRef.current?.contains(e.target)) {
+                close();
+            }
         };
 
-        // Re-calculate position on resize to prevent "floating" detached panel
-        const onResize = () => {
-            if (isOpen) openPanel();
-        };
+        const onScrollOrResize = () => requestAnimationFrame(updatePosition);
 
         document.addEventListener('mousedown', onOutside);
-        window.addEventListener('resize', onResize);
-        window.addEventListener('scroll', close, true);
+        // Use capturing phase (true) for scroll so it triggers on any internal overflow container scroll
+        window.addEventListener('resize', onScrollOrResize, { passive: true });
+        window.addEventListener('scroll', onScrollOrResize, true);
+
         return () => {
             document.removeEventListener('mousedown', onOutside);
-            window.removeEventListener('resize', onResize);
-            window.removeEventListener('scroll', close, true);
+            window.removeEventListener('resize', onScrollOrResize, { passive: true });
+            window.removeEventListener('scroll', onScrollOrResize, true);
         };
-    }, [isOpen]);
+    }, [isOpen, updatePosition]);
 
     const handleTransition = async (newState) => {
         if (transitioning) return;
@@ -201,13 +461,6 @@ const LifecycleTransitionPanel = ({ color, onTransition }) => {
 
     if (allowed.length === 0) return <LifecycleBadge state={color.lifecycleState} />;
 
-    // Guard: do not compute style until position has been calculated
-    const posStyle = panelPos
-        ? (panelPos.bottom != null
-            ? { position: 'fixed', zIndex: 100000, width: PANEL_WIDTH, bottom: panelPos.bottom, left: panelPos.left }
-            : { position: 'fixed', zIndex: 100000, width: PANEL_WIDTH, top: panelPos.top, left: panelPos.left })
-        : null;
-
     return (
         <div className="flex flex-col items-center gap-1.5">
             <LifecycleBadge state={color.lifecycleState} />
@@ -215,7 +468,7 @@ const LifecycleTransitionPanel = ({ color, onTransition }) => {
             {/* Trigger */}
             <button
                 ref={btnRef}
-                onClick={() => isOpen ? setIsOpen(false) : openPanel()}
+                onClick={() => setIsOpen(p => !p)}
                 disabled={transitioning}
                 className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all duration-150 disabled:opacity-40 ${isOpen
                     ? 'bg-slate-100 border-slate-300 text-slate-700'
@@ -239,54 +492,63 @@ const LifecycleTransitionPanel = ({ color, onTransition }) => {
                 )}
             </button>
 
-            {/* Floating panel — rendered at fixed viewport coords, zero layout impact */}
-            <AnimatePresence>
-                {isOpen && (
-                    <motion.div
-                        ref={panelRef}
-                        initial={{ opacity: 0, scale: 0.95, y: -6 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: -6 }}
-                        transition={{ duration: 0.14, ease: 'easeOut' }}
-                        style={posStyle}
-                        className="bg-white rounded-xl shadow-2xl ring-1 ring-slate-200 overflow-hidden"
-                    >
-                        {/* Header */}
-                        <div className="px-3.5 pt-3 pb-2.5 border-b border-slate-100 bg-slate-50/80">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.18em] mb-1.5">Allowed Transitions</p>
-                            <div className="flex items-center gap-1.5">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${currentCfg.badge}`}>
-                                    <span className={`w-1 h-1 rounded-full ${currentCfg.dot}`} />
-                                    {currentCfg.label}
-                                </span>
-                                <ArrowRightIcon className="w-3 h-3 text-slate-300 flex-shrink-0" />
-                                <span className="text-[10px] text-slate-400 font-medium">next state</span>
+            {/* Floating panel — rendered via Portal to completely escape table overflow-x-hidden container */}
+            {typeof document !== 'undefined' && createPortal(
+                <AnimatePresence>
+                    {isOpen && panelPos && (
+                        <motion.div
+                            ref={panelRef}
+                            initial={{ opacity: 0, scale: 0.95, y: -6 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -6 }}
+                            transition={{ duration: 0.14, ease: 'easeOut' }}
+                            style={{
+                                position: 'fixed',
+                                zIndex: 999999,
+                                width: PANEL_WIDTH,
+                                ...(panelPos.bottom != null ? { bottom: panelPos.bottom } : { top: panelPos.top }),
+                                left: panelPos.left
+                            }}
+                            className="bg-white rounded-xl shadow-2xl ring-1 ring-slate-200 overflow-hidden"
+                        >
+                            {/* Header */}
+                            <div className="px-3.5 pt-3 pb-2.5 border-b border-slate-100 bg-slate-50/80">
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.18em] mb-1.5">Allowed Transitions</p>
+                                <div className="flex items-center gap-1.5">
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${currentCfg.badge}`}>
+                                        <span className={`w-1 h-1 rounded-full ${currentCfg.dot}`} />
+                                        {currentCfg.label}
+                                    </span>
+                                    <ArrowRightIcon className="w-3 h-3 text-slate-300 flex-shrink-0" />
+                                    <span className="text-[10px] text-slate-400 font-medium">next state</span>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Options */}
-                        <div className="py-1.5 px-1.5 space-y-0.5">
-                            {allowed.map((ts) => {
-                                const tCfg = LIFECYCLE[ts];
-                                return (
-                                    <button
-                                        key={ts}
-                                        onClick={() => handleTransition(ts)}
-                                        className="w-full flex items-start gap-2.5 px-2.5 py-2.5 rounded-lg hover:bg-slate-50 active:bg-slate-100 transition-colors group text-left"
-                                    >
-                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[3px] ${tCfg.dot}`} />
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-xs font-bold text-slate-700 group-hover:text-slate-900 leading-snug">{tCfg.label}</div>
-                                            <div className="text-[10px] text-slate-400 leading-snug mt-0.5">{tCfg.description}</div>
-                                        </div>
-                                        <ArrowRightIcon className="w-3 h-3 text-slate-200 group-hover:text-slate-400 flex-shrink-0 mt-[3px] transition-colors" />
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                            {/* Options */}
+                            <div className="py-1.5 px-1.5 space-y-0.5">
+                                {allowed.map((ts) => {
+                                    const tCfg = LIFECYCLE[ts];
+                                    return (
+                                        <button
+                                            key={ts}
+                                            onClick={() => handleTransition(ts)}
+                                            className="w-full flex items-start gap-2.5 px-2.5 py-2.5 rounded-lg hover:bg-slate-50 active:bg-slate-100 transition-colors group text-left"
+                                        >
+                                            <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[3px] ${tCfg.dot}`} />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-xs font-bold text-slate-700 group-hover:text-slate-900 leading-snug">{tCfg.label}</div>
+                                                <div className="text-[10px] text-slate-400 leading-snug mt-0.5">{tCfg.description}</div>
+                                            </div>
+                                            <ArrowRightIcon className="w-3 h-3 text-slate-200 group-hover:text-slate-400 flex-shrink-0 mt-[3px] transition-colors" />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
         </div>
     );
 };
@@ -367,6 +629,12 @@ const ColorManagement = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState(EMPTY_FORM);
 
+    // Multi-select bulk state
+    const [selectedIds, setSelectedIds] = useState([]);
+
+    const toggleRowSelect = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    const clearSelection = () => setSelectedIds([]);
+
     // Ref for synchronous snapshot capture across async lifecycle transitions
     const snapshotRef = useRef(null);
 
@@ -441,6 +709,24 @@ const ColorManagement = () => {
         toast.success(`Copied ${hex}`, { icon: '📋' });
     };
 
+    const handleBulkArchive = () => {
+        customConfirm(`Archive ${selectedIds.length} colors?`, async () => {
+            await Promise.allSettled(selectedIds.map(id => colorAPI.update(id, { lifecycleState: 'ARCHIVED' })));
+            toast.success(`Archived ${selectedIds.length} colors`);
+            clearSelection();
+            loadColors(new AbortController().signal);
+        }, 'Archive', 'bg-amber-600 hover:bg-amber-700');
+    };
+
+    const handleBulkLock = () => {
+        customConfirm(`Lock ${selectedIds.length} colors?`, async () => {
+            await Promise.allSettled(selectedIds.map(id => colorAPI.update(id, { lifecycleState: 'LOCKED' })));
+            toast.success(`Locked ${selectedIds.length} colors`);
+            clearSelection();
+            loadColors(new AbortController().signal);
+        }, 'Lock', 'bg-slate-800 hover:bg-slate-900');
+    };
+
     const handleCreate = () => { setFormData(EMPTY_FORM); setSelectedColor(null); setModalMode('create'); setShowModal(true); };
 
     const handleEdit = (color) => {
@@ -491,15 +777,32 @@ const ColorManagement = () => {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm('Archive this color?')) return;
-        try {
-            await colorAPI.delete(id);
-            toast.success('Archived');
-            loadColors(new AbortController().signal);
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed');
-        }
+    const handleDelete = (id, isArchived) => {
+        const msg = isArchived ? 'Permanently delete this color? This cannot be undone.' : 'Archive this color?';
+        const configBtn = isArchived ? 'Delete' : 'Archive';
+        const configColor = isArchived ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700';
+
+        customConfirm(msg, async () => {
+            try {
+                await colorAPI.delete(id);
+                toast.success(isArchived ? 'Permanently Deleted' : 'Archived');
+                loadColors(new AbortController().signal);
+            } catch (err) {
+                toast.error(err.response?.data?.message || 'Failed');
+            }
+        }, configBtn, configColor);
+    };
+
+    const handleRestore = (id) => {
+        customConfirm('Restore this color back to DRAFT state?', async () => {
+            try {
+                await colorAPI.restore(id);
+                toast.success('Color Restored');
+                loadColors(new AbortController().signal);
+            } catch (err) {
+                toast.error(err.response?.data?.message || 'Failed to restore');
+            }
+        }, 'Restore', 'bg-indigo-600 hover:bg-indigo-700');
     };
 
     const statusOptions = [
@@ -532,6 +835,13 @@ const ColorManagement = () => {
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] pb-24 font-sans text-slate-900">
+            {/* Bulk action floating bar */}
+            <BulkActionBar
+                selectedIds={selectedIds}
+                onClear={clearSelection}
+                onBulkArchive={handleBulkArchive}
+                onBulkLock={handleBulkLock}
+            />
             {/* Header */}
             <div className="px-8 py-7">
                 <h1 className="text-xl font-black text-slate-900 tracking-tight">Color Master</h1>
@@ -586,20 +896,27 @@ const ColorManagement = () => {
                     {/* Table */}
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead>
-                                <tr className="border-b border-slate-100 bg-slate-50/70">
-                                    <th className="px-8 py-3.5 text-[9px] font-black text-slate-400 uppercase tracking-[0.18em]">Identity</th>
-                                    <th className="px-6 py-3.5 text-[9px] font-black text-slate-400 uppercase tracking-[0.18em]">Hex Code</th>
-                                    <th className="px-6 py-3.5 text-[9px] font-black text-slate-400 uppercase tracking-[0.18em]">Family</th>
-                                    <th className="px-6 py-3.5 text-center text-[9px] font-black text-slate-400 uppercase tracking-[0.18em]">Lifecycle</th>
-                                    <th className="px-6 py-3.5 text-right text-[9px] font-black text-slate-400 uppercase tracking-[0.18em]">Actions</th>
+                            <thead className="sticky top-0 z-10 backdrop-blur-sm bg-slate-50/90">
+                                <tr className="border-b border-slate-100">
+                                    <th className="px-4 py-3.5 w-10">
+                                        <input type="checkbox"
+                                            checked={selectedIds.length === colors.length && colors.length > 0}
+                                            onChange={() => selectedIds.length === colors.length ? clearSelection() : setSelectedIds(colors.map(c => c._id))}
+                                            className="w-4 h-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-400 cursor-pointer" />
+                                    </th>
+                                    <th className="px-4 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">Identity</th>
+                                    <th className="px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">Hex Code</th>
+                                    <th className="px-6 py-3.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">Family</th>
+                                    <th className="px-6 py-3.5 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">Lifecycle</th>
+                                    <th className="px-6 py-3.5 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
-                                    Array.from({ length: 5 }).map((_, i) => (
+                                    Array.from({ length: itemsPerPage }).map((_, i) => (
                                         <tr key={i} className="border-b border-slate-50 animate-pulse">
-                                            <td className="px-8 py-5"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-slate-100 flex-shrink-0" /><div className="space-y-2"><div className="h-3 bg-slate-100 rounded w-28" /><div className="h-2.5 bg-slate-100 rounded w-16" /></div></div></td>
+                                            <td className="px-4 py-5"><div className="w-4 h-4 bg-slate-100 rounded" /></td>
+                                            <td className="px-4 py-5"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-slate-100 flex-shrink-0" /><div className="space-y-2"><div className="h-3 bg-slate-100 rounded w-28" /><div className="h-2.5 bg-slate-100 rounded w-16" /></div></div></td>
                                             <td className="px-6 py-5"><div className="h-8 bg-slate-100 rounded-lg w-28" /></td>
                                             <td className="px-6 py-5"><div className="h-3 bg-slate-100 rounded w-16" /></td>
                                             <td className="px-6 py-5"><div className="h-6 bg-slate-100 rounded-full w-20 mx-auto" /></td>
@@ -627,10 +944,18 @@ const ColorManagement = () => {
                                         return (
                                             <tr
                                                 key={color._id}
-                                                className={`group border-b border-slate-50 last:border-0 transition-colors ${isArchived ? 'opacity-40 bg-slate-50/50' : isDeprecated ? 'bg-amber-50/20 hover:bg-amber-50/30' : 'hover:bg-slate-50/50'}`}
+                                                className={`group border-b border-slate-50 last:border-0 transition-colors ${isArchived ? 'opacity-40 bg-slate-50/50' : isDeprecated ? 'bg-amber-50/20 hover:bg-amber-50/30' : selectedIds.includes(color._id) ? 'bg-indigo-50/40' : 'hover:bg-slate-50/50'}`}
                                             >
+                                                {/* Select */}
+                                                <td className="px-4 py-4">
+                                                    <input type="checkbox"
+                                                        checked={selectedIds.includes(color._id)}
+                                                        onChange={() => toggleRowSelect(color._id)}
+                                                        onClick={e => e.stopPropagation()}
+                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-500 focus:ring-indigo-400 cursor-pointer" />
+                                                </td>
                                                 {/* Identity */}
-                                                <td className="px-8 py-4">
+                                                <td className="px-4 py-4">
                                                     <div className="flex items-center gap-3.5">
                                                         <div className="relative w-10 h-10 rounded-xl flex-shrink-0 shadow-sm ring-1 ring-slate-200/80 overflow-hidden" style={{ backgroundColor: safeHex }}>
                                                             <div className="absolute inset-0 bg-gradient-to-br from-white/15 to-black/10 pointer-events-none" />
@@ -679,23 +1004,46 @@ const ColorManagement = () => {
                                                 {/* Actions */}
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        {isLocked ? (
-                                                            <div className="p-2 rounded-lg text-red-200 cursor-not-allowed" title="Locked">
-                                                                <LockClosedIcon className="w-4 h-4" />
-                                                            </div>
+                                                        {isArchived ? (
+                                                            <>
+                                                                <button onClick={() => handleRestore(color._id)} className="p-2 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Restore to Draft">
+                                                                    <ArrowUturnLeftIcon className="w-4 h-4" />
+                                                                </button>
+                                                                <button onClick={() => handleDelete(color._id, true)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Permanently Delete">
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </>
                                                         ) : (
-                                                            <button onClick={() => handleEdit(color)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit">
-                                                                <PencilIcon className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        {canDelete ? (
-                                                            <button onClick={() => handleDelete(color._id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Archive">
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </button>
-                                                        ) : (
-                                                            <div className="p-2 text-slate-200 cursor-not-allowed" title="Use lifecycle to archive">
-                                                                <TrashIcon className="w-4 h-4" />
-                                                            </div>
+                                                            <>
+                                                                {isLocked ? (
+                                                                    <div className="p-2 rounded-lg text-red-200 cursor-not-allowed" title="Locked">
+                                                                        <LockClosedIcon className="w-4 h-4" />
+                                                                    </div>
+                                                                ) : (
+                                                                    <button onClick={() => handleEdit(color)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="Edit">
+                                                                        <PencilIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                                {canDelete ? (
+                                                                    <>
+                                                                        <button onClick={() => handleDelete(color._id, false)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Move to Archive">
+                                                                            <ArchiveBoxIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                        <button onClick={() => handleDelete(color._id, true)} className="p-2 text-red-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Permanently Delete">
+                                                                            <TrashIcon className="w-4 h-4" />
+                                                                        </button>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <div className="p-2 text-slate-200 cursor-not-allowed" title="Use lifecycle panel to archive">
+                                                                            <ArchiveBoxIcon className="w-4 h-4" />
+                                                                        </div>
+                                                                        <div className="p-2 text-slate-200 cursor-not-allowed" title="Unlock color to delete">
+                                                                            <TrashIcon className="w-4 h-4" />
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </>
                                                         )}
                                                     </div>
                                                 </td>
@@ -779,7 +1127,7 @@ const ColorManagement = () => {
                                 {/* Identity */}
                                 <div>
                                     <div className="flex items-center gap-2 mb-3.5">
-                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Identity</span>
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.18em]">Identity</span>
                                         <div className="flex-1 h-px bg-slate-100" />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3.5">
@@ -797,7 +1145,7 @@ const ColorManagement = () => {
                                 {/* Visual */}
                                 <div>
                                     <div className="flex items-center gap-2 mb-3.5">
-                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Visual</span>
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.18em]">Visual</span>
                                         <div className="flex-1 h-px bg-slate-100" />
                                     </div>
                                     <div className="space-y-3.5">
@@ -809,20 +1157,34 @@ const ColorManagement = () => {
                                                 </div>
                                                 <input type="text" value={formData.hexCode} onChange={(e) => setFormData({ ...formData, hexCode: e.target.value.toUpperCase() })} placeholder="#3B82F6" maxLength={7} className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all" />
                                             </div>
+                                            {/* WCAG Contrast Warning */}
+                                            {(() => {
+                                                const w = getWcagWarning(normalizeHex(formData.hexCode));
+                                                if (!w) return null;
+                                                return (
+                                                    <div className={`mt-2 flex items-start gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold leading-snug ${w.level === 'error' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                                        <ExclamationTriangleIcon className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                                                        {w.msg}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                         <div className="grid grid-cols-2 gap-3.5">
                                             <div>
-                                                <label className="block text-[11px] font-bold text-slate-500 mb-1.5">Color Family</label>
-                                                <select value={formData.colorFamily} onChange={(e) => setFormData({ ...formData, colorFamily: e.target.value })} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2364748b%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.1rem_1.1rem] bg-[right_0.75rem_center] bg-no-repeat">
-                                                    <option value="">Auto-Detect</option>
-                                                    {['RED', 'BLUE', 'GREEN', 'YELLOW', 'ORANGE', 'PURPLE', 'BLACK', 'WHITE', 'GREY', 'BROWN', 'PINK', 'BEIGE'].map(f => <option key={f} value={f}>{f}</option>)}
-                                                </select>
+                                                <ModalDropdown
+                                                    label="Color Family"
+                                                    value={formData.colorFamily}
+                                                    onChange={(v) => setFormData({ ...formData, colorFamily: v })}
+                                                    options={[{ value: '', label: 'Auto-Detect' }, ...['RED', 'BLUE', 'GREEN', 'YELLOW', 'ORANGE', 'PURPLE', 'BLACK', 'WHITE', 'GREY', 'BROWN', 'PINK', 'BEIGE'].map(f => ({ value: f, label: f }))]}
+                                                />
                                             </div>
                                             <div>
-                                                <label className="block text-[11px] font-bold text-slate-500 mb-1.5">Visual Style</label>
-                                                <select value={formData.visualCategory} onChange={(e) => setFormData({ ...formData, visualCategory: e.target.value })} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2364748b%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.1rem_1.1rem] bg-[right_0.75rem_center] bg-no-repeat">
-                                                    {['SOLID', 'METALLIC', 'PATTERN', 'GRADIENT', 'NEON', 'MATTE', 'GLOSSY'].map(c => <option key={c} value={c}>{c}</option>)}
-                                                </select>
+                                                <ModalDropdown
+                                                    label="Visual Style"
+                                                    value={formData.visualCategory}
+                                                    onChange={(v) => setFormData({ ...formData, visualCategory: v })}
+                                                    options={['SOLID', 'METALLIC', 'PATTERN', 'GRADIENT', 'NEON', 'MATTE', 'GLOSSY'].map(c => ({ value: c, label: c }))}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -831,16 +1193,18 @@ const ColorManagement = () => {
                                 {/* Governance */}
                                 <div>
                                     <div className="flex items-center gap-2 mb-3.5">
-                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Governance</span>
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.18em]">Governance</span>
                                         <div className="flex-1 h-px bg-slate-100" />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3.5">
                                         {modalMode === 'edit' && (
                                             <div>
-                                                <label className="block text-[11px] font-bold text-slate-500 mb-1.5">Lifecycle State</label>
-                                                <select value={formData.lifecycleState} onChange={(e) => setFormData({ ...formData, lifecycleState: e.target.value })} className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2364748b%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.1rem_1.1rem] bg-[right_0.75rem_center] bg-no-repeat">
-                                                    {Object.entries(LIFECYCLE).filter(([s]) => s !== 'ARCHIVED').map(([s, cfg]) => <option key={s} value={s}>{cfg.label}</option>)}
-                                                </select>
+                                                <ModalDropdown
+                                                    label="Lifecycle State"
+                                                    value={formData.lifecycleState}
+                                                    onChange={(v) => setFormData({ ...formData, lifecycleState: v })}
+                                                    options={Object.entries(LIFECYCLE).filter(([s]) => s !== 'ARCHIVED').map(([s, cfg]) => ({ value: s, label: cfg.label }))}
+                                                />
                                             </div>
                                         )}
                                         <div className={modalMode === 'create' ? 'col-span-2' : ''}>

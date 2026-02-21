@@ -24,11 +24,11 @@ export const sizeAPI = {
 
 // Color APIs
 export const colorAPI = {
-    getAll: (params) => api.get('/colors', { params }),
+    getAll: ({ signal, ...params } = {}) => api.get('/colors', { params, signal }),
     getById: (id) => api.get(`/colors/${id}`),
     create: (data) => api.post('/colors', data),
     update: (id, data) => api.put(`/colors/${id}`, data),
-    delete: (id) => api.delete(`/colors/${id}`),
+    delete: (id, force) => api.delete(`/colors/${id}${force ? '?force=true' : ''}`),
     restore: (id) => api.patch(`/colors/${id}/restore`),
     toggleStatus: (id) => api.patch(`/colors/${id}/toggle-status`),
     bulkCreate: (data) => api.post('/colors/bulk', data),

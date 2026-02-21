@@ -95,29 +95,53 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {/* Global Toaster */}
+      {/* Global Toaster — Premium Dark Theme */}
       <Toaster
         position="top-right"
+        gutter={10}
+        containerStyle={{ top: 24, right: 24 }}
         toastOptions={{
-          duration: 3000,
+          duration: 3500,
           style: {
-            background: "#1E293B",
-            color: "#fff",
-            borderRadius: "0.5rem",
-            fontSize: "0.875rem",
+            background: '#0F172A',
+            color: '#F1F5F9',
+            borderRadius: '14px',
+            fontSize: '13.5px',
+            fontWeight: '500',
+            padding: '14px 18px',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)',
+            backdropFilter: 'blur(12px)',
+            maxWidth: '380px',
+            lineHeight: '1.5',
+            borderLeft: '3px solid transparent',
           },
           success: {
             duration: 3000,
+            style: {
+              borderLeft: '3px solid #10B981',
+            },
             iconTheme: {
-              primary: "#10B981", // Emerald-500
-              secondary: "#fff",
+              primary: '#10B981',
+              secondary: '#0F172A',
             },
           },
           error: {
-            duration: 4000,
+            duration: 5000,
+            style: {
+              borderLeft: '3px solid #F87171',
+            },
             iconTheme: {
-              primary: "#EF4444", // Red-500
-              secondary: "#fff",
+              primary: '#F87171',
+              secondary: '#0F172A',
+            },
+          },
+          loading: {
+            style: {
+              borderLeft: '3px solid #818CF8',
+            },
+            iconTheme: {
+              primary: '#818CF8',
+              secondary: '#0F172A',
             },
           },
         }}

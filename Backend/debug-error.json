@@ -1,0 +1,4 @@
+{
+  "success": false,
+  "message": "ColorMaster validation failed: colorFamily: `GEN` is not a valid enum value for path `colorFamily`."
+}
