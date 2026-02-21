@@ -31,87 +31,125 @@ exports.getByProductGroup = async (req, res) => {
 };
 
 /**
+ * SINGLEFLIGHT PATTERN: Anti-Stampede Lock
+ * Ensures only one PDP matrix generation runs per ProductGroup at a time across concurrent Node requests.
+ */
+const pdpMatrixLocks = new Map();
+
+/**
  * Get available configurations for a product group
- * GET /api/variants/group/:productGroup/configurations
+ * GET /api/variants/group/:productGroupId/configurations
  */
 exports.getConfigurations = async (req, res) => {
     try {
-        const { productGroup } = req.params;
+        const { productGroupId } = req.params;
 
-        const variants = await VariantMaster.find({
-            productGroup,
-            status: 'active'
-        })
-            .populate('color')
-            .populate('sizes.sizeId')
-            .lean();
-
-        if (variants.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'No variants found for this product group'
-            });
+        // Ensure we don't stampede the database during high-concurrency cache misses
+        if (pdpMatrixLocks.has(productGroupId)) {
+            const data = await pdpMatrixLocks.get(productGroupId);
+            return res.json({ success: true, data });
         }
 
-        // Extract unique configurations
-        const configurations = {
-            sizes: {},
-            colors: [],
-            attributes: {},
-            productInfo: {
-                name: variants[0].productName,
-                brand: variants[0].brand,
-                category: variants[0].category,
-                subcategory: variants[0].subcategory
+        const buildMatrixPromise = (async () => {
+            // OPTIMIZATION: Projection ensures we don't drag 10KB of description/content data per variant over the wire
+            const variants = await VariantMaster.find({
+                productGroupId,
+                status: 'ACTIVE'
+            })
+                .select('sku price imageGallery inventory colorId sizes')
+                .populate('colorId', 'name hexCode category')
+                .populate('sizes.sizeId', 'value displayName sortOrder')
+                .lean();
+
+            if (variants.length === 0) {
+                return null;
             }
-        };
 
-        const colorMap = new Map();
-        const sizeMap = {};
+            // Initialize output format
+            const responseData = {
+                productGroupId: productGroupId,
+                defaultVariantId: variants[0]._id.toString(), // Prevents invalid initial selections on frontend
+                selectors: {},
+                matrix: {},
+                variantDictionary: {}
+            };
 
-        variants.forEach(variant => {
-            // Extract sizes by category
-            variant.sizes?.forEach(size => {
-                if (!sizeMap[size.category]) {
-                    sizeMap[size.category] = new Map();
+            const colorMap = new Map();
+            const sizeMaps = {};
+
+            variants.forEach(variant => {
+                const tokenKeys = [];
+
+                // 1) Color Token
+                if (variant.colorId) {
+                    const cId = variant.colorId._id.toString();
+                    tokenKeys.push(cId);
+                    if (!colorMap.has(cId)) {
+                        colorMap.set(cId, {
+                            id: cId,
+                            label: variant.colorId.name,
+                            hex: variant.colorId.hexCode
+                        });
+                    }
                 }
-                const sizeKey = size.sizeId._id.toString();
-                if (!sizeMap[size.category].has(sizeKey)) {
-                    sizeMap[size.category].set(sizeKey, {
-                        id: size.sizeId._id,
-                        value: size.value,
-                        displayName: size.sizeId.displayName,
-                        sortOrder: size.sizeId.sortOrder
+
+                // 2) Size Tokens
+                if (variant.sizes && variant.sizes.length > 0) {
+                    variant.sizes.forEach(sz => {
+                        const sId = sz.sizeId._id.toString();
+                        tokenKeys.push(sId);
+
+                        if (!sizeMaps[sz.category]) sizeMaps[sz.category] = new Map();
+                        if (!sizeMaps[sz.category].has(sId)) {
+                            sizeMaps[sz.category].set(sId, {
+                                id: sId,
+                                label: sz.sizeId.displayName || sz.sizeId.value,
+                                sortOrder: sz.sizeId.sortOrder
+                            });
+                        }
                     });
                 }
+
+                // Generate deterministic key for combination matrix
+                const combinationKey = tokenKeys.sort().join('.');
+                responseData.matrix[combinationKey] = variant._id.toString();
+
+                // Populate Dicionary
+                responseData.variantDictionary[variant._id.toString()] = {
+                    sku: variant.sku,
+                    price: parseFloat(variant.price?.toString() || 0),
+                    images: variant.imageGallery || [],
+                    inventory: variant.inventory?.quantityOnHand || 0
+                };
             });
 
-            // Extract unique colors
-            if (variant.color) {
-                const colorKey = variant.color._id.toString();
-                if (!colorMap.has(colorKey)) {
-                    colorMap.set(colorKey, {
-                        id: variant.color._id,
-                        name: variant.color.name,
-                        hexCode: variant.color.hexCode,
-                        category: variant.color.category
-                    });
-                }
+            // 3) Format Selectors Array for React
+            if (colorMap.size > 0) {
+                responseData.selectors['Color'] = Array.from(colorMap.values());
             }
-        });
+            Object.entries(sizeMaps).forEach(([cat, sMap]) => {
+                const titleCase = cat.charAt(0).toUpperCase() + cat.slice(1);
+                responseData.selectors[titleCase] = Array.from(sMap.values()).sort((a, b) => a.sortOrder - b.sortOrder);
+            });
 
-        // Convert maps to sorted arrays
-        Object.keys(sizeMap).forEach(category => {
-            configurations.sizes[category] = Array.from(sizeMap[category].values())
-                .sort((a, b) => a.sortOrder - b.sortOrder);
-        });
+            return responseData;
+        })();
 
-        configurations.colors = Array.from(colorMap.values());
+        pdpMatrixLocks.set(productGroupId, buildMatrixPromise);
 
-        res.json({
-            success: true,
-            data: configurations
-        });
+        try {
+            const data = await buildMatrixPromise;
+            if (!data) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'No variants found for this product group'
+                });
+            }
+            res.json({ success: true, data });
+        } finally {
+            // Always remove the lock once computation resolves or rejects
+            pdpMatrixLocks.delete(productGroupId);
+        }
     } catch (error) {
         console.error('Error fetching configurations:', error);
         res.status(500).json({

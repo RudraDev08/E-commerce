@@ -1,507 +1,613 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
+import Decimal from 'decimal.js';
 
 /**
- * ENTERPRISE VARIANT MASTER (DETERMINISTIC CORE)
- * Scope: Global variant registry with collision-proof configuration
- * Scale: 20M+ variants
- * Constraints: SHA-256 config hash, normalized snapshots, event-driven sync
+ * VARIANT MASTER — REFACTORED ENTERPRISE SCHEMA
+ * ─────────────────────────────────────────────
+ * Design contract:
+ *   • SizeMaster   → one ref per variant  (ref 'SizeMaster',  collection 'sizes')
+ *   • ColorMaster  → one ref per variant  (ref 'ColorMaster', collection 'colormasters')
+ *   • AttributeValue → zero-to-many refs  (ref 'AttributeValue', for material/processor/etc.)
+ *   • configHash   → SHA-256(productGroupId:sizeId:colorId:sorted_attrValueIds)
+ *   • price        → Decimal128 for precision
+ *   • status       → ACTIVE | INACTIVE
+ *   • imageGallery → [String] of URLs
+ *
+ * Collections kept SEPARATE — no data duplication from SizeMaster / ColorMaster.
+ * Scale target: 20M+ variants.
  */
 
-const normalizedAttributeSchema = new mongoose.Schema({
-    typeId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'AttributeType',
-        required: true
-    },
-    valueId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'AttributeValue',
-        required: true
-    },
-    typeSlug: {
-        type: String,
-        required: true,
-        lowercase: true
-    },
-    valueSlug: {
-        type: String,
-        required: true,
-        lowercase: true
-    },
-    valueName: {
-        type: String,
-        required: true
-    },
-    sortOrder: {
-        type: Number,
-        default: 0
-    }
-}, { _id: false });
+const VALID_TRANSITIONS = {
+    DRAFT: ['ACTIVE', 'ARCHIVED'],
+    ACTIVE: ['OUT_OF_STOCK', 'ARCHIVED', 'LOCKED'],
+    OUT_OF_STOCK: ['ACTIVE', 'ARCHIVED'],
+    LOCKED: ['ACTIVE', 'ARCHIVED'],
+    ARCHIVED: []  // Terminal state
+};
 
-const priceSnapshotSchema = new mongoose.Schema({
-    amount: { type: Number, required: true, min: 0 },
-    currency: { type: String, default: 'USD', uppercase: true },
-    compareAt: { type: Number, min: 0 },
-    cost: { type: Number, min: 0 },
-    margin: { type: Number },
-    marginPercent: { type: Number },
-    effectiveFrom: { type: Date, default: Date.now },
-    effectiveUntil: Date
-}, { _id: false });
-
-const inventorySummarySchema = new mongoose.Schema({
-    totalQuantity: { type: Number, default: 0, min: 0 },
-    reservedQuantity: { type: Number, default: 0, min: 0 },
-    availableQuantity: { type: Number, default: 0, min: 0 },
-
-    locations: [{
-        warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse' },
-        warehouseCode: String,
-        quantity: { type: Number, default: 0, min: 0 },
-        reserved: { type: Number, default: 0, min: 0 }
-    }],
-
-    lastSyncedAt: { type: Date, default: Date.now },
-    syncVersion: { type: Number, default: 1 }
-}, { _id: false });
-
-const variantMasterSchema = new mongoose.Schema({
-    // ==================== CANONICAL IDENTITY ====================
-    canonicalId: {
-        type: String,
-        required: true,
-        unique: true,
-        uppercase: true,
-        immutable: true,
-        description: "Immutable global identifier"
-    },
-
-    sku: {
-        type: String,
-        required: true,
-        unique: true,
-        uppercase: true,
-        trim: true,
-        index: true,
-        description: "Globally unique SKU (e.g., NKE-TSH-BLK-XL-001)"
-    },
-
-    barcode: {
-        type: String,
-        sparse: true,
-        unique: true,
-        trim: true,
-        uppercase: true,
-        description: "EAN-13, UPC-A, or GTIN-14"
-    },
-
-    // ==================== PRODUCT REFERENCE ====================
-    productId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Product',
-        required: true,
-        index: true
-    },
-
-    productGroup: {
-        type: String,
-        required: true,
-        uppercase: true,
-        index: true,
-        description: "Product group identifier for variant clustering"
-    },
-
-    productName: {
-        type: String,
-        required: true,
-        description: "Denormalized for search performance"
-    },
-
-    brand: {
-        type: String,
-        required: true,
-        uppercase: true,
-        index: true
-    },
-
-    category: {
-        type: String,
-        required: true,
-        uppercase: true,
-        index: true
-    },
-
-    // ==================== DETERMINISTIC CONFIGURATION ====================
-    configHash: {
-        type: String,
-        required: true,
-        unique: true,
-        description: "SHA-256 hash of canonicalized attribute configuration"
-    },
-
-    configSignature: {
-        type: String,
-        required: true,
-        description: "Human-readable config (e.g., 'COLOR:BLACK|SIZE:XL')"
-    },
-
-    // ==================== NORMALIZED ATTRIBUTE SNAPSHOT ====================
-    normalizedAttributes: {
-        type: [normalizedAttributeSchema],
-        required: true,
-        validate: {
-            validator: function (v) {
-                return v && v.length > 0;
-            },
-            message: 'Variant must have at least one attribute'
-        }
-    },
-
-    // ==================== PRICING ====================
-    currentPrice: priceSnapshotSchema,
-
-    priceHistory: [priceSnapshotSchema],
-
-    minVariantPrice: {
-        type: Number,
-        index: true,
-        description: "Cached min price across all channels/regions"
-    },
-
-    maxVariantPrice: {
-        type: Number,
-        index: true,
-        description: "Cached max price across all channels/regions"
-    },
-
-    // ==================== INVENTORY SUMMARY ====================
-    inventorySummary: inventorySummarySchema,
-
-    // ==================== SEGMENTATION ====================
-    availableChannels: {
-        type: [String],
-        enum: ['WEB', 'POS', 'B2B', 'APP', 'MARKETPLACE'],
-        default: ['WEB'],
-        index: true
-    },
-
-    availableRegions: {
-        type: [String],
-        enum: ['US', 'EU', 'APAC', 'GLOBAL'],
-        default: ['GLOBAL'],
-        index: true
-    },
-
-    // ==================== LIFECYCLE STATE MACHINE ====================
-    lifecycleState: {
-        type: String,
-        enum: ['DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'MATURE', 'CLEARANCE', 'DISCONTINUED', 'ARCHIVED'],
-        default: 'DRAFT',
-        required: true,
-        index: true
-    },
-
-    status: {
-        type: String,
-        enum: ['DRAFT', 'ACTIVE', 'INACTIVE', 'DISCONTINUED', 'ARCHIVED'],
-        default: 'DRAFT',
-        index: true
-    },
-
-    isActive: {
-        type: Boolean,
-        default: false,
-        index: true
-    },
-
-    // ==================== DATES ====================
-    launchDate: Date,
-    discontinuedDate: Date,
-    archivedDate: Date,
-
-    // ==================== GOVERNANCE ====================
-    isLocked: {
-        type: Boolean,
-        default: false,
-        description: "Prevents automated modifications"
-    },
-
-    requiresApproval: {
-        type: Boolean,
-        default: false
-    },
-
-    approvedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
-
-    approvedAt: Date,
-
-    // ==================== SEARCH PROJECTION ====================
-    searchProjection: {
-        title: String,
-        description: String,
-        keywords: [String],
-        tags: [String],
-        searchableText: String,
-        lastIndexedAt: Date
-    },
-
-    // ==================== ANALYTICS ====================
-    analytics: {
-        viewCount: { type: Number, default: 0 },
-        purchaseCount: { type: Number, default: 0 },
-        cartAddCount: { type: Number, default: 0 },
-        conversionRate: { type: Number, default: 0 },
-        popularityScore: { type: Number, default: 0, index: true },
-        lastPurchaseAt: Date
-    },
-
-    // ==================== VERSIONING ====================
-    version: {
-        type: Number,
-        default: 1,
-        min: 1
-    },
-
-    schemaVersion: {
-        type: String,
-        default: '2.0',
-        description: "Schema version for migration tracking"
-    },
-
-    // ==================== AUDIT ====================
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
-
-    updatedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
-
-    auditLog: [{
-        action: {
+const variantMasterSchema = new mongoose.Schema(
+    {
+        // ═══════════════════════════════════════════════
+        // TENANT ISOLATION
+        // ═══════════════════════════════════════════════
+        tenantId: {
             type: String,
-            enum: ['CREATED', 'UPDATED', 'PRICE_CHANGED', 'INVENTORY_SYNCED', 'STATUS_CHANGED', 'APPROVED', 'LOCKED']
+            required: true,
+            default: 'GLOBAL'
         },
-        by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        at: { type: Date, default: Date.now },
-        changes: mongoose.Schema.Types.Mixed,
-        metadata: mongoose.Schema.Types.Mixed
-    }]
 
-}, {
-    timestamps: true,
-    collection: 'variantmasters',
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true }
-});
+        // ═══════════════════════════════════════════════
+        // PRODUCT GROUP REFERENCE
+        // ═══════════════════════════════════════════════
+        productGroupId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'ProductGroupMaster',
+            required: [true, 'productGroupId is required'],
+            index: true,
+        },
 
-// ==================== COMPOUND INDEXES ====================
-// Collision prevention (primary constraint)
-variantMasterSchema.index({ configHash: 1 }, { unique: true, name: 'idx_variant_config_hash' });
+        // O(1) FLATTENED FILTER PARADIGM (e.g., ["color:red", "size:ram:16GB"])
+        filterTokens: [{
+            type: String,
+            index: true
+        }],
 
-// Product clustering
-variantMasterSchema.index(
-    { productGroup: 1, lifecycleState: 1, isActive: 1 },
-    { name: 'idx_variant_product_group' }
-);
+        // ═══════════════════════════════════════════════
+        // MASTER DATA REFERENCES (Masters stay separate)
+        // ═══════════════════════════════════════════════
+        sizes: [
+            {
+                sizeId: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'SizeMaster',
+                    required: [true, 'sizeId is required']
+                },
+                category: {
+                    type: String,
+                    required: [true, 'Size category is required']
+                }
+            }
+        ],
 
-// Price range filtering
-variantMasterSchema.index(
-    { category: 1, 'currentPrice.amount': 1, lifecycleState: 1 },
-    { name: 'idx_variant_price_range' }
-);
+        colorId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'ColorMaster',
+            required: [true, 'colorId is required']
+        },
 
-// Inventory faceting
-variantMasterSchema.index(
-    { 'inventorySummary.availableQuantity': 1, lifecycleState: 1 },
-    { name: 'idx_variant_stock' }
-);
+        // Zero-to-many attribute values (processor, material, RAM capacity, etc.)
+        attributeValueIds: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'AttributeValue',
+            },
+        ],
 
-// Segmentation filtering
-variantMasterSchema.index(
-    { availableChannels: 1, availableRegions: 1, lifecycleState: 1 },
-    { name: 'idx_variant_segmentation' }
-);
+        // ═══════════════════════════════════════════════
+        // PRICING
+        // ═══════════════════════════════════════════════
+        price: {
+            type: mongoose.Schema.Types.Decimal128,
+            required: [true, 'price is required'],
+            validate: {
+                validator: (v) => parseFloat(v.toString()) >= 0,
+                message: 'price must be non-negative',
+            },
+        },
 
-// Attribute value lookups
-variantMasterSchema.index(
-    { 'normalizedAttributes.valueId': 1 },
-    { name: 'idx_variant_attributes' }
-);
+        compareAtPrice: {
+            type: mongoose.Schema.Types.Decimal128, // MRP / strikethrough price
+        },
 
-// Popularity sorting
-variantMasterSchema.index(
-    { 'analytics.popularityScore': -1, lifecycleState: 1 },
-    { name: 'idx_variant_popularity' }
-);
+        resolvedPrice: {
+            type: mongoose.Schema.Types.Decimal128,
+        },
 
-// ==================== VIRTUALS ====================
-variantMasterSchema.virtual('isInStock').get(function () {
-    return this.inventorySummary?.availableQuantity > 0;
-});
+        priceResolutionLog: [{
+            source: { type: String, enum: ['BASE', 'ATTRIBUTE_MODIFIER'], required: true },
+            attributeValueId: { type: mongoose.Schema.Types.ObjectId, ref: 'AttributeValue' },
+            modifierType: { type: String, enum: ['FIXED', 'PERCENTAGE'] },
+            modifierValue: { type: mongoose.Schema.Types.Decimal128 },
+            appliedAmount: { type: mongoose.Schema.Types.Decimal128, required: true },
+            recordedAt: { type: Date, default: Date.now, immutable: true },
+            recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+        }],
 
-variantMasterSchema.virtual('discountPercentage').get(function () {
-    if (this.currentPrice?.compareAt && this.currentPrice.compareAt > this.currentPrice.amount) {
-        return Math.round(((this.currentPrice.compareAt - this.currentPrice.amount) / this.currentPrice.compareAt) * 100);
+        // ═══════════════════════════════════════════════
+        // LIFECYCLE
+        // ═══════════════════════════════════════════════
+        status: {
+            type: String,
+            enum: ['DRAFT', 'ACTIVE', 'OUT_OF_STOCK', 'ARCHIVED', 'LOCKED'],
+            default: 'DRAFT',
+            required: true,
+            index: true,
+        },
+
+        // ═══════════════════════════════════════════════
+        // MEDIA
+        // ═══════════════════════════════════════════════
+        imageGallery: [{
+            url: { type: String, required: true },
+            altText: { type: String },
+            isPrimary: { type: Boolean, default: false },
+            sortOrder: { type: Number, default: 0 },
+            type: {
+                type: String,
+                enum: ['HERO', 'THUMBNAIL', 'DETAIL', 'LIFESTYLE']
+            }
+        }],
+
+        // ═══════════════════════════════════════════════
+        // INVENTORY
+        // ═══════════════════════════════════════════════
+        inventory: {
+            warehouseRef: { type: String },          // External WMS ID
+            quantityOnHand: { type: Number, default: 0 },
+            quantityReserved: { type: Number, default: 0 },
+            lowStockThreshold: { type: Number, default: 5 },
+            autoStatusSync: { type: Boolean, default: true }
+        },
+
+        // ═══════════════════════════════════════════════
+        // COLLISION-PROOF IDENTITY
+        // ═══════════════════════════════════════════════
+        sku: {
+            type: String,
+            unique: true,
+            sparse: true,
+            uppercase: true,
+            trim: true
+        },
+
+        skuStrategy: {
+            type: String,
+            enum: ['AUTO', 'MANUAL', 'LEGACY_IMPORT'],
+            default: 'AUTO'
+        },
+
+        configHash: {
+            type: String,
+            unique: true,
+            index: true,
+        },
+
+        // ═══════════════════════════════════════════════
+        // GOVERNANCE — prevent modification of identity
+        // fields after activation
+        // ═══════════════════════════════════════════════
+        governance: {
+            isLocked: { type: Boolean, default: false },
+            lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            lockedAt: { type: Date },
+            lockedReason: {
+                type: String,
+                enum: ['WAREHOUSE_SYNC', 'COMPLIANCE', 'MANUAL']
+            },
+            createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            createdAt: { type: Date, default: Date.now },
+            updatedAt: { type: Date },
+            version: { type: Number, default: 1 }
+        },
+    },
+    {
+        timestamps: true,
+        collection: 'variantmasters',
+        toJSON: {
+            virtuals: true,
+            // Convert Decimal128 to safe string in JSON responses automatically
+            transform: (_doc, ret) => {
+                if (ret.price) ret.price = ret.price.toString();
+                if (ret.compareAtPrice) ret.compareAtPrice = ret.compareAtPrice.toString();
+                if (ret.resolvedPrice) ret.resolvedPrice = ret.resolvedPrice.toString();
+                if (ret.priceResolutionLog) {
+                    ret.priceResolutionLog = ret.priceResolutionLog.map(log => {
+                        if (log.modifierValue) log.modifierValue = log.modifierValue.toString();
+                        if (log.appliedAmount) log.appliedAmount = log.appliedAmount.toString();
+                        return log;
+                    });
+                }
+                return ret;
+            },
+        },
+        toObject: { virtuals: true },
+        optimisticConcurrency: true,
+        versionKey: 'governance.version'
     }
-    return 0;
+);
+
+
+
+// ═══════════════════════════════════════════════════════════
+// INDEXES
+// ═══════════════════════════════════════════════════════════
+
+// Primary collision-prevention index (Scoped Uniqueness: combinations must be unique WITHIN a product group)
+// We remove the unique property from the schema block for configHash and handle it here:
+variantMasterSchema.index(
+    { productGroupId: 1, configHash: 1 },
+    { unique: true, name: 'idx_variant_scoped_configHash' }
+);
+
+// Global SKU Uniqueness Scoped to Tenant
+variantMasterSchema.index(
+    { tenantId: 1, sku: 1 },
+    { unique: true, name: 'idx_variant_tenant_sku', partialFilterExpression: { sku: { $exists: true, $ne: null } } }
+);
+
+// High-speed faceted filtering index
+variantMasterSchema.index(
+    { tenantId: 1, filterTokens: 1, status: 1, price: 1 },
+    { name: 'idx_variant_filter_tokens' }
+);
+
+// Compound index for the most common admin/customer query
+variantMasterSchema.index(
+    { productGroupId: 1, status: 1 },
+    { name: 'idx_variant_productGroup_status' }
+);
+
+// Support filtering by color within a product group
+variantMasterSchema.index(
+    { productGroupId: 1, colorId: 1, status: 1 },
+    { name: 'idx_variant_productGroup_color' }
+);
+
+// Attribute value lookup (e.g., "which variants have processor=A18 Pro?")
+variantMasterSchema.index(
+    { attributeValueIds: 1 },
+    { name: 'idx_variant_attributeValues' }
+);
+
+// ═══════════════════════════════════════════════════════════
+// VIRTUALS
+// ═══════════════════════════════════════════════════════════
+variantMasterSchema.virtual('priceFormatted').get(function () {
+    return this.price ? parseFloat(this.price.toString()) : null;
 });
 
-variantMasterSchema.virtual('canDelete').get(function () {
-    return this.lifecycleState === 'ARCHIVED' &&
-        this.inventorySummary?.totalQuantity === 0 &&
-        this.analytics?.purchaseCount === 0;
+variantMasterSchema.virtual('isOnSale').get(function () {
+    if (!this.compareAtPrice || !this.price) return false;
+    return parseFloat(this.compareAtPrice.toString()) > parseFloat(this.price.toString());
 });
 
-// ==================== STATIC METHODS ====================
+// ═══════════════════════════════════════════════════════════
+// 1️⃣ ORDERED MIDDLEWARE EXECUTION (P0 MUST)
+// Sequence:
+//   0. Pre-validate: FilterTokens & Size Category Dedup
+//   1. Scope Validation (Ensure attributes are legal)
+//   2. Hash & Dedup (Canonicalize identity)
+//   3. Price Engine (Build logs using canonical attributes)
+//   4. Media Validations (Check galleries)
+//   5. Governance & Lifecycle (Lock checks, OCC timestamp, Inventory sync)
+// ═══════════════════════════════════════════════════════════
+
 /**
- * Generate deterministic configuration hash
- * @param {ObjectId} productId - Product reference
- * @param {Array<ObjectId>} attributeValueIds - Sorted attribute value IDs
- * @returns {string} SHA-256 hash
+ * [STEP 0] Size Category Duplication Check & FilterToken Generation
  */
-variantMasterSchema.statics.generateConfigHash = function (productId, attributeValueIds) {
-    if (!productId) throw new Error('Product ID required for hash generation');
-    if (!attributeValueIds || attributeValueIds.length === 0) {
-        throw new Error('At least one attribute value required');
+variantMasterSchema.pre('validate', function () {
+    // 1. Array validation for Size Categories
+    if (this.sizes && this.sizes.length > 0) {
+        const categorySet = new Set();
+        for (const s of this.sizes) {
+            if (!s.category) throw new Error('Size category cannot be undefined');
+            if (categorySet.has(s.category)) {
+                throw new Error(`Duplicate size category detected: ${s.category}. A variant can only have one size per category.`);
+            }
+            categorySet.add(s.category);
+        }
     }
 
-    // 1. Canonicalize: Sort attribute IDs deterministically
-    const sortedIds = [...attributeValueIds]
-        .map(id => id.toString())
-        .sort()
-        .join('|');
-
-    // 2. Combine with product identity
-    const rawString = `${productId.toString()}:${sortedIds}`;
-
-    // 3. Generate SHA-256 hash
-    return crypto.createHash('sha256').update(rawString).digest('hex');
-};
-
-/**
- * Generate human-readable configuration signature
- */
-variantMasterSchema.statics.generateConfigSignature = function (normalizedAttributes) {
-    return normalizedAttributes
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map(attr => `${attr.typeSlug.toUpperCase()}:${attr.valueSlug.toUpperCase()}`)
-        .join('|');
-};
+    // 2. Generate Search/Filter Tokens for O(1) Reads
+    const tks = new Set();
+    if (this.colorId) tks.add(`color:${this.colorId.toString()}`);
+    if (this.sizes && this.sizes.length) {
+        this.sizes.forEach(s => tks.add(`size:${s.category}:${s.sizeId.toString()}`));
+    }
+    if (this.attributeValueIds) {
+        this.attributeValueIds.forEach(valId => tks.add(`attr:${valId.toString()}`));
+    }
+    this.filterTokens = Array.from(tks).sort();
+});
 
 /**
- * Validate lifecycle state transition
+ * [STEP 1] Scope Validation Middleware
+ * Prevent mapping unrelated attributes to variants
  */
-variantMasterSchema.statics.validateTransition = function (currentState, newState) {
-    const allowedTransitions = {
-        'DRAFT': ['PENDING_APPROVAL', 'ACTIVE', 'ARCHIVED'],
-        'PENDING_APPROVAL': ['ACTIVE', 'DRAFT', 'ARCHIVED'],
-        'ACTIVE': ['MATURE', 'CLEARANCE', 'DISCONTINUED', 'ARCHIVED'],
-        'MATURE': ['CLEARANCE', 'DISCONTINUED', 'ARCHIVED'],
-        'CLEARANCE': ['DISCONTINUED', 'ARCHIVED'],
-        'DISCONTINUED': ['ARCHIVED'],
-        'ARCHIVED': []
-    };
-
-    return allowedTransitions[currentState]?.includes(newState) || false;
-};
-
-/**
- * Find variants by product group with filters
- */
-variantMasterSchema.statics.findByProductGroup = function (productGroup, filters = {}) {
-    const query = {
-        productGroup,
-        lifecycleState: { $in: ['ACTIVE', 'MATURE', 'CLEARANCE'] },
-        isActive: true
-    };
-
-    if (filters.minPrice) query['currentPrice.amount'] = { $gte: filters.minPrice };
-    if (filters.maxPrice) query['currentPrice.amount'] = { ...query['currentPrice.amount'], $lte: filters.maxPrice };
-    if (filters.inStockOnly) query['inventorySummary.availableQuantity'] = { $gt: 0 };
-    if (filters.channel) query.availableChannels = filters.channel;
-    if (filters.region) query.availableRegions = filters.region;
-
-    return this.find(query).sort({ 'analytics.popularityScore': -1 });
-};
-
-// ==================== MIDDLEWARE ====================
 variantMasterSchema.pre('save', async function () {
-    // 1. Generate canonical ID
-    if (this.isNew && !this.canonicalId) {
-        this.canonicalId = `VAR-${this.sku}`;
-    }
+    if (this.attributeValueIds && this.attributeValueIds.length > 0) {
+        const values = await mongoose.model('AttributeValue').find({
+            _id: { $in: this.attributeValueIds }
+        }).populate('attributeType').lean();
 
-    // 2. Ensure config hash consistency
-    if (this.isModified('normalizedAttributes') || this.isModified('productId')) {
-        const valueIds = this.normalizedAttributes.map(a => a.valueId);
-        this.configHash = this.constructor.generateConfigHash(this.productId, valueIds);
-        this.configSignature = this.constructor.generateConfigSignature(this.normalizedAttributes);
-    }
-
-    // 3. Calculate inventory availability
-    if (this.inventorySummary) {
-        this.inventorySummary.availableQuantity =
-            this.inventorySummary.totalQuantity - this.inventorySummary.reservedQuantity;
-    }
-
-    // 4. Calculate price margins
-    if (this.currentPrice && this.currentPrice.cost) {
-        this.currentPrice.margin = this.currentPrice.amount - this.currentPrice.cost;
-        this.currentPrice.marginPercent =
-            ((this.currentPrice.margin / this.currentPrice.amount) * 100).toFixed(2);
-    }
-
-    // 5. Update min/max price cache
-    if (this.currentPrice) {
-        this.minVariantPrice = this.currentPrice.amount;
-        this.maxVariantPrice = this.currentPrice.compareAt || this.currentPrice.amount;
-    }
-
-    // 6. Lifecycle validation
-    if (this.isModified('lifecycleState')) {
-        const oldState = this._original?.lifecycleState || 'DRAFT';
-        if (!this.constructor.validateTransition(oldState, this.lifecycleState)) {
-            throw new Error(`Invalid lifecycle transition: ${oldState} → ${this.lifecycleState}`);
-        }
-    }
-
-    // 7. Lock enforcement
-    if (this.isLocked && !this.isNew && this.isModified()) {
-        const allowedFields = [
-            'updatedBy', 'isLocked', 'auditLog', 'inventorySummary',
-            'analytics', 'searchProjection.lastIndexedAt'
-        ];
-        const modifiedFields = this.modifiedPaths().filter(p =>
-            !allowedFields.some(allowed => p.startsWith(allowed))
+        // Ensure values belong to categories applicable to product.
+        const invalid = values.filter(v =>
+            v.attributeType && v.attributeType.applicableTo && this.productGroupType && !v.attributeType.applicableTo.includes(this.productGroupType)
         );
-        if (modifiedFields.length > 0) {
-            throw new Error(`Cannot modify locked variant. Modified fields: ${modifiedFields.join(', ')}`);
+
+        if (invalid.length > 0) {
+            throw new Error(`Invalid attribute scope: ${invalid.map(v => v.value || v.name).join(', ')}`);
+        }
+    }
+});
+
+/**
+ * [STEP 2] Hash & Dedup Middleware
+ * Deduplicate attributes and regenerate configHash whenever identity changes.
+ */
+variantMasterSchema.pre('save', function () {
+    if (this.isModified('productGroupId') ||
+        this.isModified('sizes') ||
+        this.isModified('colorId') ||
+        this.isModified('attributeValueIds')) {
+
+        let deduped = [];
+        if (this.attributeValueIds && this.attributeValueIds.length > 0) {
+            deduped = [...new Set(
+                this.attributeValueIds.map(id => id.toString())
+            )].sort();
+            this.attributeValueIds = deduped; // Assign back the deduplicated valid array
+        }
+
+        const sizeStrings = (this.sizes || []).map(s => `${s.category}:${s.sizeId.toString()}`).sort();
+
+        const parts = [
+            this.productGroupId?.toString() || '',
+            ...sizeStrings,
+            this.colorId?.toString() || '',
+            ...deduped
+        ].join('|');
+
+        this.configHash = crypto
+            .createHash('sha256')
+            .update(parts)
+            .digest('hex');
+    }
+});
+
+/**
+ * [STEP 3] Price Resolution Engine (Decimal.js Hardened)
+ * Deterministically resolve finalPrice and rebuild the priceResolutionLog
+ */
+variantMasterSchema.pre('save', async function () {
+    if (this.isModified('price') || this.isModified('attributeValueIds')) {
+        const basePrice = new Decimal(this.price ? this.price.toString() : 0);
+
+        // Option A: Deterministic Rebuild Model Reset
+        this.priceResolutionLog = [{
+            source: 'BASE',
+            modifierType: 'FIXED',
+            modifierValue: basePrice.toString(),
+            appliedAmount: basePrice.toString()
+        }];
+
+        let subtotal = new Decimal(basePrice);
+        let totalFixed = new Decimal(0);
+        let totalPercentage = new Decimal(0);
+        const attrLogs = [];
+
+        if (this.attributeValueIds && this.attributeValueIds.length > 0) {
+            const AttributeValue = mongoose.model('AttributeValue');
+            const attributes = await AttributeValue.find({ _id: { $in: this.attributeValueIds } }).lean();
+
+            for (const attr of attributes) {
+                const pm = attr.pricingModifiers?.priceModifier || attr.priceModifier;
+                const mTypeRaw = pm?.type || attr.pricingModifiers?.modifierType;
+                const mValueRaw = pm?.value || attr.pricingModifiers?.value;
+
+                if (mTypeRaw && mTypeRaw !== 'none' && mValueRaw) {
+                    const typeUpper = mTypeRaw.toUpperCase();
+                    const valDec = new Decimal(mValueRaw.toString());
+
+                    if (typeUpper === 'FIXED') {
+                        totalFixed = totalFixed.plus(valDec);
+                        attrLogs.push({
+                            source: 'ATTRIBUTE_MODIFIER',
+                            attributeValueId: attr._id,
+                            modifierType: 'FIXED',
+                            modifierValue: valDec.toString(),
+                            appliedAmount: valDec.toString() // fixed amount is exactly the modifier
+                        });
+                    } else if (typeUpper === 'PERCENTAGE') {
+                        totalPercentage = totalPercentage.plus(valDec);
+                        attrLogs.push({
+                            source: 'ATTRIBUTE_MODIFIER',
+                            attributeValueId: attr._id,
+                            modifierType: 'PERCENTAGE',
+                            modifierValue: valDec.toString(),
+                            appliedAmount: '0' // Will populate dynamically based on subtotal later
+                        });
+                    }
+                }
+            }
+        }
+
+        // Apply Fixed Modifiers to get Base Subtotal
+        subtotal = subtotal.plus(totalFixed);
+
+        // Apply Percentage on Evaluated Subtotal
+        if (!totalPercentage.isZero()) {
+            attrLogs.forEach(log => {
+                if (log.modifierType === 'PERCENTAGE') {
+                    // Applied proportionally to the fixed subtotal amount
+                    const pctDec = new Decimal(log.modifierValue);
+                    log.appliedAmount = subtotal.times(pctDec.dividedBy(100)).toString();
+                }
+            });
+            subtotal = subtotal.plus(subtotal.times(totalPercentage.dividedBy(100)));
+        }
+
+        // Negative boundary protection (P0 requirement)
+        if (subtotal.isNegative()) {
+            throw new Error(`resolvedPrice evaluates to ${subtotal.toString()}. Variants cannot have a negative price outcome.`);
+        }
+
+        // Push deterministic logs
+        if (attrLogs.length > 0) {
+            this.priceResolutionLog.push(...attrLogs);
+        }
+
+        this.resolvedPrice = subtotal.toString();
+    }
+});
+
+/**
+ * [STEP 4] Image Gallery Validations
+ */
+variantMasterSchema.pre('save', function () {
+    if (!this.imageGallery || !Array.isArray(this.imageGallery)) return;
+
+    // 1. Primary Image Enforcement
+    const primaryImages = this.imageGallery.filter(img => img.isPrimary);
+    if (primaryImages.length > 1) {
+        throw new Error('Only one image can be marked as primary.');
+    }
+    if (this.imageGallery.length > 0 && primaryImages.length === 0) {
+        this.imageGallery[0].isPrimary = true;
+    }
+
+    // 2. SortOrder Uniqueness
+    const orders = this.imageGallery.map(img => img.sortOrder).filter(o => o !== undefined);
+    const uniqueOrders = new Set(orders);
+    if (orders.length !== uniqueOrders.size) {
+        throw new Error('Duplicate sortOrder values in imageGallery.');
+    }
+});
+
+/**
+ * [STEP 5] Governance, Lifecycle, & Inventory Validations
+ */
+variantMasterSchema.pre('save', async function () {
+    // 1. Update timestamp for Governance (Mongoose handles OCC version increment automatically)
+    if (!this.isNew && this.isModified()) {
+        if (!this.governance) this.governance = {};
+        this.governance.updatedAt = new Date();
+    }
+
+    // 2. compareAtPrice guard
+    if (this.compareAtPrice && this.price) {
+        const compareNum = new Decimal(this.compareAtPrice.toString());
+        const priceNum = new Decimal(this.price.toString());
+        if (compareNum.lessThanOrEqualTo(priceNum)) {
+            throw new Error('compareAtPrice must be greater than price to show a valid discount.');
         }
     }
 
-    // 8. Auto-activate if approved
-    if (this.isModified('approvedBy') && this.approvedBy && this.lifecycleState === 'PENDING_APPROVAL') {
-        this.lifecycleState = 'ACTIVE';
-        this.isActive = true;
+    // 3. Inventory Auto-Status Sync (Protect LOCKED variants)
+    if (this.inventory && this.inventory.autoStatusSync) {
+        const isCurrentlyLocked = this.governance?.isLocked || false;
+        if (!isCurrentlyLocked) {
+            if (this.inventory.quantityOnHand <= 0 && this.status === 'ACTIVE') {
+                this.status = 'OUT_OF_STOCK';
+            } else if (this.inventory.quantityOnHand > 0 && this.status === 'OUT_OF_STOCK') {
+                this.status = 'ACTIVE';
+            }
+        }
+    }
+
+    if (this.isNew) return;
+
+    // DB Fetch for Transition & Lock Validations
+    const original = await mongoose.model('VariantMaster').findById(this._id).lean();
+    if (!original) return;
+
+    // 4. ACTIVE Lock Enforcement
+    if (original.status === 'ACTIVE') {
+        const lockedFields = ['sizes', 'colorId', 'attributeValueIds', 'productGroupId', 'configHash'];
+        for (const field of lockedFields) {
+            if (this.isModified(field)) {
+                throw new Error(`Cannot modify '${field}' on an ACTIVE variant. Archive and recreate.`);
+            }
+        }
+    }
+
+    // 5. Valid Transitions Checks
+    if (this.isModified('status')) {
+        const allowed = VALID_TRANSITIONS[original.status] || [];
+        if (this.status !== original.status && !allowed.includes(this.status)) {
+            throw new Error(`Invalid status transition: ${original.status} → ${this.status}`);
+        }
     }
 });
 
-// Prevent deletion if has sales history
-variantMasterSchema.pre('remove', async function (next) {
-    if (this.analytics?.purchaseCount > 0) {
-        throw new Error(`Cannot delete variant with ${this.analytics.purchaseCount} purchases. Archive instead.`);
+/**
+ * [QUERY MIDDLEWARE] Hardened Identity, OCC, and Image Gallery Guard
+ */
+variantMasterSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], async function () {
+    const update = this.getUpdate();
+    const setUpdate = update.$set || update;
+    const query = this.getQuery();
+
+    // 1. Enforce OCC Version Check in updates (P0)
+    const isInternalSync = update.$ignoreOCC === true;
+    if (!isInternalSync && (!query['governance.version'] && !query._id?.$in)) {
+        if (this.op === 'findOneAndUpdate' || this.op === 'updateOne') {
+            throw new Error(`Optimistic Concurrency Control requires 'governance.version' in query condition for ${this.op}`);
+        }
     }
-    if (this.inventorySummary?.totalQuantity > 0) {
-        throw new Error('Cannot delete variant with inventory. Move stock first.');
+
+    // 2. Auto-lock on transition to ACTIVE
+    const newStatus = setUpdate.status || update.status;
+    if (newStatus === 'ACTIVE') {
+        if (!update.$set) update.$set = {};
+        if (!update.$set.governance) update.$set.governance = {};
+        update.$set['governance.isLocked'] = true;
     }
-    next();
+
+    // 3. Dot-Notation Deep Identity Mutation Scan (P0)
+    const identityFields = ['sizes', 'colorId', 'productGroupId', 'configHash', 'attributeValueIds'];
+    let identityModified = false;
+
+    const mutateOps = [update.$set, update.$unset, update.$push, update.$addToSet, update.$pull, update];
+    for (const opObj of mutateOps) {
+        if (!opObj) continue;
+        for (const key of Object.keys(opObj)) {
+            if (identityFields.some(f => key === f || key.startsWith(`${f}.`))) {
+                identityModified = true;
+                break;
+            }
+        }
+        if (identityModified) break;
+    }
+
+    if (identityModified) {
+        const docs = await this.model.find(this.getQuery()).lean();
+        for (const doc of docs) {
+            if (doc?.governance?.isLocked || doc?.status === 'ACTIVE') {
+                const err = new Error('Variant identity (configHash, etc.) is locked and cannot be modified via update query on ACTIVE/LOCKED docs.');
+                err.status = 409;
+                err.statusCode = 409;
+                throw err;
+            }
+        }
+    }
+
+    // 4. Image Gallery Guards (P1)
+    let galleryModified = false;
+    for (const opObj of mutateOps) {
+        if (!opObj) continue;
+        for (const key of Object.keys(opObj)) {
+            if (key === 'imageGallery' || key.startsWith('imageGallery.')) {
+                galleryModified = true;
+                break;
+            }
+        }
+        if (galleryModified) break;
+    }
+
+    if (galleryModified) {
+        if (update.$push?.imageGallery || update.$set?.imageGallery) {
+            const err = new Error('Modifying imageGallery arrays via query updates is blocked for integrity. Use document.save().');
+            err.status = 400;
+            throw err;
+        }
+    }
 });
 
-export default mongoose.models.VariantMaster || mongoose.model('VariantMaster', variantMasterSchema);
+// ═══════════════════════════════════════════════════════════
+// SINGLETON EXPORT
+// ═══════════════════════════════════════════════════════════
+export default mongoose.models.VariantMaster ||
+    mongoose.model('VariantMaster', variantMasterSchema);

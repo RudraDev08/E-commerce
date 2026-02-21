@@ -21,6 +21,15 @@ import ProductSelectDropdown from '../../components/Shared/Dropdowns/ProductSele
 import SizeMultiSelectDropdown from '../../components/Shared/Dropdowns/SizeMultiSelectDropdown';
 import ColorMultiSelectDropdown from '../../components/Shared/Dropdowns/ColorMultiSelectDropdown';
 
+const formatCurrency = (amount, currency = 'INR') => {
+    return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(Number(amount));
+};
+
 const VariantBuilder = () => {
     const { productId } = useParams();
     const navigate = useNavigate();
@@ -47,6 +56,7 @@ const VariantBuilder = () => {
     // UI State
     const [filter, setFilter] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
+    const [partialCommitWarning, setPartialCommitWarning] = useState(false);
 
     useEffect(() => {
         fetchAllData();
@@ -57,8 +67,8 @@ const VariantBuilder = () => {
         try {
             const [prodRes, sizeRes, colorRes, varRes] = await Promise.all([
                 productAPI.getById(productId),
-                sizeAPI.getAll({ status: 'active' }),
-                colorAPI.getAll({ status: 'active' }),
+                sizeAPI.getAll({ status: 'ACTIVE' }),
+                colorAPI.getAll({ status: 'ACTIVE' }),
                 variantAPI.getByProduct(productId)
             ]);
 
@@ -195,7 +205,8 @@ const VariantBuilder = () => {
             // }
 
             // NEW SKU LOGIC: Use RAM/Storage if available (e.g. 12-256), else fallback to Code
-            let sizePart = size.code.replace(/[^a-zA-Z0-9]/g, '');
+            const rawCode = size.code || (size.displayName || size.name || 'MISC');
+            let sizePart = String(rawCode).replace(/[^a-zA-Z0-9]/g, '');
             if (size.ram && size.storage) {
                 sizePart = `${size.ram}-${size.storage}`;
             }
@@ -246,7 +257,7 @@ const VariantBuilder = () => {
                     price: genPrice,
                     images: [], // New Image Field
                     // stock: REMOVED - Managed by Inventory Master
-                    status: 'active',
+                    status: 'DRAFT',
                     isNew: true,
                     isEdited: true
                 });
@@ -288,7 +299,7 @@ const VariantBuilder = () => {
                         price: genPrice,
                         images: [], // New Image Field
                         // stock: REMOVED - Managed by Inventory Master
-                        status: 'active',
+                        status: 'DRAFT',
                         isNew: true,
                         isEdited: true
                     });
@@ -343,6 +354,21 @@ const VariantBuilder = () => {
         }
     };
 
+    // ─── Valid lifecycle transitions (mirrors backend VALID_TRANSITIONS) ────────
+    const VALID_TRANSITIONS = {
+        DRAFT: ['ACTIVE', 'ARCHIVED'],
+        ACTIVE: ['OUT_OF_STOCK', 'ARCHIVED', 'LOCKED'],
+        OUT_OF_STOCK: ['ACTIVE', 'ARCHIVED'],
+        ARCHIVED: [],          // Terminal — no re-opens without explicit workflow
+        LOCKED: [],           // Terminal — identity fully frozen
+    };
+
+    const getAllowedStatuses = (currentStatus) => {
+        // Always include current status so the select has a valid default
+        const transitions = VALID_TRANSITIONS[currentStatus] || [];
+        return [currentStatus, ...transitions];
+    };
+
     const saveChanges = async () => {
         const newItems = variants.filter(v => v.isNew);
         const editedItems = variants.filter(v => v.isEdited && !v.isNew);
@@ -352,6 +378,30 @@ const VariantBuilder = () => {
             return;
         }
 
+        // P0: Pre-flight price regex guard explicitly block format violations
+        const priceRegex = /^\d+(\.\d{1,2})?$/;
+        for (const v of [...newItems, ...editedItems]) {
+            const rawVal = v.price?.toString();
+            if (!priceRegex.test(rawVal)) {
+                toast.error(`Variant "${v.sku || v._id}" has an invalid price format. Must be a positive number with max 2 decimals.`);
+                return;
+            }
+            if (Number(rawVal) < 0) {
+                toast.error(`Variant "${v.sku || v._id}" price cannot be negative.`);
+                return;
+            }
+
+            // P0: Enforce Primary Image invariant
+            const gallery = v.imageGallery || v.images || [];
+            if (gallery.length > 0) {
+                const primaryCount = gallery.filter(i => i.isPrimary).length;
+                if (primaryCount !== 1) {
+                    toast.error(`Variant "${v.sku || v._id}" must have exactly one primary image. Found ${primaryCount}.`);
+                    return;
+                }
+            }
+        }
+
         setSaving(true);
         try {
             // Bulk Create New
@@ -359,40 +409,28 @@ const VariantBuilder = () => {
                 const payload = {
                     productId: product._id,
                     variants: newItems.map(v => {
-                        const attributes = {
-                            size: v.sizeCode
-                        };
-
-                        // LEGACY: Support old reports/search (Requested by Requirement 7)
-                        if (v.displayColorName) {
-                            attributes.color = v.displayColorName;
-                        }
-
-                        // STRICT: Follow variantAttributes.js rules for modern logic
-                        if (!v.isColorway) {
-                            attributes.colorId = v.colorId;
-                        }
+                        const attributes = { size: v.sizeCode };
+                        if (v.displayColorName) attributes.color = v.displayColorName;
+                        if (!v.isColorway) attributes.colorId = v.colorId;
 
                         const base = {
                             attributes,
                             sizeId: v.sizeId,
                             sku: v.sku,
-                            price: Number(v.price) || 0,
-                            // stock: REMOVED - Managed by Inventory Master
-                            status: v.status === 'active'
+                            price: v.price?.toString() || "0", // ✅ Float Safety: String transmission
+                            status: v.status || 'DRAFT',
                         };
 
-                        // Add Type Specifics
                         if (v.isColorway) {
                             base.colorwayName = v.colorwayName;
-                            base.colorParts = v.colorParts.map(c => c._id); // Extract IDs
+                            base.colorParts = v.colorParts.map(c => c._id);
                         } else {
                             base.colorId = v.colorId;
                         }
 
-                        // Add Images (New Feature)
-                        if (v.images && v.images.length > 0) {
-                            base.images = v.images;
+                        // ✅ Structured imageGallery (enterprise schema shape)
+                        if (v.imageGallery && v.imageGallery.length > 0) {
+                            base.imageGallery = v.imageGallery;
                         }
 
                         return base;
@@ -411,25 +449,47 @@ const VariantBuilder = () => {
                 }
             }
 
-            // Update Edited
+            // ✅ P0: Sequential guarded execution — Abort on first failure to prevent partial state drift
             if (editedItems.length > 0) {
-                await Promise.all(editedItems.map(v =>
-                    variantAPI.update(v._id, {
-                        price: Number(v.price),
-                        // stock: REMOVED - Managed by Inventory Master
-                        sku: v.sku,
-                        status: v.status === 'active'
-                    })
-                ));
-            }
+                let successes = 0;
 
-            if (newItems.length === 0 && editedItems.length > 0) {
-                toast.success('Updates saved successfully');
+                for (const v of editedItems) {
+                    try {
+                        const payload = {
+                            price: v.price?.toString(), // ✅ Float Safety: Send as STRING
+                            sku: v.sku,
+                            status: v.status,
+                            // OCC: version must be sent so backend query middleware can validate
+                            'governance.version': v.governance?.version,
+                        };
+
+                        await variantAPI.update(v._id, payload);
+                        successes++;
+                    } catch (err) {
+                        const status = err?.response?.status;
+                        if (status === 409) {
+                            // ✅ OCC conflict — Abort immediately to prevent legacy partial commit
+                            setPartialCommitWarning(true);
+                            toast.error(`⚠️ Conflict: Variant "${v.sku || v._id}" was updated by another administrator. Aborting bulk save to prevent data corruption.`);
+                            await fetchAllData();
+                            return; // STOP execution
+                        } else {
+                            setPartialCommitWarning(true);
+                            toast.error(`Abort: Bulk update failed at "${v.sku || 'variant'}". Error: ${err?.response?.data?.message || err.message}`);
+                            await fetchAllData();
+                            return; // Guarded stop
+                        }
+                    }
+                }
+
+                if (successes > 0) toast.success(`Updated ${successes} variant(s) successfully`);
             }
 
             fetchAllData();
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to save changes');
+            // Refresh to ensure UI hasn't drifted due to partial successes or backend auto-fixes
+            await fetchAllData();
         } finally {
             setSaving(false);
         }
@@ -498,46 +558,74 @@ const VariantBuilder = () => {
         if (!files || files.length === 0) return;
 
         const currentVariant = variants.find(v => v._id === variantId);
-        const currentCount = (currentVariant.images || []).length;
+        const currentGallery = currentVariant.imageGallery || [];
 
-        if (currentCount + files.length > 5) {
-            toast.error(`Limit reached: You can only have 5 images per variant.`);
+        if (currentGallery.length + files.length > 10) {
+            toast.error(`Limit reached: Maximum 10 images per variant.`);
             return;
         }
 
         const toastId = toast.loading('Uploading images...');
         try {
             const res = await uploadAPI.uploadMultiple(files);
-            const uploadedImages = res.data.data.map(img => ({
+
+            // ✅ Structured imageGallery shape matching VariantMaster enterprise schema
+            const uploadedImages = res.data.data.map((img, i) => ({
                 url: img.url,
-                alt: img.filename,
-                sortOrder: 0
+                altText: img.filename || '',
+                // First upload is primary only if gallery is currently empty
+                isPrimary: currentGallery.length === 0 && i === 0,
+                sortOrder: currentGallery.length + i,
+                type: 'DETAIL',  // HERO | THUMBNAIL | DETAIL | LIFESTYLE
             }));
 
-            const currentVariant = variants.find(v => v._id === variantId);
-            const currentImages = currentVariant.images || [];
-
-            updateVariant(variantId, 'images', [...currentImages, ...uploadedImages]);
-
-            toast.success('Images uploaded!', { id: toastId });
+            updateVariant(variantId, 'imageGallery', [...currentGallery, ...uploadedImages]);
+            toast.success(`${uploadedImages.length} image(s) uploaded!`, { id: toastId });
         } catch (error) {
             console.error(error);
             toast.error('Upload failed', { id: toastId });
         }
     };
 
+    const handleSetPrimary = (variantId, targetIndex) => {
+        const currentVariant = variants.find(v => v._id === variantId);
+        const updated = (currentVariant.imageGallery || []).map((img, i) => ({
+            ...img,
+            isPrimary: i === targetIndex,
+        }));
+        updateVariant(variantId, 'imageGallery', updated);
+    };
+
     const handleRemoveImage = (variantId, imgIndex) => {
         if (!window.confirm('Remove this image?')) return;
 
         const currentVariant = variants.find(v => v._id === variantId);
-        const currentImages = [...(currentVariant.images || [])];
-        currentImages.splice(imgIndex, 1);
+        let updated = [...(currentVariant.imageGallery || [])];
+        const wasRemovedPrimary = updated[imgIndex]?.isPrimary;
+        updated.splice(imgIndex, 1);
 
-        updateVariant(variantId, 'images', currentImages);
+        // Auto-assign primary to first remaining image if primary was removed
+        if (wasRemovedPrimary && updated.length > 0) {
+            updated[0] = { ...updated[0], isPrimary: true };
+        }
+
+        // Reindex sortOrder after removal
+        updated = updated.map((img, i) => ({ ...img, sortOrder: i }));
+
+        updateVariant(variantId, 'imageGallery', updated);
     };
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20 font-sans">
+            {partialCommitWarning && (
+                <div className="bg-red-500 text-white px-6 py-3 font-semibold flex items-center justify-between shadow-md z-40 relative">
+                    <span className="flex items-center gap-2">
+                        <XMarkIcon className="w-5 h-5 bg-white/20 rounded-full" />
+                        Partial update detected (Aborted on error). Please review updated variants.
+                    </span>
+                    <button onClick={() => setPartialCommitWarning(false)} className="text-white hover:text-red-100 uppercase text-xs font-bold tracking-wide">Dismiss</button>
+                </div>
+            )}
             {/* Header */}
             <header className="bg-white/80 backdrop-blur-xl sticky top-0 z-30 transition-all duration-300 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
                 <div className="w-full px-6 lg:px-8 h-24 flex items-center justify-between">
@@ -595,7 +683,7 @@ const VariantBuilder = () => {
                         </div>
                         <button
                             onClick={saveChanges}
-                            disabled={saving}
+                            disabled={saving || (variants.filter(v => v.isNew || v.isEdited).length === 0)}
                             className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-full font-bold shadow-xl shadow-slate-900/10 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:translate-y-0 flex items-center gap-2"
                         >
                             {saving ? 'Saving...' : 'Save Changes'}
@@ -856,9 +944,10 @@ const VariantBuilder = () => {
                                 <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
                                     <th className="px-8 py-5 font-medium">Variant Identity</th>
                                     <th className="px-6 py-5 font-medium">Images</th>
-                                    <th className="px-6 py-5 font-medium w-64">SKU Code</th>
-                                    <th className="px-6 py-5 font-medium w-40">Price (₹)</th>
-                                    <th className="px-6 py-5 font-medium w-24 text-center">Active</th>
+                                    <th className="px-6 py-5 font-medium w-48">SKU Code</th>
+                                    <th className="px-6 py-5 font-medium w-36">Base Price (₹)</th>
+                                    <th className="px-6 py-5 font-medium w-36">Resolved Price (₹)</th>
+                                    <th className="px-6 py-5 font-medium w-36">Status</th>
                                     <th className="px-6 py-5 w-16"></th>
                                 </tr>
                             </thead>
@@ -939,20 +1028,37 @@ const VariantBuilder = () => {
                                             <td className="px-6 py-6">
                                                 <div className="flex flex-col items-start gap-3">
                                                     <div className="flex flex-wrap gap-2">
-                                                        {(variant.images || []).map((img, imgIdx) => (
-                                                            <div key={imgIdx} className="relative group/img w-10 h-10 rounded-lg ring-1 ring-slate-200/80 overflow-hidden bg-white shadow-sm hover:scale-110 transition-transform z-0 hover:z-10">
+                                                        {(variant.imageGallery || variant.images || []).map((img, imgIdx) => (
+                                                            <div
+                                                                key={imgIdx}
+                                                                className={`relative group/img w-10 h-10 rounded-lg ring-1 overflow-hidden bg-white shadow-sm hover:scale-110 transition-transform z-0 hover:z-10 ${img.isPrimary ? 'ring-indigo-400' : 'ring-slate-200/80'}`}
+                                                                title={img.isPrimary ? 'Primary Image' : `Image ${imgIdx + 1}`}
+                                                            >
                                                                 <img
                                                                     src={getImageUrl(img)}
-                                                                    alt="Variant"
+                                                                    alt={img.altText || 'Variant'}
                                                                     className="w-full h-full object-cover"
                                                                     onError={(e) => e.target.style.display = 'none'}
                                                                 />
-                                                                <button
-                                                                    onClick={() => handleRemoveImage(variant._id, imgIdx)}
-                                                                    className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white transition-opacity backdrop-blur-[1px]"
-                                                                >
-                                                                    <XMarkIcon className="w-3.5 h-3.5" />
-                                                                </button>
+                                                                {/* Primary star badge */}
+                                                                {img.isPrimary && (
+                                                                    <div className="absolute top-0 left-0 bg-indigo-500 text-white text-[8px] px-1 leading-4 rounded-br">★</div>
+                                                                )}
+                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex flex-col items-center justify-center gap-0.5 transition-opacity backdrop-blur-[1px]">
+                                                                    {!img.isPrimary && (
+                                                                        <button
+                                                                            onClick={() => handleSetPrimary(variant._id, imgIdx)}
+                                                                            className="text-yellow-300 text-[10px] font-bold"
+                                                                            title="Set as primary"
+                                                                        >★</button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => handleRemoveImage(variant._id, imgIdx)}
+                                                                        className="text-white"
+                                                                    >
+                                                                        <XMarkIcon className="w-3 h-3" />
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -972,18 +1078,29 @@ const VariantBuilder = () => {
 
                                             {/* 2. SKU COLUMN */}
                                             <td className="px-6 py-6">
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={variant.sku}
-                                                        onChange={(e) => updateVariant(variant._id, 'sku', e.target.value)}
-                                                        className="w-full bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 focus:border-indigo-500 text-slate-600 text-xs font-mono font-semibold rounded-lg px-3 py-2 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-sm focus:shadow-md focus:bg-white placeholder-slate-300"
-                                                        placeholder="GEN-SKU-..."
-                                                    />
-                                                </div>
+                                                {/* SKU locked on ACTIVE/LOCKED variants */}
+                                                {(() => {
+                                                    const isLocked = variant.status === 'LOCKED' || variant.status === 'ACTIVE';
+                                                    return (
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={variant.sku || ''}
+                                                                onChange={(e) => !isLocked && updateVariant(variant._id, 'sku', e.target.value)}
+                                                                readOnly={isLocked}
+                                                                className={`w-full text-slate-600 text-xs font-mono font-semibold rounded-lg px-3 py-2 focus:outline-none transition-all shadow-sm placeholder-slate-300 ${isLocked
+                                                                    ? 'bg-slate-100 border border-slate-200 cursor-not-allowed text-slate-400'
+                                                                    : 'bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:shadow-md focus:bg-white'
+                                                                    }`}
+                                                                placeholder="GEN-SKU-..."
+                                                            />
+                                                            {isLocked && <LockClosedIcon className="absolute right-2 top-2.5 w-3 h-3 text-slate-400" />}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </td>
 
-                                            {/* 3. PRICE COLUMN */}
+                                            {/* 3. BASE PRICE COLUMN */}
                                             <td className="px-6 py-6">
                                                 <div className="relative group/input">
                                                     <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
@@ -991,28 +1108,74 @@ const VariantBuilder = () => {
                                                     </div>
                                                     <input
                                                         type="number"
-                                                        value={variant.price}
-                                                        onChange={(e) => updateVariant(variant._id, 'price', e.target.value)}
-                                                        className="w-full bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 focus:border-emerald-500 text-slate-900 font-bold text-sm rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all shadow-sm focus:shadow-md focus:bg-white"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={variant.price ?? ''}
+                                                        readOnly={variant.status === 'LOCKED' || variant.status === 'ACTIVE'}
+                                                        onChange={(e) => {
+                                                            // ✅ Float Safety: Store raw string to prevent early IEEE-754 drift
+                                                            const rawVal = e.target.value;
+                                                            updateVariant(variant._id, 'price', rawVal);
+                                                        }}
+                                                        className={`w-full bg-slate-50 border font-bold text-sm rounded-lg pl-8 pr-3 py-2 transition-all shadow-sm ${variant.status === 'LOCKED' || variant.status === 'ACTIVE' ? 'cursor-not-allowed opacity-70 bg-slate-100 text-slate-500 hover:bg-slate-100' : 'hover:bg-white focus:outline-none focus:ring-4 focus:shadow-md focus:bg-white'} ${Number(variant.price) < 0
+                                                            ? 'border-red-400 text-red-600 focus:ring-red-500/10 focus:border-red-500'
+                                                            : 'border-transparent hover:border-slate-200 focus:border-emerald-500 text-slate-900 focus:ring-emerald-500/10'
+                                                            }`}
                                                         placeholder="0.00"
                                                     />
                                                 </div>
+                                                {Number(variant.price) < 0 && (
+                                                    <p className="text-red-500 text-[10px] mt-1 font-semibold">Price cannot be negative</p>
+                                                )}
                                             </td>
 
-                                            {/* 4. STATUS COLUMN */}
+                                            {/* 4. RESOLVED PRICE COLUMN (read-only, computed by backend) */}
                                             <td className="px-6 py-6">
-                                                <div className="flex justify-center">
-                                                    <button
-                                                        onClick={() => updateVariant(variant._id, 'status', variant.status === 'active' ? 'inactive' : 'active')}
-                                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${variant.status === 'active' ? 'bg-emerald-500' : 'bg-slate-200'}`}
-                                                    >
-                                                        <span className="sr-only">Toggle active</span>
-                                                        <span
-                                                            aria-hidden="true"
-                                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${variant.status === 'active' ? 'translate-x-5' : 'translate-x-0'}`}
-                                                        />
-                                                    </button>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className={`font-bold text-sm ${variant.resolvedPrice ? 'text-emerald-700' : 'text-slate-400'
+                                                        }`}>
+                                                        {variant.resolvedPrice
+                                                            ? formatCurrency(variant.resolvedPrice)
+                                                            : variant.isNew ? '—' : 'Pending'
+                                                        }
+                                                    </span>
+                                                    {variant.priceResolutionLog && variant.priceResolutionLog.length > 1 && (
+                                                        <span className="text-[10px] text-indigo-500 font-semibold">
+                                                            {variant.priceResolutionLog.length - 1} modifier{variant.priceResolutionLog.length > 2 ? 's' : ''} applied
+                                                        </span>
+                                                    )}
                                                 </div>
+                                            </td>
+
+                                            {/* 5. LIFECYCLE STATUS COLUMN (enum dropdown, not boolean toggle) */}
+                                            <td className="px-6 py-6">
+                                                {(() => {
+                                                    const isTerminal = variant.status === 'LOCKED' || variant.status === 'ARCHIVED';
+                                                    const allowed = getAllowedStatuses(variant.status || 'DRAFT');
+                                                    const statusColors = {
+                                                        DRAFT: 'bg-slate-100 text-slate-600',
+                                                        ACTIVE: 'bg-emerald-50 text-emerald-700',
+                                                        OUT_OF_STOCK: 'bg-amber-50 text-amber-700',
+                                                        ARCHIVED: 'bg-red-50 text-red-600',
+                                                        LOCKED: 'bg-indigo-50 text-indigo-700',
+                                                    };
+                                                    return isTerminal ? (
+                                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusColors[variant.status] || 'bg-slate-100 text-slate-600'}`}>
+                                                            <LockClosedIcon className="w-2.5 h-2.5" />
+                                                            {variant.status}
+                                                        </span>
+                                                    ) : (
+                                                        <select
+                                                            value={variant.inventory?.quantityOnHand === 0 && variant.status === 'ACTIVE' ? 'OUT_OF_STOCK' : (variant.status || 'DRAFT')}
+                                                            onChange={(e) => updateVariant(variant._id, 'status', e.target.value)}
+                                                            className={`text-[11px] font-bold rounded-full px-2.5 py-1 border-0 focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer uppercase tracking-wide ${(variant.inventory?.quantityOnHand === 0 && variant.status === 'ACTIVE') ? statusColors['OUT_OF_STOCK'] : (statusColors[variant.status] || 'bg-slate-100 text-slate-600')}`}
+                                                        >
+                                                            {allowed.map(s => (
+                                                                <option key={s} value={s} disabled={s === 'ACTIVE' && variant.inventory?.quantityOnHand === 0}>{s.replace('_', ' ')}</option>
+                                                            ))}
+                                                        </select>
+                                                    );
+                                                })()}
                                             </td>
 
                                             {/* 6. ACTIONS COLUMN */}

@@ -1,375 +1,357 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 
+/**
+ * REUSABLE VARIANT SELECTOR COMPONENT
+ * Handles different UI types: Swatches, Buttons, Grids, Dropdowns
+ */
+const VariantSelector = React.memo(({
+    label,
+    options,
+    currentSelection,
+    onSelect,
+    isValidOption
+}) => {
+    const isColor = label.toLowerCase() === 'color';
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-slate-900 tracking-tight">
+                    {label}
+                </label>
+                {isColor && currentSelection && (
+                    <span className="text-sm text-slate-500 font-normal">
+                        {options.find(opt => opt.id === currentSelection)?.label}
+                    </span>
+                )}
+            </div>
+
+            <div className="flex flex-wrap gap-2.5">
+                {options.map((option) => {
+                    const selected = currentSelection === option.id;
+                    const disabled = !isValidOption(option.id);
+
+                    if (isColor) {
+                        return (
+                            <button
+                                key={option.id}
+                                onClick={() => !disabled && onSelect(option.id)}
+                                disabled={disabled}
+                                className={`
+                  relative w-10 h-10 rounded-full transition-all duration-300
+                  ${selected ? 'ring-2 ring-indigo-600 ring-offset-2 scale-110' : 'hover:scale-105'}
+                  ${disabled ? 'opacity-20 grayscale cursor-not-allowed' : 'cursor-pointer'}
+                `}
+                                title={option.label}
+                            >
+                                <span
+                                    className="absolute inset-0 rounded-full border border-slate-200 shadow-inner"
+                                    style={{ backgroundColor: option.hex }}
+                                />
+                                {disabled && (
+                                    <span className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-px h-full bg-slate-400 rotate-45" />
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    }
+
+                    return (
+                        <button
+                            key={option.id}
+                            onClick={() => !disabled && onSelect(option.id)}
+                            disabled={disabled}
+                            className={`
+                min-w-[64px] px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 border
+                ${selected
+                                    ? 'bg-slate-900 border-slate-900 text-white shadow-md'
+                                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'}
+                ${disabled ? 'opacity-30 border-slate-100 text-slate-300 cursor-not-allowed' : 'cursor-pointer'}
+              `}
+                        >
+                            {option.label}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+});
+
+/**
+ * PREMIUM ENTERPRISE PRODUCT DETAIL PAGE
+ */
 const ProductDetailPage = ({ productGroup }) => {
-    const [variants, setVariants] = useState([]);
-    const [configurations, setConfigurations] = useState(null);
-    const [selectedConfig, setSelectedConfig] = useState({});
-    const [currentVariant, setCurrentVariant] = useState(null);
+    const [pdpData, setPdpData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
     // API base URL
     const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
     useEffect(() => {
-        loadProductData();
-    }, [productGroup]);
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                const response = await fetch(`${API_BASE}/variants/group/${productGroup}/configurations`);
+                const result = await response.json();
 
-    const loadProductData = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-
-            const [variantsRes, configRes] = await Promise.all([
-                axios.get(`${API_BASE}/variants/group/${productGroup}`),
-                axios.get(`${API_BASE}/variants/group/${productGroup}/configurations`)
-            ]);
-
-            if (!variantsRes.data.success || !configRes.data.success) {
-                throw new Error('Failed to load product data');
-            }
-
-            setVariants(variantsRes.data.data);
-            setConfigurations(configRes.data.data);
-
-            // Auto-select first available variant
-            if (variantsRes.data.data.length > 0) {
-                const firstVariant = variantsRes.data.data[0];
-                selectVariant(firstVariant);
-            }
-
-            setLoading(false);
-        } catch (err) {
-            console.error('Error loading product:', err);
-            setError(err.response?.data?.message || 'Failed to load product');
-            setLoading(false);
-        }
-    };
-
-    const selectVariant = (variant) => {
-        setCurrentVariant(variant);
-        setSelectedImageIndex(0);
-
-        // Build selected configuration
-        const config = {};
-        variant.sizes?.forEach(size => {
-            config[size.category] = size.sizeId._id || size.sizeId;
-        });
-        if (variant.color) {
-            config.color = variant.color._id || variant.color;
-        }
-        setSelectedConfig(config);
-    };
-
-    const handleConfigChange = (type, value) => {
-        const newConfig = { ...selectedConfig, [type]: value };
-        setSelectedConfig(newConfig);
-
-        // Find matching variant
-        const matchingVariant = findMatchingVariant(newConfig);
-        if (matchingVariant) {
-            selectVariant(matchingVariant);
-        }
-    };
-
-    const findMatchingVariant = (config) => {
-        return variants.find(variant => {
-            // Check color match
-            const variantColorId = variant.color?._id?.toString() || variant.color?.toString();
-            const configColorId = config.color?.toString();
-
-            if (configColorId && variantColorId !== configColorId) {
-                return false;
-            }
-
-            // Check all size categories match
-            const sizeCategories = Object.keys(config).filter(k => k !== 'color');
-
-            for (const category of sizeCategories) {
-                const variantSize = variant.sizes?.find(s => s.category === category);
-                const variantSizeId = variantSize?.sizeId?._id?.toString() || variantSize?.sizeId?.toString();
-                const configSizeId = config[category]?.toString();
-
-                if (!variantSize || variantSizeId !== configSizeId) {
-                    return false;
-                }
-            }
-
-            return true;
-        });
-    };
-
-    const isOptionAvailable = (type, value) => {
-        // Create temporary config with this option
-        const tempConfig = { ...selectedConfig, [type]: value };
-
-        // Check if any variant matches this configuration
-        return variants.some(variant => {
-            const variantColorId = variant.color?._id?.toString() || variant.color?.toString();
-            const tempColorId = tempConfig.color?.toString();
-
-            if (type === 'color') {
-                if (variantColorId !== value.toString()) return false;
-            } else {
-                const variantSize = variant.sizes?.find(s => s.category === type);
-                const variantSizeId = variantSize?.sizeId?._id?.toString() || variantSize?.sizeId?.toString();
-                if (!variantSize || variantSizeId !== value.toString()) return false;
-            }
-
-            // Check other selections still match
-            return Object.entries(tempConfig).every(([key, val]) => {
-                if (key === type) return true; // Skip the one we're checking
-
-                if (key === 'color') {
-                    return variantColorId === val?.toString();
+                if (result.success) {
+                    setPdpData(result.data);
                 } else {
-                    const size = variant.sizes?.find(s => s.category === key);
-                    const sizeId = size?.sizeId?._id?.toString() || size?.sizeId?.toString();
-                    return sizeId === val?.toString();
+                    throw new Error(result.message || 'Failed to load product');
                 }
-            });
-        });
-    };
+            } catch (err) {
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
 
-    const primaryImage = useMemo(() => {
-        if (!currentVariant?.images?.length) return null;
-        return currentVariant.images[selectedImageIndex] || currentVariant.images[0];
-    }, [currentVariant, selectedImageIndex]);
+        if (productGroup) loadData();
+    }, [productGroup, API_BASE]);
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600 font-medium">Loading product...</p>
+            <div className="min-h-screen flex items-center justify-center bg-white">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+                    <p className="text-slate-400 font-medium animate-pulse">Refining Details...</p>
                 </div>
             </div>
         );
     }
 
-    if (error) {
+    if (error || !pdpData || !pdpData.selectors) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                <div className="text-center max-w-md">
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-                        <svg className="w-12 h-12 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <div className="min-h-screen flex items-center justify-center bg-white px-6">
+                <div className="max-w-md w-full text-center space-y-6">
+                    <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto">
+                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
-                        <h3 className="text-lg font-semibold text-red-900 mb-2">Error Loading Product</h3>
-                        <p className="text-red-700">{error}</p>
                     </div>
+                    <div className="space-y-2">
+                        <h2 className="text-2xl font-bold text-slate-900">Unable to load product</h2>
+                        <p className="text-slate-500">{error || "The requested item could not be found."}</p>
+                    </div>
+                    <button onClick={() => window.location.reload()} className="px-8 py-3 bg-slate-900 text-white rounded-full font-medium hover:bg-slate-800 transition-all">
+                        Try Again
+                    </button>
                 </div>
             </div>
         );
     }
 
-    if (!currentVariant) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                <div className="text-center">
-                    <p className="text-gray-500 text-lg">Product not found</p>
-                </div>
-            </div>
-        );
-    }
+    const { selectors, matrix, variantDictionary, defaultVariantId } = pdpData;
+
+    // 1. Initialize selections with defaultVariantId configuration to guarantee a valid combination
+    const [selections, setSelections] = useState(() => {
+        const initial = {};
+        if (defaultVariantId) {
+            // Find the matrix key that resolves to defaultVariantId
+            const validKey = Object.keys(matrix).find(k => matrix[k] === defaultVariantId);
+            if (validKey) {
+                const parts = validKey.split('.');
+                // Map the parts back to the selector categories
+                Object.entries(selectors).forEach(([key, options]) => {
+                    const matchedOption = options.find(opt => parts.includes(opt.id));
+                    if (matchedOption) initial[key] = matchedOption.id;
+                });
+                return initial;
+            }
+        }
+
+        // Fallback
+        Object.keys(selectors).forEach(key => {
+            initial[key] = selectors[key][0]?.id;
+        });
+        return initial;
+    });
+
+    const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+    // 2. Computed O(1) Key & Variant Lookup
+    const combinationKey = useMemo(() => {
+        return Object.values(selections).filter(Boolean).sort().join('.');
+    }, [selections]);
+
+    const activeVariantId = matrix[combinationKey];
+    const activeVariant = variantDictionary[activeVariantId];
+
+    // 3. Logic to check if a specific option is valid given other current selections
+    const isValidOption = useCallback((category, optionId) => {
+        const testSelections = { ...selections, [category]: optionId };
+        const testKey = Object.values(testSelections).filter(Boolean).sort().join('.');
+        return !!matrix[testKey];
+    }, [selections, matrix]);
+
+    const handleSelect = useCallback((category, id) => {
+        setSelections(prev => ({ ...prev, [category]: id }));
+        setActiveImageIndex(0); // Reset gallery on variant change
+    }, []);
+
+    // 4. Derived UI data
+    const images = activeVariant?.images || [];
+    const primaryImage = images.find(img => img.isPrimary) || images[activeImageIndex] || images[0];
 
     return (
-        <div className="min-h-screen bg-gray-50 py-8">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                    {/* Image Gallery */}
-                    <div className="space-y-4">
-                        {/* Main Image */}
-                        <div className="aspect-square bg-white rounded-2xl overflow-hidden shadow-md border border-gray-200">
-                            {primaryImage ? (
+        <div className="min-h-screen bg-white">
+            <div className="max-w-[1440px] mx-auto px-6 lg:px-12 py-12 lg:py-20">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-24 items-start">
+
+                    {/* L: IMAGE GALLERY (7/12 col) */}
+                    <div className="lg:col-span-7 space-y-6">
+                        <div className="relative aspect-[4/5] bg-slate-50 rounded-3xl overflow-hidden group">
+                            {primaryImage && (
                                 <img
+                                    key={primaryImage.url} // Key forces clean animation per variant
                                     src={primaryImage.url}
-                                    alt={primaryImage.altText || currentVariant.productName}
-                                    className="w-full h-full object-cover"
+                                    alt={primaryImage.altText || "Product variant view"}
+                                    className="w-full h-full object-cover animate-in fade-in duration-700"
                                 />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                                    <svg className="w-24 h-24 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            )}
+                            {!primaryImage && (
+                                <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                    <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
                                 </div>
                             )}
-                        </div>
 
-                        {/* Thumbnail Gallery */}
-                        {currentVariant.images && currentVariant.images.length > 1 && (
-                            <div className="grid grid-cols-4 gap-3">
-                                {currentVariant.images.map((img, idx) => (
-                                    <button
+                            {/* Image Navigation Overlay (Mobile) */}
+                            <div className="absolute inset-x-4 bottom-6 flex justify-center gap-2 lg:hidden">
+                                {images.map((_, idx) => (
+                                    <div
                                         key={idx}
-                                        onClick={() => setSelectedImageIndex(idx)}
-                                        className={`aspect-square bg-white rounded-lg overflow-hidden border-2 transition-all ${selectedImageIndex === idx
-                                                ? 'border-indigo-600 ring-2 ring-indigo-200'
-                                                : 'border-gray-200 hover:border-gray-300'
-                                            }`}
-                                    >
-                                        <img
-                                            src={img.thumbnailUrl || img.url}
-                                            alt=""
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </button>
+                                        className={`h-1.5 rounded-full transition-all duration-300 ${activeImageIndex === idx ? 'w-8 bg-slate-900' : 'w-2 bg-slate-300'}`}
+                                    />
                                 ))}
                             </div>
-                        )}
+                        </div>
+
+                        {/* Thumbnails (Desktop) */}
+                        <div className="hidden lg:grid grid-cols-6 gap-4">
+                            {images.map((img, idx) => (
+                                <button
+                                    key={img.url}
+                                    onClick={() => setActiveImageIndex(idx)}
+                                    className={`
+                    aspect-square rounded-xl overflow-hidden border-2 transition-all duration-200
+                    ${activeImageIndex === idx ? 'border-slate-900 shadow-md ring-2 ring-slate-100' : 'border-transparent hover:border-slate-200'}
+                  `}
+                                >
+                                    <img src={img.url} className="w-full h-full object-cover" alt={`Thumb ${idx}`} />
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Product Info */}
-                    <div className="space-y-6">
-                        {/* Brand & Title */}
-                        <div>
-                            <p className="text-sm text-gray-500 uppercase tracking-wide font-semibold">
-                                {configurations?.productInfo?.brand || currentVariant.brand}
-                            </p>
-                            <h1 className="text-3xl font-bold text-gray-900 mt-2 leading-tight">
-                                {currentVariant.productName}
+                    {/* R: PRODUCT DETAILS (5/12 col) */}
+                    <div className="lg:col-span-5 lg:sticky lg:top-12 space-y-10">
+                        {/* Header Section */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-0.5 bg-slate-100 text-[10px] font-bold tracking-widest text-slate-600 uppercase rounded-md">
+                                    New Release
+                                </span>
+                                {activeVariant?.inventory < 10 && activeVariant?.inventory > 0 && (
+                                    <span className="text-amber-600 text-xs font-medium animate-pulse">
+                                        Only {activeVariant.inventory} units left
+                                    </span>
+                                )}
+                            </div>
+
+                            <h1 className="text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1]">
+                                {pdpData.baseDetails?.productName || "Product Name"}
                             </h1>
-                        </div>
 
-                        {/* Price */}
-                        <div className="flex items-baseline gap-3">
-                            <span className="text-4xl font-bold text-gray-900">
-                                ₹{currentVariant.price.toLocaleString('en-IN')}
-                            </span>
-                            {currentVariant.compareAtPrice && currentVariant.compareAtPrice > currentVariant.price && (
-                                <>
-                                    <span className="text-xl text-gray-500 line-through">
-                                        ₹{currentVariant.compareAtPrice.toLocaleString('en-IN')}
+                            <div className="flex items-baseline gap-4">
+                                <span key={activeVariant?.price} className="text-3xl font-semibold text-slate-900 animate-in slide-in-from-bottom-2 fade-in duration-500">
+                                    ${activeVariant?.price?.toLocaleString() || '---'}
+                                </span>
+                                {activeVariant?.compareAtPrice && (
+                                    <span className="text-xl text-slate-400 line-through">
+                                        ${activeVariant.compareAtPrice.toLocaleString()}
                                     </span>
-                                    <span className="px-2 py-1 bg-green-100 text-green-800 text-sm font-semibold rounded-full">
-                                        {currentVariant.discountPercentage}% OFF
-                                    </span>
-                                </>
-                            )}
+                                )}
+                            </div>
                         </div>
 
-                        {/* SKU and Stock */}
-                        <div className="flex items-center gap-4 text-sm">
-                            <span className="font-mono text-gray-600 bg-gray-100 px-3 py-1 rounded-lg">
-                                SKU: {currentVariant.sku}
-                            </span>
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${currentVariant.inStock
-                                    ? 'bg-green-100 text-green-800 border border-green-200'
-                                    : 'bg-red-100 text-red-800 border border-red-200'
-                                }`}>
-                                {currentVariant.inStock ? `In Stock (${currentVariant.totalStock})` : 'Out of Stock'}
-                            </span>
+                        {/* Dynamic Selectors */}
+                        <div className="space-y-8 py-8 border-y border-slate-100">
+                            {Object.entries(selectors).map(([label, options]) => (
+                                <VariantSelector
+                                    key={label}
+                                    label={label}
+                                    options={options}
+                                    currentSelection={selections[label]}
+                                    onSelect={(id) => handleSelect(label, id)}
+                                    isValidOption={(id) => isValidOption(label, id)}
+                                />
+                            ))}
                         </div>
 
-                        {/* Size Selectors */}
-                        {configurations && Object.entries(configurations.sizes).map(([category, sizes]) => (
-                            <div key={category} className="space-y-3">
-                                <label className="block text-sm font-semibold text-gray-900 capitalize">
-                                    Select {category}
-                                </label>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {sizes.map(size => {
-                                        const isAvailable = isOptionAvailable(category, size.id);
-                                        const isSelected = selectedConfig[category]?.toString() === size.id.toString();
-
-                                        return (
-                                            <button
-                                                key={size.id}
-                                                onClick={() => isAvailable && handleConfigChange(category, size.id)}
-                                                disabled={!isAvailable}
-                                                className={`
-                                                    px-4 py-3 rounded-xl border-2 text-sm font-semibold transition-all
-                                                    ${isSelected
-                                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-900 shadow-sm'
-                                                        : isAvailable
-                                                            ? 'border-gray-200 bg-white text-gray-900 hover:border-gray-300 hover:shadow-sm'
-                                                            : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed opacity-50'
-                                                    }
-                                                `}
-                                            >
-                                                {size.displayName}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                        {/* Stock & SKU Context */}
+                        <div className="flex justify-between items-center text-xs font-medium text-slate-500">
+                            <span className="tracking-widest uppercase">SKU: {activeVariant?.sku || 'N/A'}</span>
+                            <div className="flex items-center gap-1.5">
+                                <div className={`w-1.5 h-1.5 rounded-full ${activeVariant?.inventory > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                {activeVariant?.inventory > 0 ? 'Ships within 24 hours' : 'Out of Stock'}
                             </div>
-                        ))}
+                        </div>
 
-                        {/* Color Selector */}
-                        {configurations?.colors && configurations.colors.length > 0 && (
-                            <div className="space-y-3">
-                                <label className="block text-sm font-semibold text-gray-900">Select Color</label>
-                                <div className="flex flex-wrap gap-3">
-                                    {configurations.colors.map(color => {
-                                        const isAvailable = isOptionAvailable('color', color.id);
-                                        const isSelected = selectedConfig.color?.toString() === color.id.toString();
-
-                                        return (
-                                            <button
-                                                key={color.id}
-                                                onClick={() => isAvailable && handleConfigChange('color', color.id)}
-                                                disabled={!isAvailable}
-                                                className={`
-                                                    relative group
-                                                    ${!isAvailable && 'opacity-40 cursor-not-allowed'}
-                                                `}
-                                                title={color.name}
-                                            >
-                                                <div className={`
-                                                    w-12 h-12 rounded-full border-2 transition-all
-                                                    ${isSelected
-                                                        ? 'border-indigo-600 ring-4 ring-indigo-200'
-                                                        : 'border-gray-300 hover:border-gray-400'
-                                                    }
-                                                `}>
-                                                    <span
-                                                        className="absolute inset-1 rounded-full"
-                                                        style={{ backgroundColor: color.hexCode }}
-                                                    />
-                                                </div>
-                                                <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-xs text-gray-600 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {color.name}
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Description */}
-                        {currentVariant.description && (
-                            <div className="pt-6 border-t border-gray-200">
-                                <h3 className="text-sm font-semibold text-gray-900 mb-2">Description</h3>
-                                <p className="text-gray-700 leading-relaxed">{currentVariant.description}</p>
-                            </div>
-                        )}
-
-                        {/* Specifications */}
-                        {currentVariant.specifications && Object.keys(currentVariant.specifications).length > 0 && (
-                            <div className="pt-6 border-t border-gray-200">
-                                <h3 className="text-sm font-semibold text-gray-900 mb-3">Specifications</h3>
-                                <dl className="grid grid-cols-2 gap-3">
-                                    {Object.entries(currentVariant.specifications).map(([key, value]) => (
-                                        <div key={key} className="bg-gray-50 px-3 py-2 rounded-lg">
-                                            <dt className="text-xs text-gray-500 capitalize">{key}</dt>
-                                            <dd className="text-sm font-medium text-gray-900 mt-0.5">{value}</dd>
-                                        </div>
-                                    ))}
-                                </dl>
-                            </div>
-                        )}
-
-                        {/* Add to Cart Button */}
-                        <div className="pt-6">
+                        {/* Actions */}
+                        <div className="space-y-4">
                             <button
-                                disabled={!currentVariant.inStock}
-                                className="w-full bg-indigo-600 text-white py-4 px-8 rounded-xl font-semibold text-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl disabled:shadow-none transform hover:-translate-y-0.5 disabled:transform-none"
+                                disabled={!activeVariant || activeVariant.inventory <= 0}
+                                className={`
+                  w-full py-5 px-8 rounded-full text-lg font-semibold transition-all duration-300 shadow-lg
+                  ${activeVariant && activeVariant.inventory > 0
+                                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-indigo-100 hover:-translate-y-1'
+                                        : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'}
+                `}
                             >
-                                {currentVariant.inStock ? 'Add to Cart' : 'Out of Stock'}
+                                {activeVariant?.inventory > 0 ? 'Add to Bag' : 'Join Waitlist'}
                             </button>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <button className="flex items-center justify-center gap-2 py-3 px-4 rounded-full border border-slate-200 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                    </svg>
+                                    Save to List
+                                </button>
+                                <button className="flex items-center justify-center gap-2 py-3 px-4 rounded-full border border-slate-200 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6a3 3 0 100-2.684m0 2.684l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                    </svg>
+                                    Share
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Trust Badges */}
+                        <div className="pt-8 grid grid-cols-3 gap-8">
+                            <div className="text-center space-y-2">
+                                <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
+                                    <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                </div>
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Secure Delivery</p>
+                            </div>
+                            <div className="text-center space-y-2">
+                                <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
+                                    <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                                </div>
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">100-Day Returns</p>
+                            </div>
+                            <div className="text-center space-y-2">
+                                <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
+                                    <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                </div>
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Lifetime Warranty</p>
+                            </div>
                         </div>
                     </div>
                 </div>

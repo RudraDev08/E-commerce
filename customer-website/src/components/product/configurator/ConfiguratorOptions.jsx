@@ -1,11 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CheckIcon, XMarkIcon } from '@heroicons/react/24/solid';
 import { getImageUrl } from '../../../utils/formatters';
 
-/**
- * Rich Variant Card (Amazon Style)
- * Shows a thumbnail image + price inside a bordered card.
- */
+// ─── RICH VARIANT CARD (Image + Price preview) ───────────────────────────────
 export const RichVariantCard = ({ attribute, values, selectedValue, onSelect, checkAvailability }) => (
     <div className="rich-variant-group">
         {values.map(val => {
@@ -40,23 +37,109 @@ export const RichVariantCard = ({ attribute, values, selectedValue, onSelect, ch
     </div>
 );
 
-
-/**
- * Button Group Component
- */
+// ─── PREMIUM SEGMENTED BUTTON GROUP (Size / Generic) ─────────────────────────
 export const ButtonGroup = ({ attribute, values, selectedValue, onSelect, checkAvailability }) => (
-    <div className="options-group">
+    <div className="seg-group">
         {values.map(val => {
             const isAvailable = checkAvailability(val.slug || val.value);
             const isSelected = selectedValue === (val.slug || val.value);
+            const key = val.id || val.slug || val.value;
 
             return (
                 <button
-                    key={val.id}
-                    onClick={() => onSelect(val.slug || val.value)}
+                    key={key}
+                    onClick={() => isAvailable && onSelect(val.slug || val.value)}
                     disabled={!isAvailable}
-                    className={`option-btn ${isSelected ? 'selected' : ''} ${!isAvailable ? 'disabled' : ''}`}
-                    title={!isAvailable ? 'Out of Stock' : val.value}
+                    aria-pressed={isSelected}
+                    title={!isAvailable ? 'Out of stock for this combination' : val.value}
+                    className={[
+                        'seg-btn',
+                        isSelected ? 'seg-btn--active' : '',
+                        !isAvailable ? 'seg-btn--disabled' : '',
+                    ].join(' ')}
+                >
+                    {val.value}
+                    {!isAvailable && <span className="seg-btn__slash" aria-hidden="true" />}
+                </button>
+            );
+        })}
+    </div>
+);
+
+// ─── PREMIUM CIRCULAR COLOR SWATCHES ─────────────────────────────────────────
+export const ColorSwatch = ({ attribute, values, selectedValue, onSelect, checkAvailability }) => {
+    const [tooltip, setTooltip] = useState(null);
+
+    return (
+        <div className="swatches-row">
+            {values.map(val => {
+                const isAvailable = checkAvailability(val.slug || val.value);
+                const isSelected = selectedValue === (val.slug || val.value);
+                const colorCode = val.hexCode || val.hex || val.value;
+                const isLightColor = colorCode && /^#?[fF]{3,6}$/.test(colorCode.replace('#', ''));
+                const key = val.id || val.slug || val.value;
+
+                return (
+                    <div key={key} className="swatch-wrap">
+                        <button
+                            onClick={() => isAvailable && onSelect(val.slug || val.value)}
+                            disabled={!isAvailable}
+                            aria-pressed={isSelected}
+                            aria-label={`${val.name || val.value} ${!isAvailable ? '(Out of Stock)' : ''}`}
+                            onMouseEnter={() => setTooltip(key)}
+                            onMouseLeave={() => setTooltip(null)}
+                            className={[
+                                'swatch-btn',
+                                isSelected ? 'swatch-btn--selected' : '',
+                                !isAvailable ? 'swatch-btn--disabled' : '',
+                                isLightColor ? 'swatch-btn--light' : '',
+                            ].join(' ')}
+                            style={{ backgroundColor: colorCode || '#ccc' }}
+                        >
+                            {isSelected && (
+                                <CheckIcon
+                                    className="swatch-check"
+                                    style={{ color: isLightColor ? '#111' : '#fff' }}
+                                />
+                            )}
+                            {!isAvailable && (
+                                <span className="swatch-slash" aria-hidden="true" />
+                            )}
+                        </button>
+                        {/* Tooltip */}
+                        {tooltip === key && (
+                            <div className="swatch-tooltip" role="tooltip">
+                                {val.name || val.value}
+                                {!isAvailable && ' · OOS'}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
+// ─── TAG-STYLE ATTRIBUTE SELECTOR (Processor, Material, etc.) ────────────────
+export const TagSelector = ({ attribute, values, selectedValue, onSelect, checkAvailability }) => (
+    <div className="tags-row">
+        {values.map(val => {
+            const isAvailable = checkAvailability(val.slug || val.value);
+            const isSelected = selectedValue === (val.slug || val.value);
+            const key = val.id || val.slug || val.value;
+
+            return (
+                <button
+                    key={key}
+                    onClick={() => isAvailable && onSelect(val.slug || val.value)}
+                    disabled={!isAvailable}
+                    aria-pressed={isSelected}
+                    title={!isAvailable ? 'Unavailable' : val.value}
+                    className={[
+                        'tag-btn',
+                        isSelected ? 'tag-btn--active' : '',
+                        !isAvailable ? 'tag-btn--disabled' : '',
+                    ].join(' ')}
                 >
                     {val.value}
                 </button>
@@ -65,39 +148,7 @@ export const ButtonGroup = ({ attribute, values, selectedValue, onSelect, checkA
     </div>
 );
 
-/**
- * Color Swatch Component (Classic)
- */
-export const ColorSwatch = ({ attribute, values, selectedValue, onSelect, checkAvailability }) => (
-    <div className="swatches-group">
-        {values.map(val => {
-            const isAvailable = checkAvailability(val.slug || val.value);
-            const isSelected = selectedValue === (val.slug || val.value);
-            const colorCode = val.hexCode || val.value;
-
-            return (
-                <button
-                    key={val.id}
-                    onClick={() => onSelect(val.slug || val.value)}
-                    disabled={!isAvailable}
-                    className={`color-swatch-btn ${isSelected ? 'selected' : ''} ${!isAvailable ? 'disabled' : ''}`}
-                    style={{ backgroundColor: colorCode }}
-                    title={`${val.name || val.value} ${!isAvailable ? '(Out of Stock)' : ''}`}
-                >
-                    {!isAvailable && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-full">
-                            <XMarkIcon className="w-5 h-5 text-white drop-shadow-md" />
-                        </div>
-                    )}
-                </button>
-            );
-        })}
-    </div>
-);
-
-/**
- * Dropdown Select Component
- */
+// ─── DROPDOWN SELECT ──────────────────────────────────────────────────────────
 export const AttributeSelect = ({ attribute, values, selectedValue, onSelect, checkAvailability }) => (
     <div className="select-wrapper">
         <select
@@ -122,9 +173,7 @@ export const AttributeSelect = ({ attribute, values, selectedValue, onSelect, ch
     </div>
 );
 
-/**
- * Radio Group Component
- */
+// ─── RADIO GROUP ──────────────────────────────────────────────────────────────
 export const RadioGroup = ({ attribute, values, selectedValue, onSelect, checkAvailability }) => (
     <div className="radio-group-container">
         {values.map(val => {
@@ -154,19 +203,16 @@ export const RadioGroup = ({ attribute, values, selectedValue, onSelect, checkAv
     </div>
 );
 
-// Map of input types to components
+// ─── COMPONENT MAP ────────────────────────────────────────────────────────────
 export const COMPONENT_MAP = {
-    // Revert to Classic Swatches per new request (Clean, Minimal, Rounded)
     color_swatch: ColorSwatch,
     swatch: ColorSwatch,
-
-    // Keep Rich Cards for explicit image grids if used
     image_grid: RichVariantCard,
-
-    // Others
     button_group: ButtonGroup,
     button: ButtonGroup,
     dropdown: AttributeSelect,
     radio: RadioGroup,
-    checkbox: ButtonGroup,
+    checkbox: TagSelector,
+    // Generic attribute tags (processor, material, etc.)
+    tag: TagSelector,
 };

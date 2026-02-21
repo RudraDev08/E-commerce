@@ -140,17 +140,35 @@ export const getVariants = async (req, res) => {
 
 /* UPDATE */
 export const updateVariant = async (req, res) => {
-  // ✅ FIX: Add .populate() to return populated data and prevent color disappearing in UI
-  const data = await ProductVariant.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true }
-  )
-    .populate('product', 'name')
-    .populate('size', 'code name')
-    .populate('color', 'name hexCode');
+  try {
+    const variant = await ProductVariant.findById(req.params.id);
+    if (!variant) {
+      return res.status(404).json({ success: false, message: "Variant not found" });
+    }
 
-  res.json({ success: true, data });
+    // Handle status boolean-to-string conversion if present in req.body
+    if (req.body.status !== undefined) {
+      if (typeof req.body.status === 'boolean') {
+        req.body.status = req.body.status ? 'active' : 'archived';
+      }
+    }
+
+    // Merge updates
+    Object.assign(variant, req.body);
+
+    // Save triggers the pre-save hooks in variantSchema.js
+    await variant.save();
+
+    // Populate references for UI consistency
+    await variant.populate('product', 'name');
+    await variant.populate('size', 'code name');
+    await variant.populate('color', 'name hexCode');
+
+    res.json({ success: true, data: variant });
+  } catch (error) {
+    console.error("Update Variant Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 /* DELETE */

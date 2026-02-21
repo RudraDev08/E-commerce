@@ -3,10 +3,10 @@ import { getProductType, createVariants, getAllProductTypes } from "../../Api/ca
 
 const VariantForm = ({ products, onVariantCreated }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
-  
+
   // New State for the "Manual Override" dropdown
   const [allProductTypes, setAllProductTypes] = useState([]);
-  const [manualTypeId, setManualTypeId] = useState(""); 
+  const [manualTypeId, setManualTypeId] = useState("");
 
   const [attributes, setAttributes] = useState([]);
   const [values, setValues] = useState({});
@@ -42,7 +42,7 @@ const VariantForm = ({ products, onVariantCreated }) => {
       if (manualTypeId) {
         typeId = manualTypeId; // Use the manual override
       } else {
-        return; 
+        return;
       }
     }
 
@@ -67,18 +67,23 @@ const VariantForm = ({ products, onVariantCreated }) => {
     const payload = {
       productId: selectedProduct._id,
       attributes: values,
-      price: Number(price),
-      stock: Number(stock),
+      price: price.toString(), // ✅ Float Safety: STRING transmission
+      // ✅ Correct Schema: Map flat stock to nested inventory structure
+      inventory: {
+        quantityOnHand: Number(stock) || 0
+      },
       sku,
     };
 
     try {
       const res = await createVariants(payload);
       onVariantCreated(res.data.data || res.data);
-      alert("Saved!");
       setValues({});
+      setPrice("");
+      setStock("");
+      setSku("");
     } catch (error) {
-      alert(error.message);
+      alert(error.response?.data?.message || "Creation failed");
     }
   };
 
@@ -108,10 +113,10 @@ const VariantForm = ({ products, onVariantCreated }) => {
       {isMissingType && (
         <div className="bg-yellow-50 p-4 border border-yellow-200 rounded">
           <p className="text-sm text-yellow-700 mb-2">
-            ⚠️ <strong>Missing Link:</strong> This product has no Type assigned. 
+            ⚠️ <strong>Missing Link:</strong> This product has no Type assigned.
             Please select one to continue:
           </p>
-          <select 
+          <select
             className="w-full border p-2 rounded bg-white"
             value={manualTypeId}
             onChange={(e) => setManualTypeId(e.target.value)}
@@ -126,7 +131,7 @@ const VariantForm = ({ products, onVariantCreated }) => {
 
       {/* ATTRIBUTES INPUTS */}
       {loadingAttrs && <p className="text-sm text-gray-400">Loading specs...</p>}
-      
+
       <div className="grid grid-cols-2 gap-4">
         {attributes.map((attr) => (
           <div key={attr._id || attr.slug}>
@@ -134,18 +139,18 @@ const VariantForm = ({ products, onVariantCreated }) => {
               {attr.name}
             </label>
             {attr.values?.length > 0 ? (
-               <select 
-                 className="w-full border p-2 rounded"
-                 onChange={e => setValues({...values, [attr.slug]: e.target.value})}
-               >
-                 <option value="">Select...</option>
-                 {attr.values.map(v => <option key={v} value={v}>{v}</option>)}
-               </select>
+              <select
+                className="w-full border p-2 rounded"
+                onChange={e => setValues({ ...values, [attr.slug]: e.target.value })}
+              >
+                <option value="">Select...</option>
+                {attr.values.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
             ) : (
-               <input 
-                 className="w-full border p-2 rounded"
-                 onChange={e => setValues({...values, [attr.slug]: e.target.value})}
-               />
+              <input
+                className="w-full border p-2 rounded"
+                onChange={e => setValues({ ...values, [attr.slug]: e.target.value })}
+              />
             )}
           </div>
         ))}
@@ -153,9 +158,9 @@ const VariantForm = ({ products, onVariantCreated }) => {
 
       {/* PRICE / STOCK / SKU */}
       <div className="grid grid-cols-3 gap-3">
-         <input placeholder="Price" className="border p-2" onChange={e => setPrice(e.target.value)} />
-         <input placeholder="Stock" className="border p-2" onChange={e => setStock(e.target.value)} />
-         <input placeholder="SKU" className="border p-2" onChange={e => setSku(e.target.value)} />
+        <input placeholder="Price" className="border p-2" onChange={e => setPrice(e.target.value)} />
+        <input placeholder="Stock" className="border p-2" onChange={e => setStock(e.target.value)} />
+        <input placeholder="SKU" className="border p-2" onChange={e => setSku(e.target.value)} />
       </div>
 
       <button className="bg-black text-white px-4 py-2 rounded w-full">

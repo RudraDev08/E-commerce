@@ -326,6 +326,18 @@ colorMasterSchema.pre('save', async function () {
             this.archivedAt = null;
             this.archivedBy = null;
         }
+
+        // GOVERNANCE: Prevent archiving if active variants exist
+        if (this.lifecycleState === 'ARCHIVED' && current.lifecycleState !== 'ARCHIVED') {
+            const VariantMaster = mongoose.models.VariantMaster || mongoose.model('VariantMaster');
+            const activeCount = await VariantMaster.countDocuments({
+                colorId: this._id,
+                status: 'ACTIVE'
+            });
+            if (activeCount > 0) {
+                throw new Error(`GOVERNANCE LOCK: Cannot archive ColorMaster because it is actively used by ${activeCount} variants.`);
+            }
+        }
     }
 
     // LOCKED field mutation guard — runs AFTER state transition logic

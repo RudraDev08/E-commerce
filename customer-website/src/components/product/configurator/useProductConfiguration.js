@@ -1,142 +1,201 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 
+// Uses the browser's built-in Web Crypto API — no import needed
+const subtle = globalThis.crypto?.subtle;
+
 /**
- * useProductConfiguration Hook
- * Manages state for dynamic attribute selection and variant resolution.
- * 
- * @param {Array} variants - List of available variants
- * @param {Array} attributeTypes - List of attribute definitions
- * @param {Object} initialSelections - (Optional) Initial state
+ * generateConfigHashClient
+ * Replicates Backend/utils/configHash.util.js logic in the browser.
+ * Uses the Web Crypto API (SubtleCrypto) via TextEncoder + SHA-256.
+ *
+ * Returns a HEX string identical to the server-generated hash.
+ */
+async function generateConfigHashClient({ productGroupId, sizeId, colorId, attributeValueIds = [] }) {
+    if (!productGroupId || !sizeId || !colorId) return null;
+    if (!subtle) return null; // Web Crypto not available (SSR / very old browser)
+
+    const sortedAttrs = [...attributeValueIds]
+        .map(id => String(id))
+        .sort()
+        .join('|');
+
+    const raw = [
+        String(productGroupId),
+        String(sizeId),
+        String(colorId),
+        sortedAttrs,
+    ].join(':');
+
+    const encoded = new TextEncoder().encode(raw);
+    const hashBuffer = await subtle.digest('SHA-256', encoded);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ─── LEGACY HELPERS (for backward-compat with old variant shape) ──────────────
+
+function getVariantAttributeValueFn(variant, attributeSlug) {
+    // New API shape: variant.size / variant.color / variant.attributes [{type, value}]
+    if (attributeSlug === 'size' && variant.size && typeof variant.size === 'object') {
+        return variant.size.displayName || variant.size.value || variant.size.name;
+    }
+    if (attributeSlug === 'color' && variant.color && typeof variant.color === 'object') {
+        return variant.color.name || variant.color.displayName;
+    }
+
+    // Legacy: variant.attributes = { color: 'red', size: 'xl' }
+    if (variant.attributes && typeof variant.attributes === 'object' && !Array.isArray(variant.attributes)) {
+        if (variant.attributes[attributeSlug]) return variant.attributes[attributeSlug];
+    }
+
+    // Legacy: variant.attributes = [{ attributeType: { slug }, attributeValue: { slug } }]
+    if (Array.isArray(variant.attributes)) {
+        const attr = variant.attributes.find(a =>
+            a && (a.attributeType?.slug === attributeSlug || a.attributeType === attributeSlug)
+        );
+        if (attr) return attr.attributeValue?.slug || attr.attributeValue;
+    }
+
+    // Flat properties fallback
+    if (attributeSlug === 'size' && typeof variant.size === 'string') return variant.size;
+    if (attributeSlug === 'color' && typeof variant.color === 'string') return variant.color;
+
+    return null;
+}
+
+// ─── HOOK ─────────────────────────────────────────────────────────────────────
+
+/**
+ * useProductConfiguration
+ *
+ * Enhanced with:
+ *  - O(1) configHash map for instant deterministic variant resolution
+ *  - Backward-compat loop-based resolver as fallback
+ *  - Full availability matrix (zero extra API calls)
  */
 export const useProductConfiguration = (variants = [], attributeTypes = [], initialSelections = {}) => {
-    // State: { [attributeSlug]: valueId }
     const [selectedAttributes, setSelectedAttributes] = useState(initialSelections);
 
-    // Initial Auto-Select Logic
-    useEffect(() => {
-        if (variants.length > 0 && Object.keys(selectedAttributes).length === 0) {
-            // Option 1: Select the first variant's attributes
-            // const firstVariant = variants[0];
-            // setSelectedAttributes(firstVariant.attributes);
-        }
+    // ── 1. Build O(1) configHash map ──────────────────────────────────────────
+    const variantHashMap = useMemo(() => {
+        const map = {};
+        variants.forEach(v => {
+            if (v.configHash) map[v.configHash] = v;
+        });
+        return map;
     }, [variants]);
 
-    /**
-     * Helper: Normalize variant attributes for comparison
-     * Handles both Map-like objects and backend Array structures if needed
-     */
-    const getVariantAttributeValue = useCallback((variant, attributeSlug) => {
-        // Handle "contract" shape: variant.attributes = { color: 'red', size: 'xl' }
-        if (variant.attributes && typeof variant.attributes === 'object' && !Array.isArray(variant.attributes)) {
-            // Check direct attributes first
-            if (variant.attributes[attributeSlug]) return variant.attributes[attributeSlug];
-        }
+    // ── 2. Deterministic variant resolution via client hash ────────────────────
+    //    Falls back to loop-based matching (legacy shapes without configHash)
+    const [resolvedVariant, setResolvedVariant] = useState(null);
 
-        // Handle "backend" shape: variant.attributes = [{ attributeType: { slug: 'color' }, attributeValue: { slug: 'red' } }]
-        if (Array.isArray(variant.attributes)) {
-            const attr = variant.attributes.find(a =>
-                a && ((a.attributeType?.slug === attributeSlug) ||
-                    (a.attributeType === attributeSlug)) // fallback if just ID
+    useEffect(() => {
+        const resolve = async () => {
+            if (variants.length === 0) { setResolvedVariant(null); return; }
+
+            // Extract relevant IDs from selection
+            // The new API exposes selectors.sizes / selectors.colors / selectors.attributes.
+            // selectedAttributes keys are attribute slugs or 'size'/'color'.
+            const selectedSize = selectedAttributes['size'];
+            const selectedColor = selectedAttributes['color'];
+
+            // Try deterministic O(1) hash path first
+            if (selectedSize && selectedColor) {
+                // Find the variant whose size/color match the selection to get their _ids
+                const sizeVariant = variants.find(v =>
+                    (v.size?.displayName || v.size?.value || v.size?.name) === selectedSize
+                );
+                const colorVariant = variants.find(v =>
+                    (v.color?.name || v.color?.displayName) === selectedColor
+                );
+
+                const sizeId = sizeVariant?.size?._id;
+                const colorId = colorVariant?.color?._id;
+                const pgId = variants[0]?.productGroupId;
+
+                // Collect attributeValueIds from other selections (non-size, non-color)
+                const attrValueIds = attributeTypes
+                    .filter(t => t.slug !== 'size' && t.slug !== 'color' && selectedAttributes[t.slug])
+                    .map(t => {
+                        // Find the attribute value _id for this slug/value
+                        const v = variants.find(vr =>
+                            (vr.attributes || []).some(a =>
+                                (a.type || a.attributeType?.name) === t.name &&
+                                a.value === selectedAttributes[t.slug]
+                            )
+                        );
+                        if (!v) return null;
+                        const matchAttr = (v.attributes || []).find(a =>
+                            (a.type || a.attributeType?.name) === t.name &&
+                            a.value === selectedAttributes[t.slug]
+                        );
+                        return matchAttr?._id || null;
+                    })
+                    .filter(Boolean);
+
+                if (sizeId && colorId && pgId) {
+                    try {
+                        const hash = await generateConfigHashClient({
+                            productGroupId: pgId,
+                            sizeId,
+                            colorId,
+                            attributeValueIds: attrValueIds,
+                        });
+                        if (hash && variantHashMap[hash]) {
+                            setResolvedVariant(variantHashMap[hash]);
+                            return;
+                        }
+                    } catch (_) {
+                        // Fall through to loop-based
+                    }
+                }
+            }
+
+            // ── Fallback: loop-based match (old shape / missing IDs) ────────
+            const exactMatch = variants.find(variant =>
+                attributeTypes.every(type => {
+                    const selected = selectedAttributes[type.slug];
+                    if (!selected) return true;
+                    const variantVal = getVariantAttributeValueFn(variant, type.slug);
+                    return String(variantVal) === String(selected);
+                })
             );
-            if (attr) return attr.attributeValue?.slug || attr.attributeValue;
-        }
+            setResolvedVariant(exactMatch || null);
+        };
 
-        // NEW: Handle top-level structured attributes (size/color)
-        if (attributeSlug === 'size' && variant.size && typeof variant.size === 'object') {
-            return variant.size.name || variant.size.value;
-        }
-        if (attributeSlug === 'color' && variant.color && typeof variant.color === 'object') {
-            return variant.color.name || variant.color.value;
-        }
+        resolve();
+    }, [selectedAttributes, variants, attributeTypes, variantHashMap]);
 
-        // Fallback for flat size/color properties if they exist
-        if (attributeSlug === 'size' && typeof variant.size === 'string') return variant.size;
-        if (attributeSlug === 'color' && typeof variant.color === 'string') return variant.color;
-
-        return null;
-    }, []);
-
-    /**
-     * Resolve the best matching variant based on current selections
-     */
-    const resolvedVariant = useMemo(() => {
-        if (variants.length === 0) return null;
-
-        // Find exact match
-        const exactMatch = variants.find(variant => {
-            return attributeTypes.every(type => {
-                const selectedVal = selectedAttributes[type.slug];
-                const variantVal = getVariantAttributeValue(variant, type.slug);
-
-                // If attribute is optional/not-selected, decide if we require it or not.
-                // Usually for precise variant match, we need all required attributes.
-                if (!selectedVal && type.isRequired) return false;
-                if (!selectedVal) return true; // Loose match if not selected? No, safer to be strict.
-
-                return String(variantVal) === String(selectedVal);
-            });
-        });
-
-        return exactMatch || null;
-    }, [variants, attributeTypes, selectedAttributes, getVariantAttributeValue]);
-
-
-    /**
-     * Check if an option is available given CURRENT selections of OTHER attributes
-     * (Matrix validation)
-     */
+    // ── 3. Availability matrix ────────────────────────────────────────────────
     const isOptionAvailable = useCallback((attributeSlug, valueSlug) => {
-        // Create a test selection with this new value
-        const testSelection = { ...selectedAttributes, [attributeSlug]: valueSlug };
-
-        // Check if ANY variant matches this potential combination
-        // We only check against attributes that represent a "path" so far.
-        // Actually, for a robust matrix, we want to know: "If I pick Color=Red, is Size=XL available?"
-        // irrespective of other currently unselected things. But if logic is sequential, it matters.
-        // Standard E-commerce logic: 
-        // 1. Filter variants that match ALL *other* selected attributes.
-        // 2. See if *any* of those remaining variants has this value for target attribute.
-
         return variants.some(variant => {
-            // Check all OTHER selected attributes match
-            const matchesOtherSelections = attributeTypes.every(type => {
-                if (type.slug === attributeSlug) return true; // Skip the one we are testing
-
-                const selectedVal = selectedAttributes[type.slug];
-                if (!selectedVal) return true; // If user hasn't picked this yet, it's a "wildcard"
-
-                const variantVal = getVariantAttributeValue(variant, type.slug);
-                return String(variantVal) === String(selectedVal);
+            const matchesOthers = attributeTypes.every(type => {
+                if (type.slug === attributeSlug) return true;
+                const selected = selectedAttributes[type.slug];
+                if (!selected) return true;
+                const variantVal = getVariantAttributeValueFn(variant, type.slug);
+                return String(variantVal) === String(selected);
             });
+            if (!matchesOthers) return false;
 
-            if (!matchesOtherSelections) return false;
-
-            // Check if this variant has the TARGET value
-            const variantVal = getVariantAttributeValue(variant, attributeSlug);
+            const variantVal = getVariantAttributeValueFn(variant, attributeSlug);
             const matchesTarget = String(variantVal) === String(valueSlug);
-
-            // STOCK CHECK: The variant must have stock > 0 to be considered "Available"
-            // If inventory logic is enforced, stock should be present.
-            // We treat explicit 0 as unavailable.
-            const hasStock = (variant.stock !== undefined) ? variant.stock > 0 : true;
+            const hasStock = variant.stock !== undefined ? variant.stock > 0 : true;
 
             return matchesTarget && hasStock;
         });
-    }, [variants, attributeTypes, selectedAttributes, getVariantAttributeValue]);
+    }, [variants, attributeTypes, selectedAttributes]);
 
-
+    // ── 4. Select attribute ────────────────────────────────────────────────────
     const selectAttribute = useCallback((attributeSlug, valueSlug) => {
-        setSelectedAttributes(prev => {
-            const next = { ...prev, [attributeSlug]: valueSlug };
-
-            // Advanced: If new selection makes another attribute invalid, reset the invalid one?
-            // E.g. Color=Red selected. Size=XL previously selected. If Red & XL doesn't exist, should we clear Size?
-            // "Invalid combinations are disabled, not removed" - implies we might allow the state but show it as invalid?
-            // Or better: keep it but `resolvedVariant` becomes null, indicating "Unavailable".
-
-            return next;
-        });
+        setSelectedAttributes(prev => ({ ...prev, [attributeSlug]: valueSlug }));
     }, []);
+
+    // ── 5. getVariantAttributeValue (stable ref) ──────────────────────────────
+    const getVariantAttributeValue = useCallback(
+        (variant, slug) => getVariantAttributeValueFn(variant, slug),
+        []
+    );
 
     return {
         selectedAttributes,
@@ -144,6 +203,6 @@ export const useProductConfiguration = (variants = [], attributeTypes = [], init
         selectAttribute,
         resolvedVariant,
         isOptionAvailable,
-        getVariantAttributeValue
+        getVariantAttributeValue,
     };
 };

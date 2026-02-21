@@ -44,8 +44,7 @@ export const createAttributeType = async (req, res) => {
             applicableCategories,
             description,
             helpText,
-            icon,
-            createdBy: 'admin'
+            icon
         });
 
         res.status(201).json({
@@ -151,7 +150,7 @@ export const updateAttributeType = async (req, res) => {
             });
         }
 
-        const updates = { ...req.body, updatedBy: 'admin' };
+        const updates = { ...req.body };
 
         if (updates.name) {
             updates.slug = slugify(updates.name, { lower: true, strict: true });

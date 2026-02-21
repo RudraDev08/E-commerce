@@ -1,65 +1,88 @@
-import { CheckIcon, XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/solid';
+import React from 'react';
+import { CheckCircleIcon, XCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/solid';
 
+// ─── PRICE DISPLAY ────────────────────────────────────────────────────────────
 export const PriceDisplay = ({ price, currency = 'INR', originalPrice, loading }) => {
-    // ... logic same ...
-    const formattedPrice = new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: currency,
-        maximumFractionDigits: 0
-    }).format(price || 0);
+    if (loading) {
+        return (
+            <div className="price-shimmer">
+                <div className="shimmer-bar shimmer-bar--lg" />
+                <div className="shimmer-bar shimmer-bar--sm" />
+            </div>
+        );
+    }
 
-    const formattedOriginal = originalPrice ? new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: currency,
-        maximumFractionDigits: 0
-    }).format(originalPrice) : null;
+    const fmt = (val) =>
+        new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency,
+            maximumFractionDigits: 0,
+        }).format(val || 0);
 
-    if (loading) return <div className="h-8 w-32 bg-gray-200 animate-pulse rounded"></div>;
+    const hasDiscount = originalPrice && Number(originalPrice) > Number(price);
+    const discountPct = hasDiscount
+        ? Math.round(((originalPrice - price) / originalPrice) * 100)
+        : 0;
 
     return (
-        <div className="flex items-baseline space-x-3">
-            <span className="text-3xl font-bold text-gray-900 transition-all duration-300">
-                {formattedPrice}
-            </span>
-            {originalPrice && originalPrice > price && (
-                <span className="text-lg text-gray-500 line-through">
-                    {formattedOriginal}
-                </span>
+        <div className="price-block">
+            <div className="price-row">
+                <span className="price-current">{fmt(price)}</span>
+                {hasDiscount && (
+                    <>
+                        <span className="price-original">{fmt(originalPrice)}</span>
+                        <span className="price-badge">{discountPct}% off</span>
+                    </>
+                )}
+            </div>
+            {hasDiscount && (
+                <p className="price-saving">
+                    You save {fmt(originalPrice - price)}
+                </p>
             )}
         </div>
     );
 };
 
+// ─── STOCK INDICATOR ─────────────────────────────────────────────────────────
 export const StockIndicator = ({ stock, loading }) => {
-    if (loading) return <div className="h-6 w-24 bg-gray-200 animate-pulse rounded mt-2"></div>;
-
-    if (stock === null || stock === undefined) {
-        return null; // Don't show anything until selection
+    if (loading) {
+        return <div className="shimmer-bar shimmer-bar--sm" style={{ marginTop: 8 }} />;
     }
+
+    if (stock === null || stock === undefined) return null;
 
     if (stock === 0) {
         return (
-            <div className="mt-2 flex items-center text-red-600 font-medium">
-                <XMarkIcon className="w-5 h-5 mr-1" />
-                Out of Stock
+            <div className="stock-badge stock-badge--out">
+                <XCircleIcon className="stock-icon" />
+                <span>Out of Stock</span>
             </div>
         );
     }
 
-    // Low Stock Warning (< 5)
-    if (stock < 5) {
+    if (stock <= 5) {
         return (
-            <div className="mt-2 flex items-center text-orange-600 font-medium">
-                <ExclamationTriangleIcon className="w-5 h-5 mr-1" />
-                <span className="font-bold">Low Stock:</span>&nbsp;Only {stock} left!
+            <div className="stock-badge stock-badge--low">
+                <ExclamationTriangleIcon className="stock-icon" />
+                <span>Only <strong>{stock}</strong> left — order soon</span>
+            </div>
+        );
+    }
+
+    if (stock <= 20) {
+        return (
+            <div className="stock-badge stock-badge--limited">
+                <CheckCircleIcon className="stock-icon" />
+                <span>Limited stock available</span>
             </div>
         );
     }
 
     return (
-        <div className="mt-2 flex items-center text-green-600 font-medium">
-            <CheckIcon className="w-5 h-5 mr-1" />
-            In Stock
+        <div className="stock-badge stock-badge--in">
+            <CheckCircleIcon className="stock-icon" />
+            <span>In Stock</span>
         </div>
     );
 };

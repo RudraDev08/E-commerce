@@ -1,33 +1,90 @@
-import { useState } from 'react';
-import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
+import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon, StarIcon } from '@heroicons/react/24/outline';
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 
 /**
- * VariantImageUpload Component
- * 
- * Purpose: Upload and manage images for individual variants
- * Architecture: Variant images are PRIMARY source for PDP color switching
- * 
- * Features:
- * - Multiple image upload
- * - Drag-and-drop reordering
- * - Image preview
- * - Delete individual images
- * - Validation (file type, size)
+ * Enterprise-grade VariantImageUpload Component
+ * Fully aligned with VariantMaster.enterprise.js imageGallery schema.
  */
-
 const VariantImageUpload = ({
     images = [],
     onChange,
     maxImages = 10,
     variantName = "Variant"
 }) => {
-    const [previews, setPreviews] = useState(images.map(img => img.url || img));
     const [isDragging, setIsDragging] = useState(false);
+
+    // ✅ Fix 5: Revoke Object URLs (Memory Safety)
+    useEffect(() => {
+        return () => {
+            images.forEach(img => {
+                if (img.file && img.url?.startsWith("blob:")) {
+                    URL.revokeObjectURL(img.url);
+                }
+            });
+        };
+    }, []);
+
+    // ✅ Fix 8: Block Duplicate Primaries From Parent Injection (Self-healing guard)
+    useEffect(() => {
+        const primaries = images.filter(i => i.isPrimary);
+        if (primaries.length > 1 || (images.length > 0 && primaries.length === 0)) {
+            const fixed = images.map((img, i) => ({
+                ...img,
+                isPrimary: i === 0,
+                sortOrder: i
+            }));
+            onChange(fixed);
+        }
+    }, [images.length]); // Focus on count changes for auto-assignment
+
+    const processFiles = (files) => {
+        const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+        const invalidFiles = files.filter(f => !validTypes.includes(f.type));
+
+        if (invalidFiles.length > 0) {
+            toast.error('Only JPG, PNG, and WebP images are allowed');
+            return;
+        }
+
+        const oversizedFiles = files.filter(f => f.size > 5 * 1024 * 1024);
+        if (oversizedFiles.length > 0) {
+            toast.error('Images must be less than 5MB each');
+            return;
+        }
+
+        if (images.length + files.length > maxImages) {
+            toast.error(`Maximum ${maxImages} images allowed per variant`);
+            return;
+        }
+
+        // ✅ Fix 2: Enterprise Shape Alignment
+        const newImages = files.map((file, index) => ({
+            file, // Temporary blob reference for upload
+            url: URL.createObjectURL(file),
+            altText: `${variantName} - ${images.length + index + 1}`,
+            isPrimary: images.length === 0 && index === 0,
+            sortOrder: images.length + index,
+            type: "DETAIL" // HERO | THUMBNAIL | DETAIL | LIFESTYLE
+        }));
+
+        const updated = [...images, ...newImages];
+
+        // ✅ Fix 7: Always Normalize sortOrder After Any Change
+        const normalized = updated.map((img, i) => ({
+            ...img,
+            sortOrder: i
+        }));
+
+        onChange(normalized);
+        toast.success(`${files.length} image(s) staged`);
+    };
 
     const handleFileSelect = (e) => {
         const files = Array.from(e.target.files);
         processFiles(files);
+        e.target.value = ''; // Reset input
     };
 
     const handleDrop = (e) => {
@@ -37,59 +94,43 @@ const VariantImageUpload = ({
         processFiles(files);
     };
 
-    const processFiles = (files) => {
-        // Validate file types
-        const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-        const invalidFiles = files.filter(f => !validTypes.includes(f.type));
-
-        if (invalidFiles.length > 0) {
-            toast.error('Only JPG, PNG, and WebP images are allowed');
-            return;
-        }
-
-        // Validate file sizes (max 5MB each)
-        const oversizedFiles = files.filter(f => f.size > 5 * 1024 * 1024);
-        if (oversizedFiles.length > 0) {
-            toast.error('Images must be less than 5MB each');
-            return;
-        }
-
-        // Check max images limit
-        const totalImages = images.length + files.length;
-        if (totalImages > maxImages) {
-            toast.error(`Maximum ${maxImages} images allowed per variant`);
-            return;
-        }
-
-        // Create previews
-        const newPreviews = files.map(file => URL.createObjectURL(file));
-        setPreviews(prev => [...prev, ...newPreviews]);
-
-        // Create image objects with metadata
-        const newImages = files.map((file, index) => ({
-            file,
-            url: URL.createObjectURL(file),
-            alt: `${variantName} - Image ${images.length + index + 1}`,
-            sortOrder: images.length + index
+    // ✅ Fix 3: Enforce Exactly One Primary
+    const setPrimary = (index) => {
+        const updated = images.map((img, i) => ({
+            ...img,
+            isPrimary: i === index
         }));
-
-        onChange([...images, ...newImages]);
-        toast.success(`${files.length} image(s) added`);
+        onChange(updated);
     };
 
+    // ✅ Fix 4: Auto-Reassign Primary on Delete
     const removeImage = (index) => {
-        const newImages = images.filter((_, i) => i !== index);
-        const newPreviews = previews.filter((_, i) => i !== index);
+        const removedImage = images[index];
+        if (removedImage?.url?.startsWith('blob:')) {
+            URL.revokeObjectURL(removedImage.url);
+        }
 
-        // Update sort orders
-        const reorderedImages = newImages.map((img, i) => ({
+        let newImages = images.filter((_, i) => i !== index);
+
+        if (removedImage.isPrimary && newImages.length > 0) {
+            newImages[0].isPrimary = true;
+        }
+
+        // ✅ Deterministic normalization
+        const normalized = newImages.map((img, i) => ({
             ...img,
             sortOrder: i
         }));
 
-        setPreviews(newPreviews);
-        onChange(reorderedImages);
+        onChange(normalized);
         toast.success('Image removed');
+    };
+
+    const updateType = (index, type) => {
+        const updated = images.map((img, i) =>
+            i === index ? { ...img, type } : img
+        );
+        onChange(updated);
     };
 
     const handleDragOver = (e) => {
@@ -103,17 +144,14 @@ const VariantImageUpload = ({
 
     return (
         <div className="space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                        <PhotoIcon className="w-4 h-4 text-indigo-500" />
-                        Variant Images
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                        Upload images specific to this color variant ({images.length}/{maxImages})
-                    </p>
-                </div>
+            <div>
+                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <PhotoIcon className="w-4 h-4 text-indigo-500" />
+                    Variant Gallery
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                    Aligns with enterprise imageGallery schema ({images.length}/{maxImages})
+                </p>
             </div>
 
             {/* Upload Area */}
@@ -122,8 +160,8 @@ const VariantImageUpload = ({
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${isDragging
-                        ? 'border-indigo-500 bg-indigo-50'
-                        : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                    ? 'border-indigo-500 bg-indigo-50'
+                    : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
                     }`}
             >
                 <input
@@ -150,61 +188,75 @@ const VariantImageUpload = ({
 
             {/* Image Grid */}
             {images.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {images.map((img, index) => (
                         <div
-                            key={index}
-                            className="group relative aspect-square rounded-lg overflow-hidden border-2 border-slate-200 hover:border-indigo-300 transition-all"
+                            // ✅ Fix 6: Use Stable Keys
+                            key={img.url || img._id || `idx-${index}`}
+                            className={`group relative rounded-xl overflow-hidden border-2 transition-all ${img.isPrimary ? 'border-yellow-400 shadow-md ring-2 ring-yellow-400/20' : 'border-slate-200 hover:border-slate-300'
+                                }`}
                         >
                             {/* Image Preview */}
-                            <img
-                                src={img.url || img}
-                                alt={img.alt || `Image ${index + 1}`}
-                                className="w-full h-full object-cover"
-                            />
+                            <div className="aspect-square bg-slate-100 relative">
+                                <img
+                                    src={img.url}
+                                    alt={img.altText || `Variant Image ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                />
 
-                            {/* Sort Order Badge */}
-                            <div className="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded">
-                                #{index + 1}
+                                {/* Primary Star Label */}
+                                {img.isPrimary && (
+                                    <div className="absolute top-2 left-2 bg-yellow-400 text-white p-1 rounded-lg shadow-sm">
+                                        <StarIconSolid className="w-3.5 h-3.5" />
+                                    </div>
+                                )}
+
+                                {/* Remove Button */}
+                                <button
+                                    type="button"
+                                    onClick={() => removeImage(index)}
+                                    className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-600 shadow-lg"
+                                    title="Remove image"
+                                >
+                                    <XMarkIcon className="w-4 h-4" />
+                                </button>
                             </div>
 
-                            {/* Remove Button */}
-                            <button
-                                type="button"
-                                onClick={() => removeImage(index)}
-                                className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                                title="Remove image"
-                            >
-                                <XMarkIcon className="w-4 h-4" />
-                            </button>
+                            {/* Image Metadata Controls */}
+                            <div className="p-3 bg-white space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <select
+                                        value={img.type || 'DETAIL'}
+                                        onChange={(e) => updateType(index, e.target.value)}
+                                        className="text-[10px] font-bold text-slate-600 bg-slate-50 border-0 rounded-lg px-2 py-1 flex-1 focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                        <option value="HERO">HERO</option>
+                                        <option value="DETAIL">DETAIL</option>
+                                        <option value="THUMBNAIL">THUMBNAIL</option>
+                                        <option value="LIFESTYLE">LIFESTYLE</option>
+                                    </select>
 
-                            {/* Hover Overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setPrimary(index)}
+                                        className={`flex-shrink-0 p-1.5 rounded-lg transition-all ${img.isPrimary
+                                                ? 'bg-yellow-100 text-yellow-600'
+                                                : 'bg-slate-50 text-slate-400 hover:bg-yellow-50 hover:text-yellow-500'
+                                            }`}
+                                        title={img.isPrimary ? 'Primary Image' : 'Set as Primary'}
+                                    >
+                                        <StarIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <div className="text-[10px] font-mono text-slate-400 flex justify-between px-1">
+                                    <span>ORDER #{img.sortOrder}</span>
+                                    {img.isPrimary && <span className="text-yellow-600 font-bold uppercase">Primary</span>}
+                                </div>
+                            </div>
                         </div>
                     ))}
                 </div>
             )}
-
-            {/* Info Banner */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex gap-3">
-                    <div className="flex-shrink-0">
-                        <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="flex-1">
-                        <h4 className="text-sm font-bold text-blue-900 mb-1">
-                            Why upload variant images?
-                        </h4>
-                        <p className="text-xs text-blue-700 leading-relaxed">
-                            Each color variant should have its own images. When customers select <strong>Pink</strong> on the product page,
-                            they will see only the pink images. When they select <strong>Silver</strong>, the images automatically switch
-                            to show the silver variant. This provides a clean, accurate shopping experience.
-                        </p>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };

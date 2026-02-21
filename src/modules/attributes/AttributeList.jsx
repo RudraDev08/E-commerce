@@ -10,6 +10,53 @@ import {
     PencilIcon,
     TrashIcon
 } from '@heroicons/react/24/outline';
+import toast from 'react-hot-toast';
+
+const ICON_MAP = {
+    'bg-red-600 hover:bg-red-700': { icon: '🗑️', label: 'Destructive action' },
+    'bg-amber-600 hover:bg-amber-700': { icon: '📦', label: 'Archive action' },
+    'bg-indigo-600 hover:bg-indigo-700': { icon: '↩️', label: 'Restore action' },
+    'bg-slate-800 hover:bg-slate-900': { icon: '🔒', label: 'Lock action' },
+};
+
+const customConfirm = (message, onConfirm, confirmText = 'Confirm', confirmColor = 'bg-indigo-600 hover:bg-indigo-700') => {
+    const meta = ICON_MAP[confirmColor] || { icon: '⚡', label: 'Action' };
+    toast((t) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: '240px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <span style={{ fontSize: '18px', lineHeight: 1, flexShrink: 0 }}>{meta.icon}</span>
+                <span style={{ fontSize: '13.5px', fontWeight: 600, color: '#F1F5F9', lineHeight: '1.4', flex: 1 }}>
+                    {message}
+                </span>
+            </div>
+            <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '0 -2px' }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button
+                    onClick={() => toast.dismiss(t.id)}
+                    style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, color: '#94A3B8', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.15s' }}
+                    onMouseEnter={e => e.target.style.background = 'rgba(255,255,255,0.11)'}
+                    onMouseLeave={e => e.target.style.background = 'rgba(255,255,255,0.06)'}
+                >
+                    Cancel
+                </button>
+                <button
+                    onClick={() => { toast.dismiss(t.id); onConfirm(); }}
+                    style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 700, color: '#fff', background: confirmColor.includes('red') ? '#DC2626' : confirmColor.includes('amber') ? '#D97706' : confirmColor.includes('slate') ? '#1E293B' : '#4F46E5', border: 'none', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'opacity 0.15s' }}
+                    onMouseEnter={e => e.target.style.opacity = '0.85'}
+                    onMouseLeave={e => e.target.style.opacity = '1'}
+                >
+                    {confirmText}
+                </button>
+            </div>
+        </div>
+    ), {
+        duration: Infinity,
+        style: {
+            background: '#0F172A', color: '#F1F5F9', borderRadius: '16px', padding: '16px 18px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.07)', maxWidth: '380px', border: 'none',
+            borderLeft: '3px solid ' + (confirmColor.includes('red') ? '#F87171' : confirmColor.includes('amber') ? '#FBBF24' : confirmColor.includes('slate') ? '#64748B' : '#818CF8'),
+        },
+    });
+};
 
 const AttributeList = () => {
     const { attributeTypes, fetchAttributeTypes, deleteAttributeType, loading } = useAttributes();
@@ -21,9 +68,9 @@ const AttributeList = () => {
     }, [fetchAttributeTypes]);
 
     const handleDelete = async (id) => {
-        if (window.confirm('Are you sure you want to delete this attribute type? This action cannot be undone.')) {
+        customConfirm('Are you sure you want to delete this attribute type? This action cannot be undone.', async () => {
             await deleteAttributeType(id);
-        }
+        }, 'Delete', 'bg-red-600 hover:bg-red-700');
     };
 
     const filteredAttributes = attributeTypes.filter(attr => {

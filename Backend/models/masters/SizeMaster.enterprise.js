@@ -316,7 +316,19 @@ sizeMasterSchema.pre('save', async function () {
         }
     }
 
-    // 2. Lock Enforcement — only usageCount and auditLog allowed on locked docs
+    // 2. Governance Constraint: Prevent archiving if active variants exist
+    if (this.isModified('lifecycleState') && this.lifecycleState === 'ARCHIVED') {
+        const VariantMaster = mongoose.models.VariantMaster || mongoose.model('VariantMaster');
+        const activeCount = await VariantMaster.countDocuments({
+            'sizes.sizeId': this._id,
+            status: 'ACTIVE'
+        });
+        if (activeCount > 0) {
+            throw new Error(`GOVERNANCE LOCK: Cannot archive SizeMaster because it is actively used by ${activeCount} variants.`);
+        }
+    }
+
+    // 3. Lock Enforcement — only usageCount and auditLog allowed on locked docs
     if (this.isLocked && !this.isNew && this.isModified()) {
         const allowedFields = ['updatedBy', 'isLocked', 'auditLog', 'updatedAt', 'usageCount'];
         const modifiedFields = this.modifiedPaths().filter(p => !allowedFields.includes(p));
