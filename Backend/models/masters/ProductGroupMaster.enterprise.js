@@ -35,4 +35,31 @@ const productGroupSchema = new mongoose.Schema({
 // Read optimization
 productGroupSchema.index({ tenantId: 1, status: 1 });
 
+// Governance Hook: Block Archival if ACTIVE variants exist
+productGroupSchema.pre(['findOneAndUpdate', 'updateOne'], async function () {
+    const update = this.getUpdate();
+    const setUpdate = update.$set || update;
+
+    // Check if transitioning to ARCHIVED
+    const newStatus = setUpdate.status || update.status;
+
+    if (newStatus === 'ARCHIVED') {
+        const docToUpdate = await this.model.findOne(this.getQuery()).lean();
+        if (docToUpdate) {
+            // Count active variants
+            const VariantMaster = mongoose.model('VariantMaster');
+            const activeVariantsCount = await VariantMaster.countDocuments({
+                productGroupId: docToUpdate._id,
+                status: 'ACTIVE' // Fast count supported by idx_variant_productGroup_status
+            });
+
+            if (activeVariantsCount > 0) {
+                const err = new Error(`Governance Violation: Cannot archive ProductGroup ${docToUpdate._id}. There are ${activeVariantsCount} ACTIVE variants linked to it.`);
+                err.status = 409;
+                throw err;
+            }
+        }
+    }
+});
+
 export default mongoose.models.ProductGroupMaster || mongoose.model('ProductGroupMaster', productGroupSchema);

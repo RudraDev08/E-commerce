@@ -244,55 +244,67 @@ exports.create = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
-        const variantData = req.body;
+        const body = req.body;
+        const variantsToCreate = Array.isArray(body.variants) ? body.variants : [body];
+        const createdVariants = [];
 
-        if (!variantData.productGroup || !variantData.productName || !variantData.price) {
-            await session.abortTransaction();
-            return res.status(400).json({
-                success: false,
-                message: 'Missing required fields: productGroup, productName, price'
-            });
-        }
+        for (const variantData of variantsToCreate) {
+            // Support both legacy "productGroup" and enterprise "productGroupId"
+            const productGroupId = variantData.productGroupId || variantData.productGroup || body.productId || body.productGroupId;
 
-        if (!variantData.sku) {
-            const sizeValues = variantData.sizes?.map(s => s.value) || [];
-            const color = variantData.color ? await ColorMaster.findById(variantData.color).session(session) : null;
-            variantData.sku = await VariantMaster.generateSKU(
-                variantData.brand,
-                variantData.productGroup,
-                sizeValues,
-                color?.name
-            );
-        }
+            if (!productGroupId || !variantData.price) {
+                await session.abortTransaction();
+                return res.status(400).json({
+                    success: false,
+                    message: `Missing required fields for one or more variants (productGroupId/price). SKU: ${variantData.sku || 'N/A'}`
+                });
+            }
 
-        const variant = new VariantMaster(variantData);
-        await variant.save({ session });
+            variantData.productGroupId = productGroupId;
 
-        // Increment usageCount for every size assigned to this variant
-        const sizeIds = variantData.sizes?.map(s => s.sizeId).filter(Boolean) || [];
-        if (sizeIds.length > 0) {
-            await Promise.all(
-                sizeIds.map(sizeId => SizeMaster.incrementUsage(sizeId).session(session))
-            );
-        }
+            if (!variantData.sku) {
+                const sizeValues = variantData.sizes?.map(s => s.value) || [];
+                const color = variantData.colorId ? await ColorMaster.findById(variantData.colorId).session(session) : null;
+                variantData.sku = await VariantMaster.generateSKU(
+                    variantData.brand || variantData.brandId || body.brandId,
+                    productGroupId,
+                    sizeValues,
+                    color?.name || variantData.displayColorName
+                );
+            }
 
-        const defaultWarehouse = await WarehouseMaster.findOne({ isDefault: true }).session(session);
-        if (defaultWarehouse) {
-            await VariantInventory.create([{
-                variant: variant._id,
-                warehouse: defaultWarehouse._id,
-                quantity: 0,
-                reservedQuantity: 0
-            }], { session });
+            const variant = new VariantMaster(variantData);
+            await variant.save({ session });
+
+            // Increment usageCount for every size assigned to this variant
+            const sizeIds = variantData.sizes?.map(s => s.sizeId).filter(Boolean) || (variantData.sizeId ? [variantData.sizeId] : []);
+            if (sizeIds.length > 0) {
+                await Promise.all(
+                    sizeIds.map(sizeId => SizeMaster.incrementUsage(sizeId).session(session))
+                );
+            }
+
+            const defaultWarehouse = await WarehouseMaster.findOne({ isDefault: true }).session(session);
+            if (defaultWarehouse) {
+                await VariantInventory.create([{
+                    variant: variant._id,
+                    warehouse: defaultWarehouse._id,
+                    quantity: 0,
+                    reservedQuantity: 0
+                }], { session });
+            }
+            createdVariants.push(variant);
         }
 
         await session.commitTransaction();
 
         return res.status(201).json({
             success: true,
-            message: 'Variant created successfully',
-            data: variant
+            message: `${createdVariants.length} Variant(s) created successfully`,
+            data: createdVariants.length === 1 ? createdVariants[0] : createdVariants
         });
+
+
     } catch (error) {
         await session.abortTransaction();
         console.error('[variant.create] error:', error);

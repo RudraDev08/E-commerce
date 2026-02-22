@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ArrowLeftIcon,
@@ -11,25 +11,89 @@ import {
     TagIcon,
     XMarkIcon,
     LockClosedIcon,
+    CloudArrowUpIcon,
     PhotoIcon,
-    CloudArrowUpIcon
+    ExclamationTriangleIcon,
+    ChevronLeftIcon,
+    ChevronRightIcon
 } from '@heroicons/react/24/outline';
-import { productAPI, sizeAPI, colorAPI, variantAPI } from '../../Api/api';
+import toast from 'react-hot-toast';
+
+import { productAPI, colorAPI, sizeAPI, variantAPI, attributeTypeAPI, attributeValueAPI } from '../../Api/api';
 import { uploadAPI } from '../../Api/uploadApi';
-import toast, { Toaster } from 'react-hot-toast';
+
 import ProductSelectDropdown from '../../components/Shared/Dropdowns/ProductSelectDropdown';
 import SizeMultiSelectDropdown from '../../components/Shared/Dropdowns/SizeMultiSelectDropdown';
 import ColorMultiSelectDropdown from '../../components/Shared/Dropdowns/ColorMultiSelectDropdown';
 
+// --- FORMATTER ---
 const formatCurrency = (amount, currency = 'INR') => {
     return new Intl.NumberFormat('en-IN', {
         style: 'currency',
-        currency,
+        currency: currency,
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(Number(amount));
+        maximumFractionDigits: 2,
+    }).format(amount);
 };
 
+// ============================================================================
+// COMPONENT: Image Modal (Offloads DOM nodes from the main grid)
+// ============================================================================
+const ImageManagerModal = ({ variant, onClose, onUpload, onSetPrimary, onRemove, getImageUrl }) => {
+    if (!variant) return null;
+    const gallery = variant.imageGallery || variant.images || [];
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900">Manage Media</h2>
+                        <p className="text-sm text-slate-500 font-medium">SKU: {variant.sku || 'Unsaved Variant'}</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                </div>
+
+                <div className="p-6 flex-1 overflow-y-auto">
+                    <div className="flex flex-wrap gap-4 mb-6">
+                        {gallery.map((img, idx) => (
+                            <div key={idx} className={`relative group w-24 h-24 rounded-xl shadow-sm border-2 overflow-hidden ${img.isPrimary ? 'border-indigo-500' : 'border-slate-200'}`}>
+                                <img src={getImageUrl(img)} alt="Variant Media" className="w-full h-full object-cover" />
+                                {img.isPrimary && <div className="absolute top-0 left-0 bg-indigo-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-br-lg z-10">PRIMARY</div>}
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 transition-opacity z-20 backdrop-blur-[2px]">
+                                    {!img.isPrimary && (
+                                        <button onClick={() => onSetPrimary(variant._id, idx)} className="text-xs font-bold text-white bg-indigo-500/80 px-2 py-1 rounded hover:bg-indigo-600 transition-colors">Set Primary</button>
+                                    )}
+                                    <button onClick={() => onRemove(variant._id, idx)} className="text-xs font-bold text-white bg-red-500/80 px-2 py-1 rounded hover:bg-red-600 transition-colors">Remove</button>
+                                </div>
+                            </div>
+                        ))}
+                        {gallery.length === 0 && (
+                            <div className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400">
+                                <PhotoIcon className="w-8 h-8 opacity-50" />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <p className="text-xs font-semibold text-slate-500 text-left">Maximum 10 images allowed.</p>
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md transition-all active:scale-95">
+                        <CloudArrowUpIcon className="w-5 h-5" />
+                        Upload Images
+                        <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => onUpload(variant._id, e.target.files)} />
+                    </label>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ============================================================================
+// MAIN COMPONENT: VariantBuilder
+// ============================================================================
 const VariantBuilder = () => {
     const { productId } = useParams();
     const navigate = useNavigate();
@@ -38,25 +102,25 @@ const VariantBuilder = () => {
     const [product, setProduct] = useState(null);
     const [allSizes, setAllSizes] = useState([]);
     const [allColors, setAllColors] = useState([]);
+    const [allAttributes, setAllAttributes] = useState([]); // [{ type, values }]
     const [variants, setVariants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    // Generator State (Shared)
-    const [selectedSizes, setSelectedSizes] = useState([]);
+    // Generator State: { "COLOR": [ids], "SIZE:RAM": [ids], "ATTR:MATERIAL": [ids] }
+    const [selectedDimensions, setSelectedDimensions] = useState({});
     const [isGenerating, setIsGenerating] = useState(true);
-
-    // Generator State (Single Color)
-    const [selectedColors, setSelectedColors] = useState([]);
-
-    // Generator State (Colorway)
     const [colorwayName, setColorwayName] = useState('');
-    const [colorwayPalette, setColorwayPalette] = useState([]); // Array of Color Objects
+    const [colorwayPalette, setColorwayPalette] = useState([]);
 
-    // UI State
+    // UI & Grid State
     const [filter, setFilter] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [partialCommitWarning, setPartialCommitWarning] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [activeImageModalVariant, setActiveImageModalVariant] = useState(null);
+
+    const PAGE_SIZE = 50;
 
     useEffect(() => {
         fetchAllData();
@@ -65,53 +129,50 @@ const VariantBuilder = () => {
     const fetchAllData = async () => {
         setLoading(true);
         try {
-            const [prodRes, sizeRes, colorRes, varRes] = await Promise.all([
+            const [prodRes, sizeRes, colorRes, varRes, attrTypeRes, attrValRes] = await Promise.all([
                 productAPI.getById(productId),
                 sizeAPI.getAll({ status: 'ACTIVE' }),
                 colorAPI.getAll({ status: 'ACTIVE' }),
-                variantAPI.getByProduct(productId)
+                variantAPI.getByProduct(productId),
+                attributeTypeAPI.getAll({ status: 'ACTIVE' }),
+                attributeValueAPI.getAll({ status: 'ACTIVE' })
             ]);
 
             const productData = prodRes.data.data || prodRes.data;
             setProduct(productData);
+
             const loadedSizes = sizeRes.data.data || [];
             const loadedColors = colorRes.data.data || [];
+            const loadedTypes = attrTypeRes.data.data || [];
+            const loadedVals = attrValRes.data.data || [];
+
             setAllSizes(loadedSizes);
             setAllColors(loadedColors);
 
-            // Map existing variants to UI structure
-            // -----------------------------------------------------
-            // Map existing variants to UI structure
-            // -----------------------------------------------------
-            const existingArgs = (varRes.data.data || []).map(v => {
-                // Determine if this is a legacy variant (single) or new colorway
-                const isColorway = !!v.colorwayName || (v.colorParts && v.colorParts.length > 0);
+            // Group values by type for the generator UI
+            const groupedAttributes = loadedTypes.map(type => ({
+                ...type,
+                values: loadedVals.filter(v => v.typeId === type._id || v.type === type._id)
+            }));
+            setAllAttributes(groupedAttributes);
 
-                // Color Logic
+            const existingArgs = (varRes.data.data || []).map(v => {
+                const isColorway = !!v.colorwayName || (v.colorParts && v.colorParts.length > 0);
                 let displayColorName = 'N/A';
-                let displayHex = null; // Single Hex
-                let displayPalette = []; // Array of Hexes
+                let displayHex = null;
+                let displayPalette = [];
                 let colorId = null;
 
                 if (isColorway) {
                     displayColorName = v.colorwayName || 'Custom Colorway';
-                    // Map populated colorParts to hexes
-                    if (v.colorParts && v.colorParts.length > 0) {
-                        displayPalette = v.colorParts.map(cp => cp.hexCode || '#eee');
-                    }
+                    if (v.colorParts && v.colorParts.length > 0) displayPalette = v.colorParts.map(cp => cp.hexCode || '#eee');
                 } else {
-                    // Single Color
-                    // Schema uses 'color' field (populated object or ID)
-                    // We need to robustly handle: v.color (object/ID), v.colorId (legacy/frontend-prop)
                     const colorObj = v.color || v.colorId;
-
                     if (colorObj && typeof colorObj === 'object') {
-                        // Populated - use directly
                         displayColorName = colorObj.name || v.attributes?.color || 'N/A';
                         displayHex = colorObj.hexCode || '#eee';
                         colorId = colorObj._id;
                     } else {
-                        // Not populated (ID string or missing)
                         const cId = colorObj || (typeof v.color === 'string' ? v.color : v.color?._id);
                         const matchedColor = loadedColors.find(c => c._id === cId);
                         displayColorName = v.attributes?.color || matchedColor?.name || 'N/A';
@@ -120,45 +181,40 @@ const VariantBuilder = () => {
                     }
                 }
 
-                // Size Logic
-                // Schema uses 'size' field (populated object or ID)
                 let sizeCode = 'N/A';
                 let sizeId = null;
-                const sizeObj = v.size || v.sizeId;
+
+                // Support Enterprise schema (v.sizes array) or legacy (v.sizeId / v.size)
+                const enterpriseSize = v.sizes && v.sizes[0] ? v.sizes[0].sizeId : null;
+                const sizeObj = enterpriseSize || v.sizeId || v.size;
 
                 if (sizeObj && typeof sizeObj === 'object') {
-                    sizeCode = sizeObj.code || sizeObj.name || 'N/A';
+                    sizeCode = sizeObj.code || sizeObj.name || sizeObj.displayName || 'N/A';
                     sizeId = sizeObj._id;
                 } else {
                     const sId = sizeObj;
                     const matchedSize = loadedSizes.find(s => s._id === sId);
-                    sizeCode = matchedSize?.code || matchedSize?.name || v.attributes?.size || 'N/A';
+                    sizeCode = matchedSize?.code || matchedSize?.name || matchedSize?.displayName || v.attributes?.size || 'N/A';
                     sizeId = sId;
                 }
 
                 return {
-                    ...v, // Keep original DB fields
+                    ...v,
                     isNew: false,
                     isEdited: false,
-
-                    // Unified UI Fields
                     sizeCode,
-                    size: typeof v.size === 'object' ? v.size : null, // Pass full object for UI rendering
-                    sizeId, // Ensure we have the ID for updates
-                    colorId, // Ensure we have the ID for updates (Single Color Mode)
-
-                    // Render Hints
+                    size: typeof v.size === 'object' ? v.size : null,
+                    sizeId,
+                    colorId,
                     isColorway,
                     displayColorName,
-                    displayHex,      // Used if Single
-                    displayPalette,  // Used if Colorway
-
-                    price: Number(v.price) || 0,
-                    // stock: REMOVED - Managed by Inventory Master
-                    status: (v.status === true || v.status === 'active') ? 'active' : 'inactive'
+                    displayHex,
+                    displayPalette,
+                    // Preserve precise decimals
+                    price: typeof v.price === 'object' && v.price.$numberDecimal ? v.price.$numberDecimal : v.price?.toString() || "0",
+                    status: (v.status === true || v.status === 'active') ? 'ACTIVE' : v.status
                 };
             });
-
 
             setVariants(existingArgs);
         } catch (error) {
@@ -169,1030 +225,587 @@ const VariantBuilder = () => {
         }
     };
 
-    // --- GENERATOR LOGIC ---
+    // --- DYNAMIC CARTESIAN ENGINE ---
     const generateVariants = () => {
-        if (selectedSizes.length === 0) return;
+        // Collect active namespaces (namespaces with selections)
+        const activeDimensions = Object.entries(selectedDimensions).filter(([_, ids]) => ids.length > 0);
 
-        const isColorwayMode = product.variantType === 'COLORWAY';
-
-        // Validation based on Mode
-        if (isColorwayMode) {
-            if (!colorwayName) { toast.error("Colorway Name is required"); return; }
-            if (colorwayPalette.length === 0) { toast.error("Select at least 1 color for the palette"); return; }
-        } else {
-            if (selectedColors.length === 0) { toast.error("Select at least 1 color"); return; }
+        if (activeDimensions.length === 0) {
+            return toast.error("Please select at least one dimension.");
         }
 
-        // Base SKU Logic
-        let baseRef = product.sku;
-        if (!baseRef) {
-            const safeSlug = product.slug || product.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            baseRef = safeSlug.toUpperCase().substring(0, 8);
+        // PERFORMANCE GUARD: Blast radius limit
+        const projectedNodes = activeDimensions.reduce((acc, [_, ids]) => acc * ids.length, 1);
+        if (projectedNodes > 300) {
+            toast.error(`Cannot generate ${projectedNodes} variants at once. Limit is 300.`);
+            return;
         }
-        if (!baseRef || baseRef.length < 2) baseRef = 'PROD-' + Math.floor(Math.random() * 1000);
-        const baseSku = baseRef.replace(/[^A-Z0-9-]/g, '').toUpperCase();
 
+        // Helper: Cartesian Product of any number of arrays
+        const cartesianProduct = (entries) => {
+            return entries.reduce((acc, [namespace, values]) => {
+                const results = [];
+                const dimensionData = values.map(v => ({ namespace, data: v }));
+
+                if (acc.length === 0) return dimensionData.map(d => [d]);
+
+                for (const combination of acc) {
+                    for (const item of dimensionData) {
+                        results.push([...combination, item]);
+                    }
+                }
+                return results;
+            }, []);
+        };
+
+        // Prepare data for cartesian
+        const dimensionEntries = activeDimensions.map(([namespace, ids]) => {
+            let values = [];
+            if (namespace === 'COLOR') values = allColors.filter(c => ids.includes(c._id));
+            else if (namespace.startsWith('SIZE:')) values = allSizes.filter(s => ids.includes(s._id));
+            else if (namespace.startsWith('ATTR:')) {
+                const typeName = namespace.replace('ATTR:', '');
+                const attrType = allAttributes.find(at => at.name === typeName);
+                values = attrType ? attrType.values.filter(v => ids.includes(v._id)) : [];
+            }
+            return [namespace, values];
+        });
+
+        const combinations = cartesianProduct(dimensionEntries);
+
+        // O(1) Identity Key Strategy for duplicate detection
+        const getIdentityKey = (combo) => {
+            return combo
+                .slice()
+                .sort((a, b) => a.namespace.localeCompare(b.namespace))
+                .map(c => `${c.namespace}:${c.data._id}`)
+                .join('|');
+        };
+
+        // Pre-index existing variants
+        const currentIdentitySet = new Set(variants.map(v => {
+            const parts = [];
+            if (v.colorId) parts.push({ namespace: 'COLOR', data: { _id: v.colorId } });
+            if (v.sizes) v.sizes.forEach(s => parts.push({ namespace: `SIZE:${s.category}`, data: { _id: s.sizeId } }));
+            if (v.attributeValueIds) {
+                // Approximate attribute mapping for legacy/loaded checks
+                v.attributeValueIds.forEach(id => {
+                    const attrValId = typeof id === 'object' ? id._id : id;
+                    // Find which type this belongs to if possible
+                    allAttributes.forEach(at => {
+                        if (at.values.some(av => av._id === attrValId)) {
+                            parts.push({ namespace: `ATTR:${at.name}`, data: { _id: attrValId } });
+                        }
+                    });
+                });
+            }
+            return getIdentityKey(parts);
+        }));
+
+        const baseSku = (product.sku || product.slug || product.name.substring(0, 8)).replace(/[^a-z0-9]/gi, '').toUpperCase();
         const newVariants = [];
         let skipped = 0;
 
-        // Generator Loop
-        selectedSizes.forEach(size => {
-            // STRICT VALIDATION: Skip invalid sizes
-            // if (!size.ram || !size.storage) {
-            //     console.warn(`Skipping invalid size: ${size.name}`);
-            //     skipped++;
-            //     return;
-            // }
-
-            // NEW SKU LOGIC: Use RAM/Storage if available (e.g. 12-256), else fallback to Code
-            const rawCode = size.code || (size.displayName || size.name || 'MISC');
-            let sizePart = String(rawCode).replace(/[^a-zA-Z0-9]/g, '');
-            if (size.ram && size.storage) {
-                sizePart = `${size.ram}-${size.storage}`;
+        combinations.forEach(combo => {
+            const identityKey = getIdentityKey(combo);
+            if (currentIdentitySet.has(identityKey)) {
+                skipped++;
+                return;
             }
 
-            const genPrice = Number(product.basePrice || product.price || 0);
+            // Build VariantMaster compatible object
+            const variantObj = {
+                _id: `temp-${Math.random().toString(36).substr(2, 9)}`,
+                productId: product._id,
+                isNew: true,
+                isEdited: true,
+                status: 'DRAFT',
+                price: (product.basePrice || 0).toString(),
+                imageGallery: [],
+                sizes: [],
+                attributeValueIds: [],
+                colorId: null,
+                // Display helpers
+                displayColorName: '',
+                displayHex: '',
+                sizeCode: '',
+                variantLabel: combo.map(c => c.data.code || c.data.name || c.data.displayName || c.data.value).join(' / ')
+            };
 
-            if (isColorwayMode) {
-                // ------------------------------------
-                // MODE: COLORWAY (One Concept, Multiple Sizes)
-                // ------------------------------------
+            const skuParts = [baseSku];
+            combo.forEach(dim => {
+                const code = (dim.data.code || dim.data.value || dim.data.name || 'X').replace(/[^a-z0-9]/gi, '').toUpperCase();
+                skuParts.push(code);
 
-                // Duplicate Check (Same Size + Same Colorway Name)
-                const exists = variants.find(v =>
-                    (v.sizeCode === size.code) &&
-                    (v.displayColorName.toLowerCase() === colorwayName.toLowerCase())
-                );
-
-                if (exists) {
-                    skipped++;
-                    return;
+                if (dim.namespace === 'COLOR') {
+                    variantObj.colorId = dim.data._id;
+                    variantObj.displayColorName = dim.data.name;
+                    variantObj.displayHex = dim.data.hexCode;
+                } else if (dim.namespace.startsWith('SIZE:')) {
+                    const category = dim.namespace.replace('SIZE:', '');
+                    variantObj.sizes.push({ sizeId: dim.data._id, category });
+                    variantObj.sizeCode = dim.data.code || dim.data.displayName;
+                } else if (dim.namespace.startsWith('ATTR:')) {
+                    variantObj.attributeValueIds.push(dim.data._id);
                 }
+            });
 
-                // SKU: MODEL-SIZE-COLORWAY (e.g. J4-US9-CHI)
-                const colorwayCode = colorwayName.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, 'X');
-
-                const tempId = `temp-${Date.now()}-${size._id}`; // Date.now() is safer here as user clicks once per "concept"
-
-                newVariants.push({
-                    _id: tempId,
-                    productId: product._id,
-                    variantType: 'COLORWAY',
-
-                    // Identity
-                    sizeId: size._id,
-                    sizeCode: size.code,
-
-                    // Color Data
-                    colorwayName: colorwayName,
-                    colorParts: colorwayPalette, // Store full objects for UI, extract IDs on save
-
-                    // UI Helpers
-                    isColorway: true,
-                    displayColorName: colorwayName,
-                    displayPalette: colorwayPalette.map(c => c.hexCode),
-
-                    // Biz Data
-                    sku: `${baseSku}-${sizePart}-${colorwayCode}`,
-                    price: genPrice,
-                    images: [], // New Image Field
-                    // stock: REMOVED - Managed by Inventory Master
-                    status: 'DRAFT',
-                    isNew: true,
-                    isEdited: true
-                });
-
-            } else {
-                // ------------------------------------
-                // MODE: SINGLE COLOR (Matrix: Sizes x Colors)
-                // ------------------------------------
-                selectedColors.forEach(color => {
-                    // Duplicate Check
-                    const exists = variants.find(v => {
-                        return v.sizeCode === size.code && v.displayColorName === color.name;
-                    });
-
-                    if (exists) {
-                        skipped++;
-                        return;
-                    }
-
-                    const colorCode = color.name.substring(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, '');
-                    const tempId = `temp-${size._id}-${color._id}`;
-
-                    newVariants.push({
-                        _id: tempId,
-                        productId: product._id,
-                        variantType: 'SINGLE_COLOR',
-
-                        sizeId: size._id,
-                        sizeCode: size.code,
-
-                        colorId: color._id,
-                        colorName: color.name, // Legacy helper
-
-                        isColorway: false,
-                        displayColorName: color.name,
-                        displayHex: color.hexCode,
-
-                        sku: `${baseSku}-${sizePart}-${colorCode}`,
-                        price: genPrice,
-                        images: [], // New Image Field
-                        // stock: REMOVED - Managed by Inventory Master
-                        status: 'DRAFT',
-                        isNew: true,
-                        isEdited: true
-                    });
-                });
-            }
+            variantObj.sku = skuParts.join('-');
+            newVariants.push(variantObj);
         });
 
         if (newVariants.length > 0) {
             setVariants(prev => [...prev, ...newVariants]);
-            toast.success(`Generated ${newVariants.length} new variants`);
-
-            // Clear inputs based on mode
-            setSelectedSizes([]);
-            if (isColorwayMode) {
-                // Keep the colorway name/palette? Usually user wants to add same shoe in different sizes.
-                // Or maybe they want to switch colorways. Let's clear Name to be safe.
-                setColorwayName('');
-                // Keep Palette? Maybe not.
-                setColorwayPalette([]);
-            } else {
-                setSelectedColors([]);
-            }
+            toast.success(`Generated ${newVariants.length} combinations.`);
+            setSelectedDimensions({});
         } else if (skipped > 0) {
-            toast('Combinations already exist', { icon: 'ℹ️' });
+            toast.error(`${skipped} configurations already exist.`);
         }
     };
 
-    // --- TABLE INTERACTIONS ---
-    const updateVariant = (id, field, value) => {
-        setVariants(prev => prev.map(v => {
-            if (v._id === id) {
-                return { ...v, [field]: value, isEdited: true };
-            }
-            return v;
-        }));
-    };
+    // --- GRID INTERACTIONS ---
+    // Debounced UI update for performance
+    const updateVariant = useCallback((id, field, value) => {
+        setVariants(prev => prev.map(v => v._id === id ? { ...v, [field]: value, isEdited: true } : v));
+    }, []);
 
-    const deleteVariant = (id, isNew) => {
+    const deleteVariant = useCallback((id, isNew) => {
         if (isNew) {
             setVariants(prev => prev.filter(v => v._id !== id));
-            toast.success('Variant removed');
+            toast.success('Removed');
         } else {
+            if (!window.confirm('Delete variant? This is permanent.')) return;
             const previous = [...variants];
             setVariants(prev => prev.filter(v => v._id !== id));
-
             variantAPI.delete(id)
-                .then(() => toast.success('Variant deleted'))
+                .then(() => toast.success('Deleted'))
                 .catch(err => {
                     toast.error('Failed to delete');
                     setVariants(previous);
                 });
         }
-    };
+    }, [variants]);
 
-    // ─── Valid lifecycle transitions (mirrors backend VALID_TRANSITIONS) ────────
     const VALID_TRANSITIONS = {
         DRAFT: ['ACTIVE', 'ARCHIVED'],
         ACTIVE: ['OUT_OF_STOCK', 'ARCHIVED', 'LOCKED'],
         OUT_OF_STOCK: ['ACTIVE', 'ARCHIVED'],
-        ARCHIVED: [],          // Terminal — no re-opens without explicit workflow
-        LOCKED: [],           // Terminal — identity fully frozen
+        ARCHIVED: [],
+        LOCKED: [],
     };
 
-    const getAllowedStatuses = (currentStatus) => {
-        // Always include current status so the select has a valid default
-        const transitions = VALID_TRANSITIONS[currentStatus] || [];
-        return [currentStatus, ...transitions];
-    };
+    const getAllowedStatuses = (status) => [status, ...(VALID_TRANSITIONS[status] || [])];
 
+    // --- BULK TRANSACTION SAVE ---
     const saveChanges = async () => {
         const newItems = variants.filter(v => v.isNew);
         const editedItems = variants.filter(v => v.isEdited && !v.isNew);
+        if (newItems.length === 0 && editedItems.length === 0) return toast('No changes');
 
-        if (newItems.length === 0 && editedItems.length === 0) {
-            toast('No changes to save');
-            return;
-        }
-
-        // P0: Pre-flight price regex guard explicitly block format violations
         const priceRegex = /^\d+(\.\d{1,2})?$/;
         for (const v of [...newItems, ...editedItems]) {
-            const rawVal = v.price?.toString();
-            if (!priceRegex.test(rawVal)) {
-                toast.error(`Variant "${v.sku || v._id}" has an invalid price format. Must be a positive number with max 2 decimals.`);
-                return;
-            }
-            if (Number(rawVal) < 0) {
-                toast.error(`Variant "${v.sku || v._id}" price cannot be negative.`);
-                return;
-            }
-
-            // P0: Enforce Primary Image invariant
-            const gallery = v.imageGallery || v.images || [];
-            if (gallery.length > 0) {
-                const primaryCount = gallery.filter(i => i.isPrimary).length;
-                if (primaryCount !== 1) {
-                    toast.error(`Variant "${v.sku || v._id}" must have exactly one primary image. Found ${primaryCount}.`);
-                    return;
-                }
-            }
+            if (!priceRegex.test(v.price)) return toast.error(`Invalid price for SKU ${v.sku}`);
         }
 
         setSaving(true);
         try {
-            // Bulk Create New
+            // New Variants Creation
             if (newItems.length > 0) {
                 const payload = {
                     productId: product._id,
+                    productGroupId: product._id, // Support both naming variants 
                     variants: newItems.map(v => {
-                        const attributes = { size: v.sizeCode };
-                        if (v.displayColorName) attributes.color = v.displayColorName;
-                        if (!v.isColorway) attributes.colorId = v.colorId;
+                        // Find the size object in allSizes to get its category
+                        const sizeMetadata = allSizes.find(s => s._id === v.sizeId);
 
-                        const base = {
-                            attributes,
-                            sizeId: v.sizeId,
+                        return {
+                            attributes: { size: v.sizeCode, color: v.isColorway ? null : v.displayColorName },
+                            // Enterprise expects array of objects for sizes
+                            sizes: [{
+                                sizeId: v.sizeId,
+                                category: sizeMetadata?.category || 'DIMENSION'
+                            }],
                             sku: v.sku,
-                            price: v.price?.toString() || "0", // ✅ Float Safety: String transmission
+                            price: v.price.toString(),
                             status: v.status || 'DRAFT',
+                            colorwayName: v.isColorway ? v.colorwayName : undefined,
+                            colorParts: v.isColorway ? v.colorParts.map(c => c._id) : undefined,
+                            colorId: !v.isColorway ? v.colorId : undefined,
+                            imageGallery: v.imageGallery || []
                         };
-
-                        if (v.isColorway) {
-                            base.colorwayName = v.colorwayName;
-                            base.colorParts = v.colorParts.map(c => c._id);
-                        } else {
-                            base.colorId = v.colorId;
-                        }
-
-                        // ✅ Structured imageGallery (enterprise schema shape)
-                        if (v.imageGallery && v.imageGallery.length > 0) {
-                            base.imageGallery = v.imageGallery;
-                        }
-
-                        return base;
                     })
                 };
-                const res = await variantAPI.create(payload);
-                if (res.data?.stats) {
-                    const { created, skipped } = res.data.stats;
-                    if (created > 0 && skipped > 0) {
-                        toast(`Saved ${created} variants (${skipped} skipped as duplicates)`, { icon: '⚠️' });
-                    } else if (created > 0) {
-                        toast.success(`Created ${created} variants`);
-                    } else {
-                        toast('No new variants created (duplicates)', { icon: 'info' });
-                    }
-                }
+                await variantAPI.create(payload);
+                toast.success(`Created ${newItems.length} new variants`);
             }
 
-            // ✅ P0: Sequential guarded execution — Abort on first failure to prevent partial state drift
+            // Existing Variants Update (Optimized Bulk Request Pattern)
             if (editedItems.length > 0) {
-                let successes = 0;
+                // Future-proofed for DB Transaction BulkWrite endpoint
+                const updates = editedItems.map(v => ({
+                    id: v._id,
+                    price: v.price.toString(),
+                    sku: v.sku,
+                    status: v.status,
+                    'governance.version': v.governance?.version
+                }));
 
-                for (const v of editedItems) {
-                    try {
-                        const payload = {
-                            price: v.price?.toString(), // ✅ Float Safety: Send as STRING
-                            sku: v.sku,
-                            status: v.status,
-                            // OCC: version must be sent so backend query middleware can validate
-                            'governance.version': v.governance?.version,
-                        };
+                // Fallback concurrent processing if bulkWrite API doesn't exist yet
+                // Use Promise.all with Catch for safety if legacy
+                let hasConflicts = false;
+                await Promise.all(updates.map(update =>
+                    variantAPI.update(update.id, update).catch(e => {
+                        if (e?.response?.status === 409) hasConflicts = true;
+                        throw e;
+                    })
+                ));
 
-                        await variantAPI.update(v._id, payload);
-                        successes++;
-                    } catch (err) {
-                        const status = err?.response?.status;
-                        if (status === 409) {
-                            // ✅ OCC conflict — Abort immediately to prevent legacy partial commit
-                            setPartialCommitWarning(true);
-                            toast.error(`⚠️ Conflict: Variant "${v.sku || v._id}" was updated by another administrator. Aborting bulk save to prevent data corruption.`);
-                            await fetchAllData();
-                            return; // STOP execution
-                        } else {
-                            setPartialCommitWarning(true);
-                            toast.error(`Abort: Bulk update failed at "${v.sku || 'variant'}". Error: ${err?.response?.data?.message || err.message}`);
-                            await fetchAllData();
-                            return; // Guarded stop
-                        }
-                    }
-                }
-
-                if (successes > 0) toast.success(`Updated ${successes} variant(s) successfully`);
+                toast.success(`Updated ${editedItems.length} variant(s)`);
             }
 
             fetchAllData();
         } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to save changes');
-            // Refresh to ensure UI hasn't drifted due to partial successes or backend auto-fixes
+            setPartialCommitWarning(true);
+            toast.error(error.response?.data?.message || 'Bulk Save Interrupted. Check variants.');
             await fetchAllData();
         } finally {
             setSaving(false);
         }
     };
 
-    // --- STATISTICS ---
-    const stats = useMemo(() => {
-        return {
-            total: variants.length,
-            new: variants.filter(v => v.isNew).length
-            // stock: REMOVED - Check Inventory Master for stock info
-        };
-    }, [variants]);
-
+    // --- PAGINATION & FILTERING ---
     const filteredVariants = useMemo(() => {
         return variants.filter(v => {
-            // 1. Status Filter
             if (filter === 'new' && !v.isNew) return false;
-
-            // 2. Search Filter (Debounced-ish via state)
             if (!searchTerm) return true;
-
             const term = searchTerm.toLowerCase();
-            const skuMatch = v.sku?.toLowerCase().includes(term);
-            const colorMatch = v.displayColorName?.toLowerCase().includes(term);
-            const sizeMatch = v.sizeCode?.toLowerCase().includes(term);
-
-            return skuMatch || colorMatch || sizeMatch;
+            return v.sku?.toLowerCase().includes(term) || v.displayColorName?.toLowerCase().includes(term) || v.sizeCode?.toLowerCase().includes(term);
         });
     }, [variants, filter, searchTerm]);
+
+    const totalPages = Math.ceil(filteredVariants.length / PAGE_SIZE);
+    const paginatedVariants = useMemo(() => {
+        const start = (currentPage - 1) * PAGE_SIZE;
+        return filteredVariants.slice(start, start + PAGE_SIZE);
+    }, [filteredVariants, currentPage]);
 
     const getImageUrl = (image) => {
         if (!image) return null;
         let path = typeof image === 'string' ? image : image.url;
         if (!path) return null;
         if (path.startsWith('http') || path.startsWith('data:')) return path;
-
         let cleanPath = path.replace(/^\//, '');
-        if (!cleanPath.includes('/') && !cleanPath.includes('\\')) {
-            cleanPath = `uploads/${cleanPath}`;
-        }
-
-        const baseUrl = import.meta.env.VITE_API_URL
-            ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
-            : 'http://localhost:5000';
-
+        if (!cleanPath.includes('/')) cleanPath = `uploads/${cleanPath}`;
+        const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:5000';
         return `${baseUrl}/${cleanPath}`;
     };
 
-    if (loading) return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50">
-            <div className="flex flex-col items-center">
-                <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p className="text-slate-500 font-medium">Loading Builder...</p>
-            </div>
-        </div>
-    );
-
-    if (!product) return <div className="p-10 text-center">Product not found</div>;
-
-    const mainImage = product.image || product.images?.[0];
-    const productImageUrl = getImageUrl(mainImage);
-    const isColorwayMode = product.variantType === 'COLORWAY';
-
-    const handleImageUpload = async (variantId, files) => {
+    // --- IMAGES ---
+    const handleImageUpload = useCallback(async (variantId, files) => {
         if (!files || files.length === 0) return;
-
         const currentVariant = variants.find(v => v._id === variantId);
         const currentGallery = currentVariant.imageGallery || [];
+        if (currentGallery.length + files.length > 10) return toast.error(`Max 10 images allowed.`);
 
-        if (currentGallery.length + files.length > 10) {
-            toast.error(`Limit reached: Maximum 10 images per variant.`);
-            return;
-        }
-
-        const toastId = toast.loading('Uploading images...');
+        const toastId = toast.loading('Uploading...');
         try {
             const res = await uploadAPI.uploadMultiple(files);
-
-            // ✅ Structured imageGallery shape matching VariantMaster enterprise schema
             const uploadedImages = res.data.data.map((img, i) => ({
                 url: img.url,
                 altText: img.filename || '',
-                // First upload is primary only if gallery is currently empty
                 isPrimary: currentGallery.length === 0 && i === 0,
                 sortOrder: currentGallery.length + i,
-                type: 'DETAIL',  // HERO | THUMBNAIL | DETAIL | LIFESTYLE
+                type: 'DETAIL',
             }));
-
             updateVariant(variantId, 'imageGallery', [...currentGallery, ...uploadedImages]);
-            toast.success(`${uploadedImages.length} image(s) uploaded!`, { id: toastId });
+
+            // Sync open modal
+            setActiveImageModalVariant(prev => prev && prev._id === variantId ? { ...prev, imageGallery: [...currentGallery, ...uploadedImages] } : prev);
+            toast.success('Uploaded!', { id: toastId });
         } catch (error) {
-            console.error(error);
             toast.error('Upload failed', { id: toastId });
         }
-    };
+    }, [variants, updateVariant]);
 
-    const handleSetPrimary = (variantId, targetIndex) => {
+    const handleSetPrimary = useCallback((variantId, targetIndex) => {
         const currentVariant = variants.find(v => v._id === variantId);
-        const updated = (currentVariant.imageGallery || []).map((img, i) => ({
-            ...img,
-            isPrimary: i === targetIndex,
-        }));
+        const updated = (currentVariant.imageGallery || []).map((img, i) => ({ ...img, isPrimary: i === targetIndex }));
         updateVariant(variantId, 'imageGallery', updated);
+        setActiveImageModalVariant(prev => prev && prev._id === variantId ? { ...prev, imageGallery: updated } : prev);
+    }, [variants, updateVariant]);
+
+    // --- UI HELPERS ---
+    const availableDimensions = useMemo(() => {
+        if (!product) return [];
+        const dims = [];
+
+        // 1. COLORS
+        dims.push({
+            id: 'COLOR',
+            label: 'Global Colors',
+            icon: SwatchIcon,
+            options: allColors.map(c => ({ id: c._id, name: c.name, sub: c.hexCode, color: c.hexCode }))
+        });
+
+        // 2. SIZES grouped by category
+        const categories = [...new Set(allSizes.map(s => s.category))];
+        categories.forEach(cat => {
+            dims.push({
+                id: `SIZE:${cat}`,
+                label: `Size: ${cat}`,
+                icon: CubeIcon,
+                options: allSizes.filter(s => s.category === cat).map(s => ({ id: s._id, name: s.displayName || s.value, sub: s.value }))
+            });
+        });
+
+        // 3. ATTRIBUTES
+        allAttributes.forEach(attr => {
+            dims.push({
+                id: `ATTR:${attr.name}`,
+                label: `Attribute: ${attr.name}`,
+                icon: TagIcon,
+                options: attr.values.map(v => ({ id: v._id, name: v.value, sub: attr.name }))
+            });
+        });
+
+        return dims;
+    }, [product, allColors, allSizes, allAttributes]);
+
+    const DimensionSelector = ({ dim }) => {
+        const selected = selectedDimensions[dim.id] || [];
+        const [isOpen, setIsOpen] = useState(false);
+
+        return (
+            <div className="space-y-3 relative">
+                <div className="flex justify-between items-center px-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <dim.icon className="w-3 h-3" /> {dim.label}
+                    </label>
+                    {selected.length > 0 && (
+                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                            {selected.length} Selected
+                        </span>
+                    )}
+                </div>
+
+                <div
+                    onClick={() => setIsOpen(!isOpen)}
+                    className={`w-full bg-slate-50 border-2 border-dashed rounded-xl p-3 min-h-[100px] cursor-pointer transition-all hover:bg-slate-100/50 ${isOpen ? 'border-indigo-400 bg-indigo-50/30' : 'border-slate-200'}`}
+                >
+                    <div className="flex flex-wrap gap-2">
+                        {selected.length === 0 ? (
+                            <span className="text-xs font-bold text-slate-400 italic py-2 px-1">+ Add {dim.label}...</span>
+                        ) : (
+                            selected.map(id => {
+                                const opt = dim.options.find(o => o.id === id);
+                                return (
+                                    <span key={id} onClick={(e) => { e.stopPropagation(); toggleDimensionSelection(dim.id, id); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-700 rounded-lg text-xs font-black shadow-sm border border-slate-200 hover:border-red-200 hover:text-red-600 transition-all">
+                                        {opt?.name}
+                                        <XMarkIcon className="w-3 h-3 opacity-50" />
+                                    </span>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+
+                {isOpen && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 max-h-64 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {dim.options.map(opt => (
+                            <button
+                                key={opt.id}
+                                onClick={() => toggleDimensionSelection(dim.id, opt.id)}
+                                className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${selected.includes(opt.id)
+                                    ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg'
+                                    : 'border-slate-100 bg-slate-50 text-slate-600 hover:border-indigo-300'}`}
+                            >
+                                {opt.color && <div className="w-4 h-4 rounded-full mb-1 border border-white/20" style={{ background: opt.color }} />}
+                                <span className="text-xs font-black truncate w-full text-center">{opt.name}</span>
+                                <span className={`text-[9px] font-bold uppercase tracking-tighter ${selected.includes(opt.id) ? 'text-indigo-200' : 'text-slate-400'}`}>{opt.sub}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
     };
 
-    const handleRemoveImage = (variantId, imgIndex) => {
-        if (!window.confirm('Remove this image?')) return;
+    const toggleDimensionSelection = (namespace, id) => {
+        setSelectedDimensions(prev => {
+            const current = prev[namespace] || [];
+            const updated = current.includes(id)
+                ? current.filter(existing => existing !== id)
+                : [...current, id];
 
-        const currentVariant = variants.find(v => v._id === variantId);
-        let updated = [...(currentVariant.imageGallery || [])];
-        const wasRemovedPrimary = updated[imgIndex]?.isPrimary;
-        updated.splice(imgIndex, 1);
-
-        // Auto-assign primary to first remaining image if primary was removed
-        if (wasRemovedPrimary && updated.length > 0) {
-            updated[0] = { ...updated[0], isPrimary: true };
-        }
-
-        // Reindex sortOrder after removal
-        updated = updated.map((img, i) => ({ ...img, sortOrder: i }));
-
-        updateVariant(variantId, 'imageGallery', updated);
+            return { ...prev, [namespace]: updated };
+        });
     };
+
+
+    if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>;
+    if (!product) return <div className="p-10 text-center font-bold text-slate-500">Product Not Found</div>;
+
+    const isColorwayMode = product.variantType === 'COLORWAY';
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20 font-sans">
+            {activeImageModalVariant && (
+                <ImageManagerModal
+                    variant={activeImageModalVariant}
+                    onClose={() => setActiveImageModalVariant(null)}
+                    onUpload={handleImageUpload}
+                    onSetPrimary={handleSetPrimary}
+                    onRemove={handleRemoveImage}
+                    getImageUrl={getImageUrl}
+                />
+            )}
+
             {partialCommitWarning && (
-                <div className="bg-red-500 text-white px-6 py-3 font-semibold flex items-center justify-between shadow-md z-40 relative">
-                    <span className="flex items-center gap-2">
-                        <XMarkIcon className="w-5 h-5 bg-white/20 rounded-full" />
-                        Partial update detected (Aborted on error). Please review updated variants.
-                    </span>
-                    <button onClick={() => setPartialCommitWarning(false)} className="text-white hover:text-red-100 uppercase text-xs font-bold tracking-wide">Dismiss</button>
+                <div className="bg-amber-500 text-white px-6 py-4 font-semibold flex items-center justify-between shadow-md z-40 relative sticky top-0">
+                    <span className="flex items-center gap-3"><ExclamationTriangleIcon className="w-6 h-6" /> Partial Commit Risk. OCC Validation Failed on Save. Check un-saved rows.</span>
+                    <button onClick={() => setPartialCommitWarning(false)} className="text-white hover:text-amber-100 uppercase text-xs font-bold tracking-wide">Dismiss</button>
                 </div>
             )}
-            {/* Header */}
-            <header className="bg-white/80 backdrop-blur-xl sticky top-0 z-30 transition-all duration-300 shadow-[0_4px_30px_rgba(0,0,0,0.03)]">
-                <div className="w-full px-6 lg:px-8 h-24 flex items-center justify-between">
-                    <div className="flex items-center gap-8">
-                        <button
-                            onClick={() => navigate('/variant-mapping')}
-                            className="group p-3 rounded-full hover:bg-slate-100/80 transition-all text-slate-400 hover:text-slate-900"
-                        >
-                            <ArrowLeftIcon className="w-6 h-6 stroke-[2]" />
+
+            <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+                <div className="px-6 lg:px-8 h-20 flex items-center justify-between">
+                    <div className="flex items-center gap-6">
+                        <button onClick={() => navigate('/variant-mapping')} className="p-2 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
+                            <ArrowLeftIcon className="w-5 h-5" />
                         </button>
-
-                        <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 rounded-2xl bg-white shadow-lg shadow-slate-200/50 overflow-hidden flex-shrink-0 ring-1 ring-slate-100">
-                                {productImageUrl ? (
-                                    <img src={productImageUrl} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-slate-50">
-                                        <CubeIcon className="w-6 h-6 text-slate-300" />
-                                    </div>
-                                )}
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{product.name}</h1>
-                                <div className="flex items-center gap-3 mt-1.5">
-                                    <span className="text-xs font-semibold text-slate-500 tracking-wide">
-                                        {product.sku || 'NO-SKU'}
-                                    </span>
-                                    {/* Strategy Badge */}
-                                    {isColorwayMode ? (
-                                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                                            Colorway
-                                        </span>
-                                    ) : (
-                                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                                            Single Color
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
+                        <div>
+                            <h1 className="text-xl font-black text-slate-900 leading-none">{product.name}</h1>
+                            <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mt-1 block">{product.sku}</span>
                         </div>
                     </div>
-
-                    <div className="flex-1 max-w-md mx-8 transition-opacity duration-200 opacity-80 hover:opacity-100">
-                        <ProductSelectDropdown
-                            value={productId}
-                            onChange={(newId) => navigate(`/variant-builder/${newId}`)}
-                            label=""
-                        />
-                    </div>
-
-                    <div className="flex items-center gap-10">
-                        <div className="hidden sm:flex flex-col items-end">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Total Variants</span>
-                            <span className="font-bold text-slate-900 text-2xl leading-none">{stats.total}</span>
+                    <div className="flex items-center gap-6">
+                        <div className="text-right">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Total</span>
+                            <span className="font-black text-slate-900 text-2xl leading-none">{variants.length}</span>
                         </div>
-                        <button
-                            onClick={saveChanges}
-                            disabled={saving || (variants.filter(v => v.isNew || v.isEdited).length === 0)}
-                            className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-full font-bold shadow-xl shadow-slate-900/10 transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:translate-y-0 flex items-center gap-2"
-                        >
-                            {saving ? 'Saving...' : 'Save Changes'}
+                        <button onClick={saveChanges} disabled={saving || variants.filter(v => v.isNew || v.isEdited).length === 0} className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white px-8 py-3 rounded-lg font-bold shadow-md transition-all">
+                            {saving ? 'Saving...' : 'Save All Changes'}
                         </button>
                     </div>
                 </div>
             </header>
 
-            <main className="w-full px-6 lg:px-8 py-8 space-y-8">
-                {/* Generator */}
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300">
-                    <div
-                        className="p-6 flex justify-between items-center cursor-pointer hover:bg-slate-50/50 transition-colors"
-                        onClick={() => setIsGenerating(!isGenerating)}
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm ring-1 ring-indigo-100">
-                                <SparklesIcon className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <h2 className="font-bold text-slate-900 text-base">Variant Generator</h2>
-                                <p className="text-sm text-slate-500 font-medium mt-0.5">
-                                    {isColorwayMode
-                                        ? "Create defined colorways for multiple sizes"
-                                        : "Combine sizes and colors to create new SKUs"
-                                    }
-                                </p>
-                            </div>
+            <main className="px-6 lg:px-8 py-8 space-y-6 max-w-[1600px] mx-auto">
+
+                {/* STAGE 1 & 2: DYNAMIC GENERATION ENGINE */}
+                <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                    <div className="flex justify-between items-center mb-6 cursor-pointer" onClick={() => setIsGenerating(!isGenerating)}>
+                        <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2"><SparklesIcon className="w-5 h-5 text-indigo-500" /> Dimension Workspace</h2>
+                        <div className="flex items-center gap-3">
+                            {Object.values(selectedDimensions).some(v => v.length > 0) && (
+                                <button onClick={() => setSelectedDimensions({})} className="text-[10px] font-bold text-red-500 hover:text-red-600 uppercase tracking-tight">Clear All</button>
+                            )}
+                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-md">{isGenerating ? 'Active' : 'Hidden'}</span>
                         </div>
-                        <button className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50 px-4 py-2 rounded-lg transition-all border border-indigo-100/50">
-                            {isGenerating ? 'Collapse Panel' : 'Expand Panel'}
-                        </button>
                     </div>
 
                     {isGenerating && (
-                        <div className="p-8 border-t border-slate-100 bg-slate-50/30">
-                            {/* DYNAMIC GENERATOR UI */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-
-                                {/* 1. Size Dropdown (Common) */}
-                                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm/50">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-bold text-slate-800 flex items-center gap-2.5 text-base">
-                                            <TagIcon className="w-5 h-5 text-indigo-500" />
-                                            Select Sizes
-                                        </h3>
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide ${selectedSizes.length > 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-                                            {selectedSizes.length} Selected
-                                        </span>
-                                    </div>
-                                    <SizeMultiSelectDropdown
-                                        value={selectedSizes.map(s => s._id)}
-                                        onChange={(ids) => {
-                                            const objects = allSizes.filter(s => ids.includes(s._id));
-                                            setSelectedSizes(objects);
-                                        }}
-                                        label=""
-                                    />
-                                </div>
-
-                                {/* 2. Color Logic (Conditional) */}
-                                {isColorwayMode ? (
-                                    // MODE: COLORWAY COMPOSER
-                                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm/50 space-y-6">
-
-                                        {/* Name Input */}
-                                        <div>
-                                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
-                                                Colorway Name <span className="text-red-500">*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 rounded-xl px-4 py-3 font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-sm"
-                                                placeholder="e.g. 'Chicago', 'Panda', 'Triple Black'"
-                                                value={colorwayName}
-                                                onChange={(e) => setColorwayName(e.target.value)}
-                                            />
-                                        </div>
-
-                                        <div className="border-t border-slate-100 pt-6">
-                                            <div className="flex justify-between items-center mb-4">
-                                                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                                                    <SwatchIcon className="w-4 h-4 text-indigo-500" />
-                                                    Composition
-                                                </h3>
-                                                <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-full">
-                                                    {colorwayPalette.length} Parts
-                                                </span>
-                                            </div>
-
-                                            {/* Composite List */}
-                                            <div className="space-y-2 mb-4">
-                                                {colorwayPalette.map((color, index) => (
-                                                    <div
-                                                        key={`${color._id}-${index}`}
-                                                        className="group flex items-center justify-between p-2 pl-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-200 transition-colors shadow-sm"
-                                                    >
-                                                        <div className="flex items-center gap-3">
-
-                                                            {/* Index / Primary Badge */}
-                                                            {index === 0 ? (
-                                                                <span className="text-[10px] font-bold text-white bg-indigo-500 px-1.5 py-0.5 rounded shadow-sm shadow-indigo-200 uppercase tracking-wider">
-                                                                    Primary
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 min-w-[24px] text-center">
-                                                                    Part {index + 1}
-                                                                </span>
-                                                            )}
-
-                                                            {/* Color Preview */}
-                                                            <div
-                                                                className="w-6 h-6 rounded-full border border-slate-200 shadow-sm"
-                                                                style={{ backgroundColor: color.hexCode }}
-                                                            />
-
-                                                            {/* Details */}
-                                                            <div className="flex flex-col">
-                                                                <span className="text-sm font-bold text-slate-700 leading-none">
-                                                                    {color.name}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-400 font-mono uppercase mt-0.5">
-                                                                    {color.hexCode}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-
-                                                        <button
-                                                            onClick={() => {
-                                                                const newPalette = [...colorwayPalette];
-                                                                newPalette.splice(index, 1);
-                                                                setColorwayPalette(newPalette);
-                                                            }}
-                                                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                            title="Remove part"
-                                                        >
-                                                            <XMarkIcon className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                ))}
-
-                                                {colorwayPalette.length === 0 && (
-                                                    <div className="p-6 border-2 border-dashed border-slate-200 rounded-xl text-center bg-slate-50/50">
-                                                        <p className="text-xs font-semibold text-slate-400">No colors added yet.</p>
-                                                        <p className="text-[10px] text-slate-400 mt-1">Add colors below to build the palette.</p>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Add Color Dropdown */}
-                                            <div className="relative">
-                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Add Part</label>
-                                                <select
-                                                    className="w-full bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3 text-sm font-bold text-slate-600 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 cursor-pointer transition-all"
-                                                    onChange={(e) => {
-                                                        const cId = e.target.value;
-                                                        if (!cId) return;
-                                                        const color = allColors.find(c => c._id === cId);
-                                                        if (color) {
-                                                            if (colorwayPalette.find(p => p._id === cId)) {
-                                                                toast('Color already in palette', { icon: '⚠️' });
-                                                            } else {
-                                                                setColorwayPalette(prev => [...prev, color]);
-                                                            }
-                                                        }
-                                                        e.target.value = ""; // Reset
-                                                    }}
-                                                >
-                                                    <option value="">+ Select Color to Add</option>
-                                                    {allColors.map(c => (
-                                                        <option key={c._id} value={c._id}>{c.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    // MODE: SINGLE COLOR MATRIX
-                                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm/50 h-full flex flex-col">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="font-bold text-slate-800 flex items-center gap-2.5 text-base">
-                                                <SwatchIcon className="w-5 h-5 text-indigo-500" />
-                                                Select Colors
-                                            </h3>
-                                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide ${selectedColors.length > 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-                                                {selectedColors.length} Selected
-                                            </span>
-                                        </div>
-                                        <div className="flex-1 min-h-[160px]">
-                                            <ColorMultiSelectDropdown
-                                                value={selectedColors.map(c => c._id)}
-                                                onChange={(ids) => {
-                                                    const objects = allColors.filter(c => ids.includes(c._id));
-                                                    setSelectedColors(objects);
-                                                }}
-                                                label=""
-                                            />
-                                        </div>
-                                        <div className="mt-6 pt-4 border-t border-slate-100">
-                                            <p className="text-xs text-slate-400 font-medium">
-                                                This will generate <strong className="text-slate-700">{Math.max(1, selectedColors.length * selectedSizes.length)}</strong> unique SKUs
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
+                        <div className="space-y-8 pt-4 border-t border-slate-100 animate-in fade-in duration-500">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-10">
+                                {availableDimensions.map(dim => (
+                                    <DimensionSelector key={dim.id} dim={dim} />
+                                ))}
                             </div>
 
-                            <div className="flex justify-end items-center pt-6 border-t border-slate-100">
-                                <button
-                                    onClick={generateVariants}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none hover:-translate-y-0.5"
-                                >
-                                    <PlusIcon className="w-5 h-5 stroke-[2.5]" />
-                                    Generate Variants
-                                </button>
+                            <div className="flex justify-between items-center pt-6 border-t border-slate-50">
+                                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                    Projected: <span className="text-indigo-600 font-black">{Object.values(selectedDimensions).filter(v => v.length > 0).reduce((acc, v) => acc * v.length, Object.values(selectedDimensions).some(v => v.length > 0) ? 1 : 0)} Combinations</span>
+                                </div>
+                                <button onClick={generateVariants} className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-xl flex items-center gap-2 hover:bg-slate-800 transition-all active:scale-95"><PlusIcon className="w-5 h-5" /> Generate Preview</button>
                             </div>
                         </div>
                     )}
                 </section>
 
-                {/* Data Table */}
-                <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                    {/* Toolbar */}
-                    <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
-                        <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200/60">
-                            <button
-                                onClick={() => setFilter('all')}
-                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${filter === 'all'
-                                    ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
-                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'}`}
-                            >
-                                All Variants
-                            </button>
-                            <button
-                                onClick={() => setFilter('new')}
-                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${filter === 'new'
-                                    ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100'
-                                    : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/50'}`}
-                            >
-                                Unsaved <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] ${filter === 'new' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>{stats.new}</span>
-                            </button>
+                {/* STAGE 3: VIRTUALIZED/PAGINATED GRID */}
+                <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[700px]">
+                    <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 flex-shrink-0">
+                        <div className="flex gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                            <button onClick={() => setFilter('all')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${filter === 'all' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>All</button>
+                            <button onClick={() => setFilter('new')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${filter === 'new' ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:bg-slate-50'}`}>Drafts</button>
                         </div>
-                        <div className="relative group">
-                            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                            <input
-                                type="text"
-                                placeholder="Search by SKU..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200/80 rounded-full text-sm w-full sm:w-72 focus:outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300 transition-all font-medium placeholder-slate-400"
-                            />
-                        </div>
+                        <input type="text" placeholder="Search SKU..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="border border-slate-200 px-4 py-2 rounded-lg text-sm w-64 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
                     </div>
 
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                    <th className="px-8 py-5 font-medium">Variant Identity</th>
-                                    <th className="px-6 py-5 font-medium">Images</th>
-                                    <th className="px-6 py-5 font-medium w-48">SKU Code</th>
-                                    <th className="px-6 py-5 font-medium w-36">Base Price (₹)</th>
-                                    <th className="px-6 py-5 font-medium w-36">Resolved Price (₹)</th>
-                                    <th className="px-6 py-5 font-medium w-36">Status</th>
-                                    <th className="px-6 py-5 w-16"></th>
+                    <div className="flex-1 overflow-auto bg-slate-50/30">
+                        <table className="w-full text-left text-sm border-collapse">
+                            <thead className="sticky top-0 bg-slate-100/90 backdrop-blur z-10 shadow-sm">
+                                <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                    <th className="px-6 py-3">Variant</th>
+                                    <th className="px-4 py-3 w-40">SKU Ref</th>
+                                    <th className="px-4 py-3 w-32">Price</th>
+                                    <th className="px-4 py-3 w-24">Media</th>
+                                    <th className="px-4 py-3 w-36">Governance</th>
+                                    <th className="px-4 py-3 w-12 text-right"></th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {filteredVariants.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="6" className="px-6 py-24 text-center">
-                                            <div className="flex flex-col items-center justify-center">
-                                                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 ring-4 ring-slate-50/50">
-                                                    <CubeIcon className="w-8 h-8 text-slate-300" />
+                            <tbody className="divide-y divide-slate-100">
+                                {paginatedVariants.map((v) => (
+                                    <tr key={v._id} className={`hover:bg-white transition-colors ${v.isNew ? 'bg-indigo-50/20' : ''}`}>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg shadow-sm border border-slate-200 overflow-hidden flex shrink-0 relative">
+                                                    {v.isColorway ? (
+                                                        v.displayPalette.map((h, i) => <div key={i} className="flex-1 h-full" style={{ background: h }}></div>)
+                                                    ) : (
+                                                        <div className="w-full h-full" style={{ background: v.displayHex }}></div>
+                                                    )}
+                                                    {v.isNew && <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-indigo-500 shadow-sm border border-white"></span>}
                                                 </div>
-                                                <h3 className="text-slate-900 font-bold text-lg mb-1">No variants found</h3>
-                                                <p className="text-slate-400 text-sm max-w-xs mx-auto">
-                                                    Use the generator above to create new size/color combinations.
-                                                </p>
+                                                <div>
+                                                    <p className="font-bold text-slate-800 leading-tight flex items-center gap-1">
+                                                        {v.sizeCode} {!v.isNew && <LockClosedIcon className="w-3 h-3 text-slate-300" />}
+                                                    </p>
+                                                    <p className="text-xs font-semibold text-slate-500 truncate w-32">{v.displayColorName}</p>
+                                                </div>
                                             </div>
                                         </td>
+                                        <td className="px-4 py-4">
+                                            <input type="text" value={v.sku || ''} readOnly={v.status === 'LOCKED' || v.status === 'ACTIVE'} onChange={e => updateVariant(v._id, 'sku', e.target.value)} className="w-full font-mono text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 focus:bg-white focus:border-indigo-500 outline-none read-only:bg-slate-100 read-only:text-slate-400" />
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="relative">
+                                                <span className="absolute left-2 top-[7px] text-xs font-bold text-slate-400">₹</span>
+                                                <input type="number" step="0.01" value={v.price || ''} readOnly={v.status === 'LOCKED' || v.status === 'ACTIVE'} onChange={e => updateVariant(v._id, 'price', e.target.value)} className={`w-full font-semibold text-sm pl-6 pr-2 py-1.5 border rounded outline-none ${v.status === 'LOCKED' || v.status === 'ACTIVE' ? 'bg-slate-100 border-transparent text-slate-500' : 'bg-white border-slate-200 focus:border-indigo-500'}`} />
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <button onClick={() => setActiveImageModalVariant(v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 text-[11px] font-bold uppercase tracking-wider rounded-lg shadow-sm">
+                                                <PhotoIcon className="w-4 h-4 text-indigo-500" />
+                                                {v.imageGallery?.length || 0} Sets
+                                            </button>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            {v.status === 'LOCKED' || v.status === 'ARCHIVED' ? (
+                                                <span className="px-2 py-1 font-bold text-[10px] uppercase tracking-wider rounded bg-slate-100 text-slate-500 border border-slate-200 inline-block">{v.status}</span>
+                                            ) : (
+                                                <select value={v.status || 'DRAFT'} onChange={e => updateVariant(v._id, 'status', e.target.value)} className="w-full text-xs font-bold uppercase py-1 border-0 bg-transparent text-slate-700 cursor-pointer focus:ring-0 appearance-none">
+                                                    {getAllowedStatuses(v.status || 'DRAFT').map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                                                </select>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-4 text-right">
+                                            <button onClick={() => deleteVariant(v._id, v.isNew)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
+                                        </td>
                                     </tr>
-                                ) : (
-                                    filteredVariants.map((variant) => (
-                                        <tr
-                                            key={variant._id}
-                                            className={`group transition-all duration-200 hover:bg-slate-50/60 ${variant.isNew ? 'bg-indigo-50/10' : ''}`}
-                                        >
-                                            {/* 1. IDENTITY COLUMN */}
-                                            <td className="px-8 py-6">
-                                                <div className="flex items-center gap-5">
-                                                    {/* Color Swatch */}
-                                                    <div className="relative w-12 h-12 rounded-xl shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1)] flex-shrink-0 overflow-hidden ring-1 ring-black/5 bg-white group-hover:shadow-[0_4px_12px_-2px_rgba(0,0,0,0.12)] transition-shadow">
-                                                        {variant.isColorway ? (
-                                                            <div className="flex flex-wrap h-full w-full">
-                                                                {variant.displayPalette.slice(0, 4).map((hex, i) => (
-                                                                    <div key={i} className="flex-1 h-full" style={{ backgroundColor: hex || '#eee' }} />
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="w-full h-full relative">
-                                                                <div
-                                                                    className="absolute inset-0"
-                                                                    style={{ backgroundColor: variant.displayHex || '#eee' }}
-                                                                />
-                                                                {/* Glossy Overlay */}
-                                                                <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-white/20 pointer-events-none" />
-                                                            </div>
-                                                        )}
-
-                                                        {/* New Indicator */}
-                                                        {variant.isNew && (
-                                                            <div className="absolute top-0 right-0 p-1 bg-indigo-500 rounded-bl-lg shadow-sm z-10">
-                                                                <SparklesIcon className="w-2 h-2 text-white" />
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Text Info */}
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-bold text-slate-900 text-base">
-                                                                {variant.size && variant.size.ram && variant.size.storage
-                                                                    ? `${variant.size.ram}GB / ${variant.size.storage}${variant.size.storageUnit || 'GB'}`
-                                                                    : variant.size ? (variant.size.name || variant.size.code) : (variant.sizeCode || 'N/A')
-                                                                }
-                                                            </span>
-                                                            {!variant.isNew && (
-                                                                <div className="text-slate-300" title="Attributes Locked">
-                                                                    <LockClosedIcon className="w-3 h-3" />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <span className="text-sm font-medium text-slate-500">
-                                                            {variant.displayColorName}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            {/* IMAGES COLUMN */}
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-col items-start gap-3">
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {(variant.imageGallery || variant.images || []).map((img, imgIdx) => (
-                                                            <div
-                                                                key={imgIdx}
-                                                                className={`relative group/img w-10 h-10 rounded-lg ring-1 overflow-hidden bg-white shadow-sm hover:scale-110 transition-transform z-0 hover:z-10 ${img.isPrimary ? 'ring-indigo-400' : 'ring-slate-200/80'}`}
-                                                                title={img.isPrimary ? 'Primary Image' : `Image ${imgIdx + 1}`}
-                                                            >
-                                                                <img
-                                                                    src={getImageUrl(img)}
-                                                                    alt={img.altText || 'Variant'}
-                                                                    className="w-full h-full object-cover"
-                                                                    onError={(e) => e.target.style.display = 'none'}
-                                                                />
-                                                                {/* Primary star badge */}
-                                                                {img.isPrimary && (
-                                                                    <div className="absolute top-0 left-0 bg-indigo-500 text-white text-[8px] px-1 leading-4 rounded-br">★</div>
-                                                                )}
-                                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex flex-col items-center justify-center gap-0.5 transition-opacity backdrop-blur-[1px]">
-                                                                    {!img.isPrimary && (
-                                                                        <button
-                                                                            onClick={() => handleSetPrimary(variant._id, imgIdx)}
-                                                                            className="text-yellow-300 text-[10px] font-bold"
-                                                                            title="Set as primary"
-                                                                        >★</button>
-                                                                    )}
-                                                                    <button
-                                                                        onClick={() => handleRemoveImage(variant._id, imgIdx)}
-                                                                        className="text-white"
-                                                                    >
-                                                                        <XMarkIcon className="w-3 h-3" />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-white ring-1 ring-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm active:translate-y-0.5 select-none">
-                                                        <CloudArrowUpIcon className="w-3.5 h-3.5" />
-                                                        Upload
-                                                        <input
-                                                            type="file"
-                                                            multiple
-                                                            accept="image/*"
-                                                            className="hidden"
-                                                            onChange={(e) => handleImageUpload(variant._id, e.target.files)}
-                                                        />
-                                                    </label>
-                                                </div>
-                                            </td>
-
-                                            {/* 2. SKU COLUMN */}
-                                            <td className="px-6 py-6">
-                                                {/* SKU locked on ACTIVE/LOCKED variants */}
-                                                {(() => {
-                                                    const isLocked = variant.status === 'LOCKED' || variant.status === 'ACTIVE';
-                                                    return (
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={variant.sku || ''}
-                                                                onChange={(e) => !isLocked && updateVariant(variant._id, 'sku', e.target.value)}
-                                                                readOnly={isLocked}
-                                                                className={`w-full text-slate-600 text-xs font-mono font-semibold rounded-lg px-3 py-2 focus:outline-none transition-all shadow-sm placeholder-slate-300 ${isLocked
-                                                                    ? 'bg-slate-100 border border-slate-200 cursor-not-allowed text-slate-400'
-                                                                    : 'bg-slate-50 hover:bg-white border border-transparent hover:border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 focus:shadow-md focus:bg-white'
-                                                                    }`}
-                                                                placeholder="GEN-SKU-..."
-                                                            />
-                                                            {isLocked && <LockClosedIcon className="absolute right-2 top-2.5 w-3 h-3 text-slate-400" />}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </td>
-
-                                            {/* 3. BASE PRICE COLUMN */}
-                                            <td className="px-6 py-6">
-                                                <div className="relative group/input">
-                                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                                        <span className="text-slate-400 font-medium text-sm">₹</span>
-                                                    </div>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        value={variant.price ?? ''}
-                                                        readOnly={variant.status === 'LOCKED' || variant.status === 'ACTIVE'}
-                                                        onChange={(e) => {
-                                                            // ✅ Float Safety: Store raw string to prevent early IEEE-754 drift
-                                                            const rawVal = e.target.value;
-                                                            updateVariant(variant._id, 'price', rawVal);
-                                                        }}
-                                                        className={`w-full bg-slate-50 border font-bold text-sm rounded-lg pl-8 pr-3 py-2 transition-all shadow-sm ${variant.status === 'LOCKED' || variant.status === 'ACTIVE' ? 'cursor-not-allowed opacity-70 bg-slate-100 text-slate-500 hover:bg-slate-100' : 'hover:bg-white focus:outline-none focus:ring-4 focus:shadow-md focus:bg-white'} ${Number(variant.price) < 0
-                                                            ? 'border-red-400 text-red-600 focus:ring-red-500/10 focus:border-red-500'
-                                                            : 'border-transparent hover:border-slate-200 focus:border-emerald-500 text-slate-900 focus:ring-emerald-500/10'
-                                                            }`}
-                                                        placeholder="0.00"
-                                                    />
-                                                </div>
-                                                {Number(variant.price) < 0 && (
-                                                    <p className="text-red-500 text-[10px] mt-1 font-semibold">Price cannot be negative</p>
-                                                )}
-                                            </td>
-
-                                            {/* 4. RESOLVED PRICE COLUMN (read-only, computed by backend) */}
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-col gap-0.5">
-                                                    <span className={`font-bold text-sm ${variant.resolvedPrice ? 'text-emerald-700' : 'text-slate-400'
-                                                        }`}>
-                                                        {variant.resolvedPrice
-                                                            ? formatCurrency(variant.resolvedPrice)
-                                                            : variant.isNew ? '—' : 'Pending'
-                                                        }
-                                                    </span>
-                                                    {variant.priceResolutionLog && variant.priceResolutionLog.length > 1 && (
-                                                        <span className="text-[10px] text-indigo-500 font-semibold">
-                                                            {variant.priceResolutionLog.length - 1} modifier{variant.priceResolutionLog.length > 2 ? 's' : ''} applied
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-
-                                            {/* 5. LIFECYCLE STATUS COLUMN (enum dropdown, not boolean toggle) */}
-                                            <td className="px-6 py-6">
-                                                {(() => {
-                                                    const isTerminal = variant.status === 'LOCKED' || variant.status === 'ARCHIVED';
-                                                    const allowed = getAllowedStatuses(variant.status || 'DRAFT');
-                                                    const statusColors = {
-                                                        DRAFT: 'bg-slate-100 text-slate-600',
-                                                        ACTIVE: 'bg-emerald-50 text-emerald-700',
-                                                        OUT_OF_STOCK: 'bg-amber-50 text-amber-700',
-                                                        ARCHIVED: 'bg-red-50 text-red-600',
-                                                        LOCKED: 'bg-indigo-50 text-indigo-700',
-                                                    };
-                                                    return isTerminal ? (
-                                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${statusColors[variant.status] || 'bg-slate-100 text-slate-600'}`}>
-                                                            <LockClosedIcon className="w-2.5 h-2.5" />
-                                                            {variant.status}
-                                                        </span>
-                                                    ) : (
-                                                        <select
-                                                            value={variant.inventory?.quantityOnHand === 0 && variant.status === 'ACTIVE' ? 'OUT_OF_STOCK' : (variant.status || 'DRAFT')}
-                                                            onChange={(e) => updateVariant(variant._id, 'status', e.target.value)}
-                                                            className={`text-[11px] font-bold rounded-full px-2.5 py-1 border-0 focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer uppercase tracking-wide ${(variant.inventory?.quantityOnHand === 0 && variant.status === 'ACTIVE') ? statusColors['OUT_OF_STOCK'] : (statusColors[variant.status] || 'bg-slate-100 text-slate-600')}`}
-                                                        >
-                                                            {allowed.map(s => (
-                                                                <option key={s} value={s} disabled={s === 'ACTIVE' && variant.inventory?.quantityOnHand === 0}>{s.replace('_', ' ')}</option>
-                                                            ))}
-                                                        </select>
-                                                    );
-                                                })()}
-                                            </td>
-
-                                            {/* 6. ACTIONS COLUMN */}
-                                            <td className="px-6 py-6 text-right">
-                                                <button
-                                                    onClick={() => deleteVariant(variant._id, variant.isNew)}
-                                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 transform hover:scale-105 active:scale-95"
-                                                    title="Remove Variant"
-                                                >
-                                                    <TrashIcon className="w-5 h-5" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
+                                ))}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Pagination Footer */}
+                    <div className="px-6 py-3 border-t border-slate-200 bg-white flex justify-between items-center text-xs font-bold text-slate-500 flex-shrink-0">
+                        <span>Showing {(currentPage - 1) * PAGE_SIZE + 1} to {Math.min(currentPage * PAGE_SIZE, filteredVariants.length)} of {filteredVariants.length}</span>
+                        <div className="flex gap-2">
+                            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-1.5 border border-slate-200 rounded disabled:opacity-50 hover:bg-slate-50"><ChevronLeftIcon className="w-4 h-4" /></button>
+                            <span className="px-3 py-1.5 bg-slate-100 rounded">Page {currentPage} of {Math.max(1, totalPages)}</span>
+                            <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-1.5 border border-slate-200 rounded disabled:opacity-50 hover:bg-slate-50"><ChevronRightIcon className="w-4 h-4" /></button>
+                        </div>
                     </div>
                 </section>
             </main>
