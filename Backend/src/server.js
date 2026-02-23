@@ -12,9 +12,13 @@ config({ path: path.join(__dirname, '../.env') });
 const { default: logger } = await import('../config/logger.js');
 const { default: connectDB } = await import('../config/db.js');
 const { default: app } = await import('./app.js');
+const { startReservationWorker } = await import('../jobs/reservationCleanup.js');
 
 // Database Connection
 connectDB();
+
+// Start Background Workers
+startReservationWorker();
 
 const PORT = process.env.PORT || 5000;
 

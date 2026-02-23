@@ -127,6 +127,12 @@ const VariantBuilder = () => {
     }, [productId]);
 
     const fetchAllData = async () => {
+        if (!productId || String(productId).length !== 24) {
+            toast.error('Invalid Product ID');
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             const [prodRes, sizeRes, colorRes, varRes, attrTypeRes, attrValRes] = await Promise.all([
@@ -212,7 +218,9 @@ const VariantBuilder = () => {
                     displayPalette,
                     // Preserve precise decimals
                     price: typeof v.price === 'object' && v.price.$numberDecimal ? v.price.$numberDecimal : v.price?.toString() || "0",
-                    status: (v.status === true || v.status === 'active') ? 'ACTIVE' : v.status
+                    status: (v.status === true || v.status?.toLowerCase() === 'active') ? 'ACTIVE' : v.status,
+                    // Explicitly preserve governance so OCC version is available at save time
+                    governance: v.governance ?? null,
                 };
             });
 
@@ -453,17 +461,33 @@ const VariantBuilder = () => {
                 // Fallback concurrent processing if bulkWrite API doesn't exist yet
                 // Use Promise.all with Catch for safety if legacy
                 let hasConflicts = false;
+                let validationErrors = [];
+
                 await Promise.all(updates.map(update =>
                     variantAPI.update(update.id, update).catch(e => {
-                        if (e?.response?.status === 409) hasConflicts = true;
-                        throw e;
+                        const code = e?.response?.data?.code;
+                        if (code === 'OCC_CONFLICT' || e?.response?.status === 409) {
+                            hasConflicts = true;
+                        } else if (code === 'VALIDATION_ERROR') {
+                            validationErrors.push(e?.response?.data?.message || 'Validation failed');
+                        } else {
+                            throw e;
+                        }
                     })
                 ));
 
-                toast.success(`Updated ${editedItems.length} variant(s)`);
+                if (hasConflicts) {
+                    setPartialCommitWarning(true);
+                    toast.error('Partial commit: Some updates failed due to version conflicts. Reloaded authoritative data.');
+                } else if (validationErrors.length > 0) {
+                    toast.error(`Validation Errors: ${validationErrors[0]}`);
+                } else {
+                    toast.success(`Updated ${editedItems.length} variant(s)`);
+                }
             }
 
-            fetchAllData();
+            // Always refetch entire variant list from backend to prevent partial commit drift
+            await fetchAllData();
         } catch (error) {
             setPartialCommitWarning(true);
             toast.error(error.response?.data?.message || 'Bulk Save Interrupted. Check variants.');
@@ -739,6 +763,7 @@ const VariantBuilder = () => {
                                     <th className="px-6 py-3">Variant</th>
                                     <th className="px-4 py-3 w-40">SKU Ref</th>
                                     <th className="px-4 py-3 w-32">Price</th>
+                                    <th className="px-4 py-3 w-32">Resolved</th>
                                     <th className="px-4 py-3 w-24">Media</th>
                                     <th className="px-4 py-3 w-36">Governance</th>
                                     <th className="px-4 py-3 w-12 text-right"></th>
@@ -766,13 +791,42 @@ const VariantBuilder = () => {
                                             </div>
                                         </td>
                                         <td className="px-4 py-4">
-                                            <input type="text" value={v.sku || ''} readOnly={v.status === 'LOCKED' || v.status === 'ACTIVE'} onChange={e => updateVariant(v._id, 'sku', e.target.value)} className="w-full font-mono text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 focus:bg-white focus:border-indigo-500 outline-none read-only:bg-slate-100 read-only:text-slate-400" />
+                                            <input type="text" value={v.sku || ''} readOnly={v.status === 'LOCKED' || v.status?.toLowerCase() === 'active'} onChange={e => updateVariant(v._id, 'sku', e.target.value)} className="w-full font-mono text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 focus:bg-white focus:border-indigo-500 outline-none read-only:bg-slate-100 read-only:text-slate-400" />
                                         </td>
                                         <td className="px-4 py-4">
                                             <div className="relative">
                                                 <span className="absolute left-2 top-[7px] text-xs font-bold text-slate-400">₹</span>
-                                                <input type="number" step="0.01" value={v.price || ''} readOnly={v.status === 'LOCKED' || v.status === 'ACTIVE'} onChange={e => updateVariant(v._id, 'price', e.target.value)} className={`w-full font-semibold text-sm pl-6 pr-2 py-1.5 border rounded outline-none ${v.status === 'LOCKED' || v.status === 'ACTIVE' ? 'bg-slate-100 border-transparent text-slate-500' : 'bg-white border-slate-200 focus:border-indigo-500'}`} />
+                                                <input type="number" step="0.01" value={v.price || ''} readOnly={v.status === 'LOCKED' || v.status?.toLowerCase() === 'active'} onChange={e => updateVariant(v._id, 'price', e.target.value)} className={`w-full font-semibold text-sm pl-6 pr-2 py-1.5 border rounded outline-none ${v.status === 'LOCKED' || v.status?.toLowerCase() === 'active' ? 'bg-slate-100 border-transparent text-slate-500' : 'bg-white border-slate-200 focus:border-indigo-500'}`} />
                                             </div>
+                                        </td>
+                                        {/* RESOLVED PRICE */}
+                                        <td className="px-4 py-4 relative group">
+                                            {v.resolvedPrice && !v.isNew ? (
+                                                <div className="font-semibold text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5 inline-flex items-center gap-1 cursor-default">
+                                                    <span>₹{parseFloat(v.resolvedPrice?.$numberDecimal || v.resolvedPrice || 0).toFixed(2)}</span>
+                                                    {v.priceResolutionLog?.length > 0 && (
+                                                        <div className="w-4 h-4 rounded-full bg-emerald-200 text-emerald-700 flex items-center justify-center text-[10px] cursor-help">i</div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] uppercase font-bold text-slate-400">Preview</span>
+                                            )}
+                                            {/* TOOLTIP */}
+                                            {v.priceResolutionLog?.length > 0 && !v.isNew && (
+                                                <div className="absolute top-1/2 left-full -translate-y-1/2 ml-2 w-64 bg-slate-800 text-white p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                                                    <div className="font-bold text-xs mb-2 text-slate-300 border-b border-slate-600 pb-1">Price Resolution Log</div>
+                                                    <div className="space-y-1.5 text-xs">
+                                                        {v.priceResolutionLog.map((log, i) => (
+                                                            <div key={i} className="flex justify-between items-center">
+                                                                <span className="text-slate-400 truncate w-32" title={log.source}>
+                                                                    {log.source === 'BASE' ? 'Base Price' : log.modifierType || 'Modifier'}
+                                                                </span>
+                                                                <span className="text-emerald-400 font-mono">+₹{parseFloat(log.appliedAmount?.$numberDecimal || log.appliedAmount || 0).toFixed(2)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-4 py-4">
                                             <button onClick={() => setActiveImageModalVariant(v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 text-[11px] font-bold uppercase tracking-wider rounded-lg shadow-sm">

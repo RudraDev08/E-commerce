@@ -24,92 +24,115 @@ const generateOrderId = async () => {
 // CREATE ORDER
 // --------------------------------------------------------------------------
 export const createOrder = async (req, res) => {
+    const mongoose = (await import('mongoose')).default;
+    const session = await mongoose.startSession();
+
     try {
-        const {
-            items,
-            shippingAddress,
-            paymentMethod,
-            subtotal,
-            tax,
-            total,
-            userId
-        } = req.body;
+        let savedOrder = null;
 
-        // 1. Basic Validation
-        if (!items || items.length === 0) {
-            return res.status(400).json({ success: false, message: "No items in order" });
-        }
+        await session.withTransaction(async () => {
+            const {
+                items,
+                shippingAddress,
+                paymentMethod,
+                userId
+            } = req.body;
 
-        // 2. Validate & Reserve Stock (via Inventory Master)
-        for (const item of items) {
-            if (!item.variantId) {
-                throw new Error(`Variant ID missing for ${item.name}`);
+            // 1. Basic Validation
+            if (!items || !Array.isArray(items) || items.length === 0) {
+                throw { status: 400, message: "No items in order" };
             }
-            const inventory = await inventoryService.getInventoryByVariantId(item.variantId);
-            if (!inventory || inventory.availableStock < item.quantity) {
-                throw new Error(`Insufficient stock for ${item.name}. Available: ${inventory?.availableStock || 0}`);
+
+            const VariantMaster = mongoose.models.VariantMaster || mongoose.model('VariantMaster');
+            const ProductVariant = mongoose.models.ProductVariant || mongoose.model('ProductVariant');
+
+            let serverSubtotal = 0;
+            const processedItems = [];
+
+            // 2. Resolve Pricing & Validate Status
+            for (const item of items) {
+                let dbVariant = await VariantMaster.findById(item.variantId).session(session);
+                if (!dbVariant) dbVariant = await ProductVariant.findById(item.variantId).session(session);
+
+                if (!dbVariant) {
+                    throw { status: 400, message: `Variant ${item.variantId} not found.` };
+                }
+
+                if (dbVariant.status?.toUpperCase() !== 'ACTIVE') {
+                    throw { status: 409, code: 'INSUFFICIENT_STOCK', message: `Item ${dbVariant.sku || 'selected'} is no longer available.` };
+                }
+
+                let truePrice = 0;
+                if (dbVariant.resolvedPrice) truePrice = parseFloat(dbVariant.resolvedPrice.toString());
+                else if (dbVariant.price) truePrice = parseFloat(dbVariant.price.toString());
+
+                const quantity = parseInt(item.quantity, 10);
+                if (isNaN(quantity) || quantity <= 0) throw { status: 400, message: "Invalid quantity" };
+
+                const itemTotal = truePrice * quantity;
+                serverSubtotal += itemTotal;
+
+                processedItems.push({
+                    productId: dbVariant.productGroupId || dbVariant.product,
+                    variantId: dbVariant._id,
+                    productName: dbVariant.name || 'Product',
+                    sku: dbVariant.sku || 'N/A',
+                    variantAttributes: dbVariant.attributes || {},
+                    image: dbVariant.images?.[0]?.url || '',
+                    quantity: quantity,
+                    price: truePrice,
+                    total: itemTotal
+                });
             }
-        }
 
-        // 3. Generate Order ID
-        const orderId = await generateOrderId();
+            const serverTax = parseFloat((serverSubtotal * 0.18).toFixed(2));
+            const serverGrandTotal = serverSubtotal + serverTax;
 
-        // 4. Create Order Object
-        const newOrder = new Order({
-            orderId,
-            customer: userId || "65c3f9b0e4b0a1b2c3d4e5f6", // Mock User ID for guest/dev
-            items: items.map(item => ({
-                productId: item.productId,
-                variantId: item.variantId || null,
-                productName: item.name,
-                sku: item.sku || 'N/A',
-                variantAttributes: item.variant || {},
-                image: item.image,
-                quantity: item.quantity,
-                price: item.price,
-                total: item.price * item.quantity
-            })),
-            shippingAddress: {
-                fullName: shippingAddress.fullName,
-                line1: shippingAddress.address,
-                city: shippingAddress.city,
-                state: shippingAddress.state,
-                zip: shippingAddress.pincode,
-                phone: shippingAddress.phone,
-                country: 'India' // Default
-            },
-            financials: {
-                subtotal: subtotal,
-                taxTotal: tax,
-                grandTotal: total,
-                paymentMethod: paymentMethod,
-                paymentStatus: 'pending'
-            },
-            status: 'pending',
-            timeline: [{
+            // 3. Generate Order ID
+            const orderId = await generateOrderId();
+
+            // 4. Create Order Object
+            const newOrder = new Order({
+                orderId,
+                customer: req.user?._id || userId || "65c3f9b0e4b0a1b2c3d4e5f6",
+                items: processedItems,
+                shippingAddress,
+                financials: {
+                    subtotal: serverSubtotal,
+                    taxTotal: serverTax,
+                    grandTotal: serverGrandTotal,
+                    paymentMethod,
+                    paymentStatus: 'pending'
+                },
                 status: 'pending',
-                note: 'Order placed successfully',
-                user: 'customer'
-            }]
+                timeline: [{ status: 'pending', note: 'Order initiated', user: 'customer' }]
+            });
+
+            // 5. Save Order within Transaction
+            savedOrder = await newOrder.save({ session });
+
+            // 6. ATOMIC STOCK DEDUCTION
+            // This is protected by the transaction. If any deduction fails, whole order rolls back.
+            for (const item of processedItems) {
+                try {
+                    await inventoryService.deductStockForOrder(
+                        item.variantId,
+                        item.quantity,
+                        savedOrder.orderId,
+                        session
+                    );
+                } catch (invError) {
+                    console.error(`[Stock Error] ${invError.message}`);
+                    throw {
+                        status: 409,
+                        code: 'INSUFFICIENT_STOCK',
+                        message: `Stock conflict for ${item.sku}. It may have just sold out.`
+                    };
+                }
+            }
         });
 
-        // 5. Save Order
-        const savedOrder = await newOrder.save();
-
-        // 6. Deduct Stock from Inventory Master
-        for (const item of items) {
-            try {
-                await inventoryService.deductStockForOrder(
-                    item.variantId,
-                    item.quantity,
-                    savedOrder.orderId
-                );
-            } catch (invError) {
-                console.error(`[Order] Failed to deduct inventory for order ${savedOrder.orderId}:`, invError);
-                // In production, you might want to rollback the order creation or flag it
-            }
-        }
-
+        // If we reach here, transaction committed successfully
         res.status(201).json({
             success: true,
             message: "Order placed successfully",
@@ -117,8 +140,15 @@ export const createOrder = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Order Creation Error:", error);
-        res.status(500).json({ success: false, message: error.message });
+        console.error("Order Transaction Error:", error);
+        const status = error.status || 500;
+        res.status(status).json({
+            success: false,
+            code: error.code || 'ORDER_ERROR',
+            message: error.message || "An error occurred during checkout"
+        });
+    } finally {
+        session.endSession();
     }
 };
 
@@ -144,9 +174,14 @@ export const getOrderById = async (req, res) => {
 // --------------------------------------------------------------------------
 export const getMyOrders = async (req, res) => {
     try {
-        // Mock user ID until auth is fully integrated
-        const userId = "65c3f9b0e4b0a1b2c3d4e5f6";
+        // Enforce Authentication
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({ success: false, message: "Unauthorized. Please log in to view your orders." });
+        }
 
+        const userId = req.user._id;
+
+        // Ensure user can only query their OWN orders
         const orders = await Order.find({ customer: userId })
             .sort({ createdAt: -1 });
 

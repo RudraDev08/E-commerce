@@ -33,14 +33,18 @@ const CheckoutPage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (cart.items.length === 0) return;
+        // Double-submission guard — idempotent handler
+        if (loading || cart.items.length === 0) return;
 
         setLoading(true);
         try {
             // Prepare Order Payload
+            // P0: Send only variantId & quantity. Totals are recalculated server-side.
             const orderPayload = {
-                userId: user?._id || null, // Will be null for guests
-                items: cart.items,
+                items: cart.items.map(item => ({
+                    variantId: item.variantId,
+                    quantity: item.quantity
+                })),
                 shippingAddress: {
                     fullName: formData.fullName,
                     email: formData.email,
@@ -50,10 +54,7 @@ const CheckoutPage = () => {
                     state: formData.state,
                     pincode: formData.pincode
                 },
-                paymentMethod: formData.paymentMethod,
-                subtotal: cart.subtotal,
-                tax: cart.tax,
-                total: cart.total
+                paymentMethod: formData.paymentMethod
             };
 
             const response = await createOrder(orderPayload);
@@ -67,7 +68,15 @@ const CheckoutPage = () => {
             }
         } catch (error) {
             console.error("Checkout Error:", error);
-            alert(error.response?.data?.message || "An error occurred while placing your order.");
+
+            // Handle specific 409 conflict code (Insufficient Stock or Price mismatch)
+            const errorCode = error.response?.data?.code || error.code;
+            if (errorCode === 'INSUFFICIENT_STOCK' || error.response?.status === 409) {
+                alert("Stock changed or is insufficient. Please review your cart and try again.");
+                navigate('/cart');
+            } else {
+                alert(error.response?.data?.message || "An error occurred while placing your order.");
+            }
         } finally {
             setLoading(false);
         }
@@ -262,8 +271,11 @@ const CheckoutPage = () => {
                                 type="submit"
                                 form="checkout-form"
                                 className="btn btn-primary btn-lg place-order-btn"
+                                disabled={loading || cart.items.length === 0}
+                                aria-busy={loading}
+                                aria-label={loading ? 'Placing order...' : 'Place Order'}
                             >
-                                Place Order
+                                {loading ? 'Placing Order...' : 'Place Order'}
                             </button>
 
                             <Link to="/cart" className="btn btn-outline" style={{ width: '100%', marginTop: '1rem', textAlign: 'center' }}>

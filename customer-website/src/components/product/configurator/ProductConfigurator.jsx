@@ -194,7 +194,24 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
     }, [resolvedVariant, onVariantChange]);
 
     if (loadingConfig) return <div className="animate-pulse h-20 bg-gray-100 rounded"></div>;
-    if (relevantAttributes.length === 0) return null; // No configurable attributes
+
+    // DEBUG INSTRUMENTATION
+    if (relevantAttributes.length === 0) {
+        console.group('[Configurator Debug]');
+        console.log('Incoming variants length:', variants?.length);
+        console.log('First variant sample:', variants?.[0]);
+        console.log('Attribute Config Source:', attributeTypesConfig);
+        console.groupEnd();
+
+        return (
+            <div style={{ color: 'red', border: '1px solid red', padding: 10, margin: '10px 0', borderRadius: 4 }}>
+                <h4 style={{ margin: '0 0 5px 0' }}>⚠ Configurator Debug</h4>
+                <p style={{ margin: 0, fontSize: 13 }}>Variants received: {variants?.length}</p>
+                <p style={{ margin: 0, fontSize: 13 }}>Relevant Attributes resovled to 0.</p>
+                <p style={{ margin: 0, fontSize: 13 }}>Check Console BSON B-Tree for mismatch.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">

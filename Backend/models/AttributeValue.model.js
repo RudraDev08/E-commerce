@@ -302,12 +302,33 @@ const attributeValueSchema = new mongoose.Schema({
                 type: String,
                 enum: ['fixed', 'percentage']
             },
-            value: Number
+            value: {
+                type: Number,
+                validate: {
+                    validator: function (v) {
+                        if (typeof v !== 'number' || isNaN(v)) return false;
+                        if (this.type === 'percentage') return v >= -100 && v <= 500;
+                        if (this.type === 'fixed') return v >= -1000000 && v <= 1000000;
+                        return true;
+                    },
+                    message: props => `Price modifier value ${props.value} exceeds safe boundaries.`
+                }
+            }
         },
 
         value: {
             type: Number,
-            default: 0
+            default: 0,
+            validate: {
+                validator: function (v) {
+                    if (typeof v !== 'number' || isNaN(v)) return false;
+                    const modType = this.modifierType;
+                    if (modType === 'percentage') return v >= -100 && v <= 500;
+                    if (modType === 'fixed') return v >= -1000000 && v <= 1000000;
+                    return true;
+                },
+                message: props => `Modifier value ${props.value} exceeds safe boundaries.`
+            }
         },
 
         // Advanced Pricing

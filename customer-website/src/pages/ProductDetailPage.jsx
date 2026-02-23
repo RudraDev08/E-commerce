@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import { getProductBySlug } from '../api/productApi';
-import { getVariantsByProduct } from '../api/variantApi';
+import { getVariantsByProduct, getSizes, getColors } from '../api/variantApi';
+import { getAttributeTypes } from '../api/attributeApi';
 import { useCart } from '../context/CartContext';
 import ProductImageGallery from '../components/product/ProductImageGallery';
 import { ProductConfigurator } from '../components/product/configurator/ProductConfigurator';
@@ -78,7 +80,7 @@ const ProductDetailPage = () => {
                 setError(null);
                 const productData = await getProductBySlug(slug);
 
-                if (!productData || productData.status !== 'ACTIVE' || productData.isDeleted) {
+                if (!productData || productData.status?.toLowerCase() !== 'active' || productData.isDeleted) {
                     setError('Product not found');
                     setLoading(false);
                     return;
@@ -87,19 +89,104 @@ const ProductDetailPage = () => {
                 setProduct(productData);
 
                 if (productData._id) {
-                    // ✅ P0: Single Source of Truth — Variant schema now includes inventory
-                    const variantsRes = await getVariantsByProduct(productData._id);
-                    const variantsList = variantsRes.data?.data || variantsRes.data || [];
+                    // ✅ Robust ObjectId format guard (regex is safer than .length)
+                    if (!/^[a-f\d]{24}$/i.test(String(productData._id))) {
+                        setError('Invalid product ID format');
+                        setLoading(false);
+                        return;
+                    }
 
-                    const activeVariants = variantsList
-                        .filter(v => v.status === 'ACTIVE' && !v.isDeleted) // ✅ Strict Enum Check
-                        .map(v => ({
-                            ...v,
-                            // ✅ Map canonical inventory path
-                            stock: v.inventory?.quantityOnHand ?? 0,
-                        }));
+                    // ✅ Co-fetch all lookup data in parallel with variants
+                    const [variantsRes, sizesRes, colorsRes, attrTypesRes] = await Promise.all([
+                        getVariantsByProduct(productData._id),
+                        getSizes(),
+                        getColors(),
+                        getAttributeTypes(),
+                    ]);
 
-                    setVariants(activeVariants);
+                    // STEP 1 — VERIFY RAW API RESPONSE
+                    console.group('[Variant Debug — API]');
+                    console.log('Raw variantsRes:', variantsRes);
+                    console.log('variantsRes.data:', variantsRes?.data);
+                    console.log('variantsRes.data?.data:', variantsRes?.data?.data);
+                    console.groupEnd();
+
+                    // ── Unwrap API responses (Axios interceptor already strips one .data layer)
+                    const raw = variantsRes?.data?.data ?? variantsRes?.data ?? variantsRes ?? [];
+                    const variantsList = Array.isArray(raw) ? raw : [];
+
+                    // STEP 2 — VERIFY UNWRAPPED ARRAY
+                    console.group('[Variant Debug — Unwrapped]');
+                    console.log('raw value:', raw);
+                    console.log('Is array?', Array.isArray(raw));
+                    console.log('variantsList length:', variantsList.length);
+                    console.groupEnd();
+
+                    const sizesRaw = sizesRes?.data?.data ?? sizesRes?.data ?? [];
+                    const colorsRaw = colorsRes?.data?.data ?? colorsRes?.data ?? [];
+                    const attrsRaw = attrTypesRes?.data?.data ?? attrTypesRes?.data ?? [];
+
+                    // ── Build O(1) lookup maps — never mutate originals
+                    const sizeMap = Object.fromEntries(
+                        (Array.isArray(sizesRaw) ? sizesRaw : []).map(s => [String(s._id), s])
+                    );
+                    const colorMap = Object.fromEntries(
+                        (Array.isArray(colorsRaw) ? colorsRaw : []).map(c => [String(c._id), c])
+                    );
+                    const attrMap = Object.fromEntries(
+                        (Array.isArray(attrsRaw) ? attrsRaw : []).map(a => [String(a._id), a])
+                    );
+
+                    // ── Transformation layer: hydrate relational IDs → populated objects
+                    // Does NOT mutate original objects (spread into new objects)
+
+                    // STEP 3 — VERIFY STATUS FILTER IMPACT
+                    console.group('[Variant Debug — Before Filter]');
+                    console.log('variantsList sample:', variantsList.map(v => ({ id: v._id, status: v.status, isDeleted: v.isDeleted })));
+                    console.groupEnd();
+
+                    const filteredVariants = variantsList
+                        .filter(v => {
+                            const normalizedStatus = String(v.status || '').trim().toLowerCase();
+                            const notDeleted = v.isDeleted !== true;
+                            // Fallback to true if field is missing/undefined, assuming Active
+                            return (normalizedStatus === 'active' || normalizedStatus === '') && notDeleted;
+                        });
+
+                    console.group('[Variant Debug — After Filter]');
+                    console.log('Filtered count:', filteredVariants.length);
+                    console.groupEnd();
+
+                    const mappedVariants = filteredVariants.map(v => ({
+                        ...v,
+                        // Hydrate size: prefer already-populated object, fall back to lookup
+                        size: (v.size && typeof v.size === 'object')
+                            ? v.size
+                            : (v.sizeId ? sizeMap[String(v.sizeId)] ?? null : null),
+                        // Hydrate color: prefer already-populated object, fall back to lookup
+                        color: (v.color && typeof v.color === 'object')
+                            ? v.color
+                            : (v.colorId ? colorMap[String(v.colorId)] ?? null : null),
+                        // Hydrate attributeValueIds → resolved attribute objects
+                        attributes: Array.isArray(v.attributeValueIds)
+                            ? v.attributeValueIds
+                                .map(id => attrMap[String(id)] ?? null)
+                                .filter(Boolean)   // drop any unresolved IDs safely
+                            : (Array.isArray(v.attributes) ? v.attributes : []),
+                        // ✅ Canonical inventory mapping — preserved from original logic
+                        stock: v.inventory?.quantityOnHand ?? v.stock ?? 0,
+                        // ✅ resolvedPrice is preserved via spread — never overwritten
+                    }));
+
+                    // STEP 4 — VERIFY HYDRATION MAP
+                    console.group('[Variant Debug — Hydrated]');
+                    console.log('Mapped variants count:', mappedVariants.length);
+                    console.log('Sample mapped variant:', mappedVariants[0]);
+                    console.groupEnd();
+
+                    // STEP 5 — VERIFY STATE SETTING
+                    console.log('[Variant Debug] About to set variants:', mappedVariants.length);
+                    setVariants(mappedVariants);
                 }
             } catch (err) {
                 console.error('Error fetching product:', err);
@@ -176,7 +263,7 @@ const ProductDetailPage = () => {
     const alternatives = useMemo(() => {
         if (!selectedVariant || (selectedVariant.stock ?? 0) > 0) return [];
         // ✅ P0: Lifecycle bypass prevention — alternatives must also be ACTIVE
-        return variants.filter(v => v.status === 'ACTIVE' && v.stock > 0 && v._id !== selectedVariant._id).slice(0, 3);
+        return variants.filter(v => v.status?.toLowerCase() === 'active' && v.stock > 0 && v._id !== selectedVariant._id).slice(0, 3);
     }, [selectedVariant, variants]);
 
     // ✅ P2: Quantity Reset Hardening — Sync quantity with selected variant's availability
@@ -193,6 +280,13 @@ const ProductDetailPage = () => {
             selectorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
+
+        // ✅ P1: Financial Integrity — Block null/undefined prices before they reach the cart
+        if (selectedVariant.resolvedPrice === null || selectedVariant.resolvedPrice === undefined) {
+            showToast('Price unavailable. Please reselect variant.', 'error');
+            return;
+        }
+
         if ((selectedVariant.stock ?? 0) <= 0) {
             showToast('We\'ll notify you when this item is back in stock.', 'info');
             return;
@@ -210,7 +304,7 @@ const ProductDetailPage = () => {
                 return;
             }
 
-            const clientPrice = selectedVariant.resolvedPrice?.toString() || currentPrice?.toString();
+            const clientPrice = selectedVariant.resolvedPrice?.toString();
             const authoritativePrice = authoritativeVariant.resolvedPrice?.toString();
 
             if (clientPrice !== authoritativePrice) {
@@ -225,8 +319,8 @@ const ProductDetailPage = () => {
                 productId: product._id,
                 name: product.name,
                 sku: selectedVariant.sku,
-                // ✅ P1: Financial Safety — Send price as STRING to prevent float drift
-                price: selectedVariant.resolvedPrice?.toString() || currentPrice?.toString(),
+                // ✅ P1: Guaranteed Float Enforcement — Convert to Number as requested
+                price: Number(selectedVariant.resolvedPrice),
                 currency: selectedVariant.currency || product.currency || 'INR',
                 quantity,
                 // ✅ P0: Structured Identity — Remove legacy flat attributes object
@@ -257,7 +351,12 @@ const ProductDetailPage = () => {
                     <div className="tab-pane fade-in">
                         <div
                             className="description-content"
-                            dangerouslySetInnerHTML={{ __html: product.description || '<p>No description available.</p>' }}
+                            dangerouslySetInnerHTML={{
+                                __html: DOMPurify.sanitize(product.description || '', {
+                                    ALLOWED_TAGS: ['p', 'br', 'b', 'i', 'strong', 'em', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote'],
+                                    ALLOWED_ATTR: [],  // Strip ALL attributes — no style, href, src, on*
+                                })
+                            }}
                         />
                     </div>
                 );

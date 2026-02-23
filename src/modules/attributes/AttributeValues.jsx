@@ -62,7 +62,7 @@ const AttributeValues = () => {
         loading
     } = useAttributes();
 
-    const [newValue, setNewValue] = useState({ name: '', value: '', code: '' });
+    const [newValue, setNewValue] = useState({ name: '', value: '', code: '', modifierType: 'none', modifierValue: '' });
 
     useEffect(() => {
         if (id) {
@@ -76,11 +76,15 @@ const AttributeValues = () => {
         try {
             await createAttributeValue({
                 ...newValue,
+                pricingModifiers: {
+                    modifierType: newValue.modifierType,
+                    value: newValue.modifierType === 'none' ? 0 : parseFloat(newValue.modifierValue || 0)
+                },
                 attributeType: id,
                 code: newValue.code || newValue.name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10),
                 slug: newValue.name.toLowerCase().replace(/[^a-z0-9]/g, '-')
             });
-            setNewValue({ name: '', value: '', code: '' });
+            setNewValue({ name: '', value: '', code: '', modifierType: 'none', modifierValue: '' });
             fetchAttributeValues(id);
         } catch (error) {
             console.error(error);
@@ -158,9 +162,36 @@ const AttributeValues = () => {
                                     type="text"
                                     value={newValue.code}
                                     onChange={(e) => setNewValue({ ...newValue, code: e.target.value.toUpperCase() })}
-                                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 uppercase"
+                                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold text-slate-900 uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                                     placeholder="Auto-generated if empty"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">Pricing Modifier</label>
+                                <select
+                                    value={newValue.modifierType}
+                                    onChange={(e) => setNewValue({ ...newValue, modifierType: e.target.value })}
+                                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 mb-3"
+                                >
+                                    <option value="none">None</option>
+                                    <option value="fixed">Fixed Amount (₹)</option>
+                                    <option value="percentage">Percentage (%)</option>
+                                </select>
+
+                                {newValue.modifierType !== 'none' && (
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min={newValue.modifierType === 'percentage' ? -100 : -1000000}
+                                        max={newValue.modifierType === 'percentage' ? 500 : 1000000}
+                                        value={newValue.modifierValue}
+                                        onChange={(e) => setNewValue({ ...newValue, modifierValue: e.target.value })}
+                                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                        placeholder={newValue.modifierType === 'fixed' ? 'e.g. 500' : 'e.g. 10'}
+                                        required
+                                    />
+                                )}
                             </div>
 
                             <button
@@ -205,7 +236,12 @@ const AttributeValues = () => {
                                                             style={{ backgroundColor: val.value }}
                                                         />
                                                     )}
-                                                    <span className="font-bold text-slate-700">{val.name}</span>
+                                                    <span className="font-bold text-slate-700 mt-0.5">{val.name}</span>
+                                                    {val.pricingModifiers && val.pricingModifiers.modifierType !== 'none' && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                                            {val.pricingModifiers.modifierType === 'fixed' ? '+₹' : '+'}{val.pricingModifiers.value}{val.pricingModifiers.modifierType === 'percentage' ? '%' : ''}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3 font-mono text-sm text-slate-500">{val.code}</td>

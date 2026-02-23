@@ -43,6 +43,39 @@ const ProductListingPage = () => {
         updateURL();
     }, [filters, sortBy, currentPage]);
 
+    const normalizeDiscoveryFilters = (rawData) => {
+        if (!rawData) return [];
+
+        // Strategy 1: Already in the legacy array format
+        if (Array.isArray(rawData)) {
+            // Ensure we strictly only return objects where values is an array
+            return rawData.filter(item => Array.isArray(item.values));
+        }
+
+        // Strategy 2: New grouped Object format { colors: [], sizes: [] }
+        if (typeof rawData === 'object') {
+            const normalized = [];
+            for (const [key, values] of Object.entries(rawData)) {
+
+                // Only map keys where the API provided an actual array of values
+                if (Array.isArray(values) && values.length > 0) {
+                    normalized.push({
+                        attributeType: {
+                            _id: `dynamic-${key}`,
+                            slug: key,
+                            name: key.charAt(0).toUpperCase() + key.slice(1)
+                        },
+                        values: values
+                    });
+                }
+            }
+            return normalized;
+        }
+
+        // Strategy 3: Complete fallback (string, number, boolean)
+        return [];
+    };
+
     const loadFiltersData = async () => {
         try {
             // Context for Discovery
@@ -67,13 +100,11 @@ const ProductListingPage = () => {
             if (!Array.isArray(brandsData)) brandsData = [];
             setBrands(brandsData);
 
-            // Ensure dynamicFilters is strictly an array
-            let dynamicFilters = discoveryRes.data?.data || discoveryRes.data || [];
-            if (!Array.isArray(dynamicFilters)) {
-                console.warn('Received non-array data for dynamic filters:', dynamicFilters);
-                dynamicFilters = [];
-            }
-            setAttributeTypes(dynamicFilters);
+            // 🔧 FIX: Safely normalize dynamic filters
+            // Using nullish coalescing operator strictly as requested
+            const rawDynamicFilters = discoveryRes.data?.data ?? discoveryRes.data ?? {};
+            const normalizedFilters = normalizeDiscoveryFilters(rawDynamicFilters);
+            setAttributeTypes(normalizedFilters);
 
         } catch (error) {
             console.error('Error loading filters:', error);

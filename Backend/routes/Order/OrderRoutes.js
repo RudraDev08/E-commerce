@@ -5,18 +5,17 @@ import {
     getMyOrders
 } from '../../controllers/Order/OrderController.js';
 
-// Middleware for auth can be added later
-
+import { protect } from '../../middlewares/auth.middleware.js';
 
 const router = express.flatten ? express.Router() : express.Router();
 
-// Create Order (Public/Protected)
-router.post('/', createOrder);
+// Create Order (Requires Auth to link to user safely without blind mocking)
+router.post('/', protect, createOrder);
 
 // Get My Orders
-router.get('/my-orders', getMyOrders);
+router.get('/my-orders', protect, getMyOrders);
 
 // Get Single Order
-router.get('/:orderId', getOrderById);
+router.get('/:orderId', protect, getOrderById);
 
 export default router;

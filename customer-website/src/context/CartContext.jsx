@@ -15,14 +15,30 @@ export const CartProvider = ({ children }) => {
     const [cart, setCart] = useState({ items: [], subtotal: 0, tax: 0, total: 0 });
     const [isCartOpen, setIsCartOpen] = useState(false);
 
-    // Load cart from localStorage on mount
+    // Load cart from localStorage on mount with strict schema validation
     useEffect(() => {
         const savedCart = localStorage.getItem(STORAGE_KEYS.CART);
         if (savedCart) {
             try {
-                setCart(JSON.parse(savedCart));
+                const parsed = JSON.parse(savedCart);
+
+                // Strict schema validation — never trust raw localStorage shape
+                const isValid =
+                    parsed !== null &&
+                    typeof parsed === 'object' &&
+                    Array.isArray(parsed.items);
+
+                if (isValid) {
+                    setCart(parsed);
+                } else {
+                    // Malformed schema detected — silently reset to prevent crashes
+                    console.warn('[Cart] LocalStorage schema invalid. Resetting cart.');
+                    localStorage.removeItem(STORAGE_KEYS.CART);
+                }
             } catch (error) {
-                console.error('Error loading cart:', error);
+                // JSON.parse failure — corrupted data, clear it
+                console.error('[Cart] LocalStorage parse failed. Clearing.', error);
+                localStorage.removeItem(STORAGE_KEYS.CART);
             }
         }
     }, []);
@@ -34,7 +50,13 @@ export const CartProvider = ({ children }) => {
 
     // Calculate totals
     const calculateTotals = (items) => {
-        const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const subtotal = items.reduce((sum, item) => {
+            const price = parseFloat(item.price);
+            if (isNaN(price)) {
+                throw new Error(`Invalid price detected for item: ${item.name}`);
+            }
+            return sum + (price * item.quantity);
+        }, 0);
         const tax = subtotal * 0.18; // 18% GST/Tax
         const total = subtotal + tax;
         return { subtotal, tax, total };

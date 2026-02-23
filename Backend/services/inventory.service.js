@@ -312,12 +312,12 @@ class InventoryService {
   // 3. AUTOMATED OPERATIONS (Order Flow)
   // ========================================================================
 
-  async deductStockForOrder(variantId, quantity, orderId) {
+  async deductStockForOrder(variantId, quantity, orderId, session = null) {
     try {
-      const inventory = await this._getOrCreateInventory(variantId);
+      const inventory = await this._getOrCreateInventory(variantId, session);
 
       if (inventory.totalStock < quantity) {
-        throw new Error(`Insufficient stock. Available: ${inventory.totalStock}, Required: ${quantity}`);
+        throw new Error(`Insufficient stock for variant ${variantId}. Available: ${inventory.totalStock}, Required: ${quantity}`);
       }
 
       const stockBefore = { total: inventory.totalStock, reserved: inventory.reservedStock, available: inventory.totalStock - inventory.reservedStock };
@@ -331,7 +331,7 @@ class InventoryService {
           },
           $set: { lastUpdated: new Date() }
         },
-        { new: true }
+        { new: true, session }
       );
 
       if (!updatedInventory) throw new Error('Stock deduction failed (Concurrent update or insufficient stock)');
@@ -351,7 +351,7 @@ class InventoryService {
         performedBy: 'SYSTEM',
         referenceType: 'ORDER',
         referenceId: orderId
-      });
+      }, session);
 
       return updatedInventory;
     } catch (error) {
