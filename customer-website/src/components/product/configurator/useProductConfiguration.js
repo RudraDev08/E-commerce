@@ -11,20 +11,22 @@ const subtle = globalThis.crypto?.subtle;
  * Returns a HEX string identical to the server-generated hash.
  */
 async function generateConfigHashClient({ productGroupId, sizeId, colorId, attributeValueIds = [] }) {
-    if (!productGroupId || !sizeId || !colorId) return null;
+    if (!productGroupId) return null;
     if (!subtle) return null; // Web Crypto not available (SSR / very old browser)
+
+    const resolvedSizeIds = sizeId ? [String(sizeId)] : []; // fallback single size
 
     const sortedAttrs = [...attributeValueIds]
         .map(id => String(id))
-        .sort()
-        .join('|');
+        .filter(Boolean)
+        .sort();
 
     const raw = [
         String(productGroupId),
-        String(sizeId),
-        String(colorId),
-        sortedAttrs,
-    ].join(':');
+        resolvedSizeIds.join(','),        // '' if no sizes
+        colorId ? String(colorId) : '',   // '' if no color
+        sortedAttrs.join('|'),            // '' if no attributes
+    ].join('::');
 
     const encoded = new TextEncoder().encode(raw);
     const hashBuffer = await subtle.digest('SHA-256', encoded);
@@ -99,55 +101,56 @@ export const useProductConfiguration = (variants = [], attributeTypes = [], init
             const selectedSize = selectedAttributes['size'];
             const selectedColor = selectedAttributes['color'];
 
-            // Try deterministic O(1) hash path first
-            if (selectedSize && selectedColor) {
-                // Find the variant whose size/color match the selection to get their _ids
-                const sizeVariant = variants.find(v =>
-                    (v.size?.displayName || v.size?.value || v.size?.name) === selectedSize
-                );
-                const colorVariant = variants.find(v =>
-                    (v.color?.name || v.color?.displayName) === selectedColor
-                );
+            // ── Extract IDs for any selected dimensions ───────────────────────
+            const pgId = variants[0]?.productGroupId;
+            let sizeId = null;
+            let colorId = null;
+            const attrValueIds = [];
 
-                const sizeId = sizeVariant?.size?._id;
-                const colorId = colorVariant?.color?._id;
-                const pgId = variants[0]?.productGroupId;
-
-                // Collect attributeValueIds from other selections (non-size, non-color)
-                const attrValueIds = attributeTypes
-                    .filter(t => t.slug !== 'size' && t.slug !== 'color' && selectedAttributes[t.slug])
-                    .map(t => {
-                        // Find the attribute value _id for this slug/value
-                        const v = variants.find(vr =>
-                            (vr.attributes || []).some(a =>
-                                (a.type || a.attributeType?.name) === t.name &&
-                                a.value === selectedAttributes[t.slug]
-                            )
-                        );
-                        if (!v) return null;
-                        const matchAttr = (v.attributes || []).find(a =>
-                            (a.type || a.attributeType?.name) === t.name &&
-                            a.value === selectedAttributes[t.slug]
-                        );
-                        return matchAttr?._id || null;
-                    })
-                    .filter(Boolean);
-
-                if (sizeId && colorId && pgId) {
-                    try {
-                        const hash = await generateConfigHashClient({
-                            productGroupId: pgId,
-                            sizeId,
-                            colorId,
-                            attributeValueIds: attrValueIds,
-                        });
-                        if (hash && variantHashMap[hash]) {
-                            setResolvedVariant(variantHashMap[hash]);
-                            return;
-                        }
-                    } catch (_) {
-                        // Fall through to loop-based
+            // Helper to find the _id of a selected value across all variants
+            const findValueId = (slugOrValue, isSize, isColor, attrName) => {
+                for (let v of variants) {
+                    if (isSize && (v.size?.displayName === slugOrValue || v.size?.value === slugOrValue || v.size?.name === slugOrValue)) return v.size?._id;
+                    if (isColor && (v.color?.name === slugOrValue || v.color?.displayName === slugOrValue)) return v.color?._id;
+                    if (attrName) {
+                        const match = (v.attributes || []).find(a => (a.type || a.attributeType?.name) === attrName && a.value === slugOrValue);
+                        if (match) return match._id;
                     }
+                }
+                return null;
+            };
+
+            // Map size and color if they're part of the configuration
+            if (selectedAttributes['size']) {
+                sizeId = findValueId(selectedAttributes['size'], true, false, null);
+            }
+            if (selectedAttributes['color']) {
+                colorId = findValueId(selectedAttributes['color'], false, true, null);
+            }
+
+            // Map custom attributes
+            attributeTypes.forEach(t => {
+                if (t.slug !== 'size' && t.slug !== 'color' && selectedAttributes[t.slug]) {
+                    const id = findValueId(selectedAttributes[t.slug], false, false, t.name);
+                    if (id) attrValueIds.push(id);
+                }
+            });
+
+            // If we have a product group ID, attempt O(1) hash lookup
+            if (pgId) {
+                try {
+                    const hash = await generateConfigHashClient({
+                        productGroupId: pgId,
+                        sizeId,
+                        colorId,
+                        attributeValueIds: attrValueIds,
+                    });
+                    if (hash && variantHashMap[hash]) {
+                        setResolvedVariant(variantHashMap[hash]);
+                        return;
+                    }
+                } catch (_) {
+                    // Fall through to loop-based
                 }
             }
 

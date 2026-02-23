@@ -26,7 +26,20 @@ const productGroupSchema = new mongoose.Schema({
         type: String,
         enum: ['DRAFT', 'ACTIVE', 'ARCHIVED'],
         default: 'DRAFT'
-    }
+    },
+
+    // ── CATEGORY REFERENCE ─────────────────────────────────────────────────────
+    // REQUIRED for category-scope attribute validation.
+    // Every ProductGroup MUST belong to exactly one Category so that the
+    // system can enforce: "only attributes assigned to this category are allowed."
+    categoryId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Category',
+        index: true,
+        // Not strictly required to avoid breaking existing data, but should be
+        // enforced on new records (add `required: true` once migrated).
+    },
+
 }, {
     timestamps: true,
     optimisticConcurrency: true

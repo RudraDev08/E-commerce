@@ -1,6 +1,17 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 import Decimal from 'decimal.js';
+import { generateConfigHash, sortAttributeValueIds } from '../../utils/configHash.util.js';
+
+// Lazy import to avoid circular dependency — resolved at hook execution time
+let _assertCategoryScope = null;
+async function getCategoryScopeFn() {
+    if (!_assertCategoryScope) {
+        const mod = await import('../middlewares/categoryScope.middleware.js');
+        _assertCategoryScope = mod.assertCategoryScope;
+    }
+    return _assertCategoryScope;
+}
 
 /**
  * VARIANT MASTER — REFACTORED ENTERPRISE SCHEMA
@@ -73,7 +84,15 @@ const variantMasterSchema = new mongoose.Schema(
         colorId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'ColorMaster',
-            required: [true, 'colorId is required']
+            required: [function () {
+                // colorId is required ONLY for standard (non-colorway) variants
+                return !this.colorwayName;
+            }, 'colorId is required for non-colorway variants']
+        },
+
+        colorwayName: {
+            type: String,
+            default: null
         },
 
         // Zero-to-many attribute values (processor, material, RAM capacity, etc.)
@@ -83,6 +102,19 @@ const variantMasterSchema = new mongoose.Schema(
                 ref: 'AttributeValue',
             },
         ],
+
+        // ── SECTION 6: Persisted structured dimension metadata ──────────────┄
+        // This replaces runtime reconstruction from populated attributeValueIds.
+        // Frozen at creation time — rename of attributeType does NOT update here.
+        // Format mirrors frontend buildIdentityKeyFromVariant expectations.
+        attributeDimensions: [{
+            attributeId: { type: mongoose.Schema.Types.ObjectId, default: null },
+            attributeName: { type: String, default: null },  // historic snapshot
+            valueId: { type: mongoose.Schema.Types.ObjectId, required: true },
+        }],
+
+        // ── SECTION 10: Generation audit reference ──────────────────────────
+        generationBatchId: { type: String, default: null },  // audit log correlation
 
         // ═══════════════════════════════════════════════
         // PRICING
@@ -317,19 +349,20 @@ variantMasterSchema.pre('validate', function () {
  * Prevent mapping unrelated attributes to variants
  */
 variantMasterSchema.pre('save', async function () {
+    // [STEP 1 — FIXED] Category-Scope Validation
+    // The previous implementation was a dead no-op: it checked
+    // `v.attributeType.applicableTo` and `this.productGroupType` — neither
+    // field exists on the respective schemas, so `invalid` was always [].
+    //
+    // The correct path is:
+    //   this.productGroupId → ProductGroup.categoryId → CategoryAttribute → allowedTypeIds
+    //   Then verify each attributeValueId's .attributeType is in allowedTypeIds.
     if (this.attributeValueIds && this.attributeValueIds.length > 0) {
-        const values = await mongoose.model('AttributeValue').find({
-            _id: { $in: this.attributeValueIds }
-        }).populate('attributeType').lean();
-
-        // Ensure values belong to categories applicable to product.
-        const invalid = values.filter(v =>
-            v.attributeType && v.attributeType.applicableTo && this.productGroupType && !v.attributeType.applicableTo.includes(this.productGroupType)
+        const assertScope = await getCategoryScopeFn();
+        await assertScope(
+            this.productGroupId?.toString(),
+            this.attributeValueIds.map(id => id.toString())
         );
-
-        if (invalid.length > 0) {
-            throw new Error(`Invalid attribute scope: ${invalid.map(v => v.value || v.name).join(', ')}`);
-        }
     }
 });
 
@@ -341,29 +374,19 @@ variantMasterSchema.pre('save', function () {
     if (this.isModified('productGroupId') ||
         this.isModified('sizes') ||
         this.isModified('colorId') ||
-        this.isModified('attributeValueIds')) {
+        this.isModified('attributeValueIds') ||
+        this.isModified('attributeDimensions')) {
 
-        let deduped = [];
         if (this.attributeValueIds && this.attributeValueIds.length > 0) {
-            deduped = [...new Set(
-                this.attributeValueIds.map(id => id.toString())
-            )].sort();
-            this.attributeValueIds = deduped; // Assign back the deduplicated valid array
+            this.attributeValueIds = sortAttributeValueIds(this.attributeValueIds);
         }
 
-        const sizeStrings = (this.sizes || []).map(s => `${s.category}:${s.sizeId.toString()}`).sort();
-
-        const parts = [
-            this.productGroupId?.toString() || '',
-            ...sizeStrings,
-            this.colorId?.toString() || '',
-            ...deduped
-        ].join('|');
-
-        this.configHash = crypto
-            .createHash('sha256')
-            .update(parts)
-            .digest('hex');
+        this.configHash = generateConfigHash({
+            productGroupId: this.productGroupId,
+            colorId: this.colorId,
+            sizes: this.sizes,
+            attributeValueIds: this.attributeValueIds
+        });
     }
 });
 
@@ -513,9 +536,9 @@ variantMasterSchema.pre('save', async function () {
     const original = await mongoose.model('VariantMaster').findById(this._id).lean();
     if (!original) return;
 
-    // 4. ACTIVE Lock Enforcement
+    // 4. ACTIVE Lock Enforcement — includes attributeDimensions (SECTION 7)
     if (original.status === 'ACTIVE') {
-        const lockedFields = ['sizes', 'colorId', 'attributeValueIds', 'productGroupId', 'configHash'];
+        const lockedFields = ['sizes', 'colorId', 'attributeValueIds', 'attributeDimensions', 'productGroupId', 'configHash'];
         for (const field of lockedFields) {
             if (this.isModified(field)) {
                 throw new Error(`Cannot modify '${field}' on an ACTIVE variant. Archive and recreate.`);
@@ -556,8 +579,8 @@ variantMasterSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], async f
         update.$set['governance.isLocked'] = true;
     }
 
-    // 3. Dot-Notation Deep Identity Mutation Scan (P0)
-    const identityFields = ['sizes', 'colorId', 'productGroupId', 'configHash', 'attributeValueIds'];
+    // 3. Dot-Notation Deep Identity Mutation Scan (P0) — SECTION 7 immutability enforcement
+    const identityFields = ['sizes', 'colorId', 'productGroupId', 'configHash', 'attributeValueIds', 'attributeDimensions'];
     let identityModified = false;
 
     const mutateOps = [update.$set, update.$unset, update.$push, update.$addToSet, update.$pull, update];

@@ -69,6 +69,16 @@ export const variantAPI = {
     getLowStock: () => api.get('/variants/low-stock'),
 };
 
+// V2 N-Dimensional Cartesian Engine APIs
+export const variantDimensionAPI = {
+    /** Dry-run preview — no writes, returns full combination list */
+    preview: (data) => api.post('/variants/v2/preview-dimensions', data),
+    /** Write path — generates + persists all combinations */
+    generate: (data) => api.post('/variants/v2/generate-dimensions', data),
+    /** Pure in-process diff between two dimension workspaces */
+    diff: (data) => api.post('/variants/v2/diff-dimensions', data),
+};
+
 // Inventory APIs
 export const inventoryAPI = {
     getAll: (params) => api.get('/inventory', { params }),

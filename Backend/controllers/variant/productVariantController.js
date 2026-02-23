@@ -3,79 +3,98 @@ import VariantMaster from "../../models/masters/VariantMaster.enterprise.js";
 import inventoryService from "../../services/inventory.service.js";
 import mongoose from "mongoose";
 
-/* CREATE */
-/* CREATE (Supports Bulk & Single) */
+/* CREATE — Enterprise bulk (VariantMaster) or legacy single (ProductVariant) */
 export const createVariant = async (req, res) => {
   try {
-    // CHECK FOR BULK MODE
+    // ── BULK MODE: Enterprise payload from VariantBuilder ────────────────────
     if (req.body.variants && Array.isArray(req.body.variants)) {
-      const { productId, variants } = req.body;
-      if (!productId) {
-        return res.status(400).json({ success: false, message: "productId is required for bulk creation" });
+      const { productId, productGroupId, variants } = req.body;
+
+      // Accept either productGroupId (enterprise) or productId (legacy) for the group key
+      const groupId = productGroupId || productId;
+      if (!groupId) {
+        return res.status(400).json({
+          success: false,
+          message: 'productGroupId is required for bulk creation.'
+        });
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(groupId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid productGroupId format.'
+        });
       }
 
       const createdVariants = [];
-      const stats = { created: 0, skipped: 0 };
+      const stats = { created: 0, skipped: 0, errors: [] };
 
-      // Process sequentially to handle errors gracefully (or Promise.all for speed)
       for (const vData of variants) {
-        // Check for duplicates
-        const exists = await ProductVariant.findOne({ sku: vData.sku });
-        if (exists) {
-          stats.skipped++;
-          continue;
+        try {
+          // Skip duplicates by SKU (check in VariantMaster)
+          const exists = await VariantMaster.findOne({ sku: vData.sku }).lean();
+          if (exists) {
+            stats.skipped++;
+            continue;
+          }
+
+          // Extract sizeId correctly from enterprise sizes array
+          const primarySize = Array.isArray(vData.sizes) ? vData.sizes[0] : null;
+          const sizeId = primarySize?.sizeId || vData.sizeId || null;
+
+          // Build enterprise VariantMaster payload
+          const variantPayload = {
+            productGroupId: groupId,
+            sku: vData.sku,
+            price: vData.price,
+            status: vData.status || 'DRAFT',
+            // Enterprise size structure
+            sizes: Array.isArray(vData.sizes) ? vData.sizes : (sizeId ? [{ sizeId, category: 'DIMENSION' }] : []),
+            // Color: single colorId or colorway
+            colorId: vData.colorId || null,
+            colorwayName: vData.colorwayName || null,
+            colorParts: vData.colorParts || [],
+            // Attributes
+            attributeValueIds: vData.attributeValueIds || [],
+            // Media
+            imageGallery: vData.imageGallery || [],
+            // Legacy attributes mirror for search
+            attributes: vData.attributes || {}
+          };
+
+          const newVariant = await VariantMaster.create(variantPayload);
+          createdVariants.push(newVariant);
+          stats.created++;
+
+        } catch (itemErr) {
+          // Capture per-item errors without aborting the whole batch
+          const msg = itemErr.name === 'ValidationError'
+            ? Object.values(itemErr.errors).map(e => e.message).join(', ')
+            : itemErr.message;
+          stats.errors.push({ sku: vData.sku, error: msg });
+          console.error(`[createVariant] Bulk item error (SKU: ${vData.sku}):`, msg);
         }
-
-        // Prepare Data
-        const variantPayload = {
-          product: productId,
-          sku: vData.sku,
-          size: vData.sizeId || vData.size, // Handle both ID formats
-          color: vData.colorId || vData.color,
-          price: vData.price,
-          status: vData.status,
-
-          // Colorway Fields
-          colorwayName: vData.colorwayName,
-          colorParts: vData.colorParts, // Array of IDs
-
-          // Defaults
-          mrp: vData.mrp || 0,
-          isDefault: false,
-          images: vData.images || []
-        };
-
-        const newVariant = await ProductVariant.create(variantPayload);
-
-        // Auto-Initialize Inventory
-        await inventoryService.initializeInventory(newVariant._id);
-
-        createdVariants.push(newVariant);
-        stats.created++;
       }
 
       return res.status(201).json({
         success: true,
-        message: `Processed ${variants.length} items`,
+        message: `Processed ${variants.length} variants: ${stats.created} created, ${stats.skipped} skipped.`,
         stats,
         data: createdVariants
       });
     }
 
-    // SINGLE MODE (Legacy Support)
-    // 1. Destructure to safely check fields
+    // ── SINGLE MODE: Legacy admin form (ProductVariant) ──────────────────────
     const { productId, size, color, price, sku, mrp, isDefault, colorwayName, colorParts } = req.body;
 
-    // 2. Manual Validation
     const isColorway = !!colorwayName;
     if (!productId || !sku || price === undefined || !size || (!color && !isColorway)) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: productId, sku, price, size, and color (or colorwayName) are mandatory."
+        message: 'Missing required fields: productId, sku, price, size, and color (or colorwayName) are mandatory.'
       });
     }
 
-    // 3. Create
     const variantData = {
       product: productId,
       size,
@@ -90,92 +109,141 @@ export const createVariant = async (req, res) => {
     };
 
     const variant = await ProductVariant.create(variantData);
-
-    // Populate
     await variant.populate('product', 'name');
     await variant.populate('size', 'code name');
     if (variant.color) await variant.populate('color', 'name hexCode');
-    if (variant.colorParts && variant.colorParts.length > 0) await variant.populate('colorParts', 'name hexCode');
-
-    // 4. Inventory Creation
+    if (variant.colorParts?.length > 0) await variant.populate('colorParts', 'name hexCode');
     await inventoryService.initializeInventory(variant._id);
 
-    res.status(201).json({ success: true, data: variant });
+    return res.status(201).json({ success: true, data: variant });
 
   } catch (error) {
-    // Handle Duplicate SKU Error
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       const message = field === 'sku'
         ? `The SKU '${req.body.sku}' is already taken.`
-        : `This variant combination already exists for this product.`;
+        : 'This variant combination already exists.';
       return res.status(400).json({ success: false, message });
     }
-
-    // Handle Validation Errors
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
       return res.status(400).json({ success: false, message: messages.join(', ') });
     }
-
-    console.error("Create Variant Error:", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
+    console.error('[createVariant] Error:', error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 };
 
-/* READ (TABLE + FILTER) — ALIGNED WITH ENTERPRISE VariantMaster */
+/* READ (TABLE + FILTER) — ENTERPRISE VariantMaster ONLY */
 export const getVariants = async (req, res) => {
   try {
     const { productId, status } = req.query;
 
-    // ── 1. Handle Listing without Product ID (Admin Legacy Support) ──────────
+    // ── 1. Admin listing: no productId, use legacy ProductVariant for admin table ──
     if (!productId) {
       const query = status ? { status } : {};
       const data = await ProductVariant.find(query)
-        .populate("product", "name")
-        .populate("size", "code name")
-        .populate("color", "name hexCode");
+        .populate('product', 'name')
+        .populate('size', 'code name')
+        .populate('color', 'name hexCode');
       return res.json({ success: true, data });
     }
 
-    // ── 2. Alignment Fix: VariantMaster uses productGroupId ──────────────────
+    // ── 2. Strict ObjectId validation and casting ─────────────────────────────
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid product ID format'
+        message: 'Invalid productId: must be a 24-character MongoDB ObjectId'
       });
     }
 
-    // Canonical query for VariantMaster
+    const objectId = new mongoose.Types.ObjectId(productId);
+
+    // ── 3. Enterprise canonical query — VariantMaster only ───────────────────
+    // Admin panel shows ALL statuses (DRAFT, ACTIVE, OUT_OF_STOCK, etc.) unless
+    // explicitly filtered. If a status query param is provided, respect it.
     const query = {
-      productGroupId: productId,
-      // Status in VariantMaster matches uppercase enums (ACTIVE, INACTIVE, etc.)
-      status: status ? String(status).toUpperCase() : 'ACTIVE',
+      productGroupId: objectId,
+      ...(status ? { status: String(status).toUpperCase() } : {}),
+      isDeleted: { $ne: true }
     };
 
     const variants = await VariantMaster.find(query)
       .populate('colorId', 'name displayName hexCode rgbCode colorFamily')
+      .populate('sizes.sizeId', 'value displayName category')
       .populate({
         path: 'attributeValueIds',
         select: 'name displayName code attributeType',
         populate: {
           path: 'attributeType',
-          select: 'name displayName code',
+          select: 'name displayName _id',
           model: 'AttributeType'
         }
       })
       .lean();
 
-    // Note: VariantMaster uses 'sizes' array.
-    // For hydration backwards-compatibility, we can expose sizeId from the first entry if needed.
+    // ── 4. Expose flattened sizeId + normalize attributeValueIds + build
+    //       structured attributeDimensions for stable frontend identity keys ──
     const mappedData = variants.map(v => {
-      // Safely extract the primary sizeId for frontend hydration
       const primarySizeObj = v.sizes?.[0];
       const sizeId = primarySizeObj?.sizeId?._id || primarySizeObj?.sizeId || null;
 
+      // Normalize attributeValueIds: could be populated objects or plain ID strings.
+      // Sort for deterministic identity key comparison on frontend.
+      const rawAttrIds = Array.isArray(v.attributeValueIds) ? v.attributeValueIds : [];
+      const normalizedAttrValueIds = rawAttrIds
+        .map(entry => {
+          if (!entry) return null;
+          if (typeof entry === 'object' && entry._id) return entry._id.toString();
+          return entry.toString();
+        })
+        .filter(Boolean)
+        .sort();
+
+      // ── STRUCTURAL METADATA: attributeDimensions ─────────────────────────
+      // This is the canonical representation the frontend uses so it can rebuild
+      // identity keys WITHOUT reverse-scanning allAttributes client-side.
+      // Format: [{ attributeId, attributeName, valueId }]
+      // Works even when an attribute type has ZERO values configured in the DB.
+      const attributeDimensions = rawAttrIds
+        .map(entry => {
+          if (!entry) return null;
+
+          // ── Case A: fully populated — value doc exists + type ref exists ──────
+          if (typeof entry === 'object' && entry._id && entry.attributeType) {
+            return {
+              attributeId: entry.attributeType._id?.toString() ?? null,
+              attributeName: entry.attributeType.name ?? entry.attributeType.displayName ?? null,
+              valueId: entry._id.toString(),  // always use _id, never entry.toString()
+            };
+          }
+
+          // ── Case B: value doc exists but attributeType ref was deleted ────────
+          // entry = { _id: ObjectId, name: ..., attributeType: null }
+          // entry.toString() would return "[object Object]" — must use _id explicitly
+          if (typeof entry === 'object' && entry._id) {
+            return {
+              attributeId: null,
+              attributeName: null,
+              valueId: entry._id.toString(),  // correct hex string
+            };
+          }
+
+          // ── Case C: raw ObjectId string (populate silently missed) ────────────
+          if (typeof entry === 'string' && entry.length === 24) {
+            return { attributeId: null, attributeName: null, valueId: entry };
+          }
+
+          // Fallback: unknown shape — skip
+          return null;
+        })
+        .filter(Boolean);
+
       return {
         ...v,
-        sizeId
+        sizeId,
+        attributeValueIds: normalizedAttrValueIds,
+        attributeDimensions,     // ← NEW: stable structured identity metadata
       };
     });
 
@@ -186,106 +254,101 @@ export const getVariants = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("getVariants Error:", error);
+    console.error('[getVariants] Error:', error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch variants",
+      message: 'Failed to fetch variants',
       error: error.message
     });
   }
 };
 
-/* UPDATE */
+/* UPDATE — Enterprise OCC path only */
 export const updateVariant = async (req, res) => {
   try {
     const variantId = req.params.id;
-    const incomingVersion = req.body['governance.version'];
+    // Extract version from nested governance object (matches frontend payload structure)
+    const incomingVersion = req.body.governance?.version;
 
-    // 1. Differentiate Error Types - Malformed ID / Missing fields (400)
+    // 1. Validate variant ID format
     if (!mongoose.Types.ObjectId.isValid(variantId)) {
       return res.status(400).json({
-        code: "VALIDATION_ERROR",
+        code: 'VALIDATION_ERROR',
         success: false,
-        message: "Invalid variant ID format."
+        message: 'Invalid variant ID format.'
       });
     }
 
-    // Handle status boolean-to-string conversion if present in req.body
+    // 2. Require governance.version — reject early if missing
+    if (incomingVersion === undefined || incomingVersion === null) {
+      return res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        success: false,
+        message: 'governance.version is required for updates. Refresh and retry.'
+      });
+    }
+
+    // 3. Build sanitized update payload — strip governance to prevent manual version manipulation
     const updatePayload = { ...req.body };
+    delete updatePayload.governance;
+    delete updatePayload['governance.version'];
+    delete updatePayload.id; // strip echoed id field if present
+
+    // Normalize boolean status to string enum
     if (updatePayload.status !== undefined && typeof updatePayload.status === 'boolean') {
       updatePayload.status = updatePayload.status ? 'ACTIVE' : 'ARCHIVED';
     }
 
-    // Prevent manual manipulation of the version field itself
-    delete updatePayload['governance.version'];
+    // 4. Atomic OCC findOneAndUpdate — matches on _id + version, increments version
+    const variant = await VariantMaster.findOneAndUpdate(
+      {
+        _id: variantId,
+        'governance.version': incomingVersion
+      },
+      {
+        $set: updatePayload,
+        $inc: { 'governance.version': 1 }
+      },
+      { new: true, runValidators: true }
+    );
 
-    // 2. OCC PATH — Enterprise variant with governance.version present
-    if (incomingVersion !== undefined && incomingVersion !== null) {
-      const variant = await VariantMaster.findOneAndUpdate(
-        {
-          _id: variantId,
-          "governance.version": incomingVersion
-        },
-        updatePayload,
-        { new: true, runValidators: true }
-      );
-
-      if (!variant) {
-        // Distinguish 404 from OCC version mismatch
-        const existing = await VariantMaster.findById(variantId).lean();
-        if (!existing) {
-          return res.status(404).json({ success: false, message: "Variant not found." });
-        }
-
-        // Log the exact conflict cause
-        console.error(`[OCC_CONFLICT] variantId=${variantId} incomingVersion=${incomingVersion} currentVersion=${existing.governance?.version}`);
-
-        return res.status(409).json({
-          code: "OCC_CONFLICT",
-          success: false,
-          message: "Version conflict: this variant was modified by another session. Refresh to get the latest state.",
-          variantId
-        });
+    // 5. null result = either not found or version mismatch → 409
+    if (!variant) {
+      const existing = await VariantMaster.findById(variantId).lean();
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Variant not found.' });
       }
-
-      return res.json({ success: true, data: variant });
+      console.error(`[OCC_CONFLICT] variantId=${variantId} incomingVersion=${incomingVersion} currentVersion=${existing.governance?.version}`);
+      return res.status(409).json({
+        code: 'OCC_CONFLICT',
+        success: false,
+        message: 'Data changed by another session. Refresh to get the latest state.',
+        variantId
+      });
     }
 
-    // 3. LEGACY FALLBACK PATH — No governance.version (legacy variantSchema.js model)
-    const legacyVariant = await ProductVariant.findById(variantId);
-    if (!legacyVariant) {
-      return res.status(404).json({ success: false, message: "Variant not found." });
-    }
-
-    Object.assign(legacyVariant, updatePayload);
-    await legacyVariant.save();
-
-    await legacyVariant.populate('product', 'name');
-    await legacyVariant.populate('size', 'code name');
-    if (legacyVariant.color) await legacyVariant.populate('color', 'name hexCode');
-
-    return res.json({ success: true, data: legacyVariant });
+    return res.json({ success: true, data: variant });
 
   } catch (error) {
-    console.error("Update Variant Error:", error);
+    console.error('[updateVariant] Error:', error);
 
     // Duplicate key (configHash / combinationKey collision) → 409
     if (error.code === 11000) {
       console.error(`[OCC_CONFLICT] Duplicate key on Variant ${req.params.id}`);
       return res.status(409).json({
-        code: "OCC_CONFLICT",
+        code: 'OCC_CONFLICT',
         success: false,
-        message: "Conflict: this combination already exists as another variant.",
+        message: 'Conflict: this combination already exists as another variant.',
         variantId: req.params.id
       });
     }
 
-    // Mongoose schema validation failure → 400
+    // Mongoose validation failure → 400
     if (error.name === 'ValidationError') {
       const fields = Object.keys(error.errors);
       console.error(`[VALIDATION_ERROR] Fields: ${fields.join(', ')} on Variant ${req.params.id}`);
       return res.status(400).json({
-        code: "VALIDATION_ERROR",
+        code: 'VALIDATION_ERROR',
         success: false,
         message: error.message,
         fields

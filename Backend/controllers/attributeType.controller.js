@@ -211,11 +211,29 @@ export const getAttributeTypesByCategory = async (req, res) => {
     try {
         const { categoryId } = req.params;
 
-        const attributeTypes = await AttributeType.findByCategory(categoryId);
+        // PRIMARY: try category-scoped fetch
+        let attributeTypes = await AttributeType.findByCategory(categoryId);
+
+        let isCategoryScoped = true;
+        let fallback = false;
+
+        // FALLBACK: if no attributes are linked to this category, return all active types
+        // This is intentional — admins can use Section B before category ↔ attribute links are set up.
+        if (!attributeTypes || attributeTypes.length === 0) {
+            attributeTypes = await AttributeType.find({
+                status: 'active',
+                isDeleted: false,
+            }).sort({ displayOrder: 1, name: 1 }).limit(100);
+
+            isCategoryScoped = false;
+            fallback = true;
+        }
 
         res.json({
             success: true,
-            data: attributeTypes
+            data: attributeTypes,
+            isCategoryScoped,
+            fallback,
         });
     } catch (error) {
         console.error('Get attribute types by category error:', error);

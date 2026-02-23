@@ -17,8 +17,15 @@ import {
   previewCombinationsEndpoint,
 } from '../../controllers/variantCombination.controller.js';
 import { upload } from '../../config/multer.js';
+import { validateCategoryScope } from '../../middlewares/categoryScope.middleware.js';
+import {
+  previewDimensions,
+  generateDimensions,
+  diffDimensionsHandler,
+} from '../../controllers/variant/variantDimension.controller.js';
 
 const router = express.Router();
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CUSTOMER-FACING (new enterprise schema)
@@ -27,7 +34,26 @@ const router = express.Router();
 router.get('/by-group/:productGroupId', getVariantsByProductGroup);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMBINATION PREVIEW / GENERATOR (Admin utility)
+// ENTERPRISE VARIANT CREATION (new VariantMaster schema)
+// POST /api/variants/enterprise
+// validateCategoryScope → Layer 1 HTTP guard (fast fail)
+// VariantMaster.pre('save') → Layer 2 Mongoose model guard (catch-all)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/enterprise', validateCategoryScope, createVariant);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V2 — N-DIMENSIONAL ENGINE  (COLOR × SIZE × RAM × STORAGE × ...N)
+// POST /api/variants/v2/preview-dimensions
+// POST /api/variants/v2/generate-dimensions
+// POST /api/variants/v2/diff-dimensions
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/v2/preview-dimensions', previewDimensions);
+router.post('/v2/generate-dimensions', validateCategoryScope, generateDimensions);
+router.post('/v2/diff-dimensions', diffDimensionsHandler);  // pure in-process, no auth needed
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY COMBINATION GENERATOR (still supported — do not remove)
+// POST /api/variants/generate-combinations  (COLOR × STORAGE × RAM only)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/generate-combinations', generateCombinations);
 router.post('/preview-combinations', previewCombinationsEndpoint);

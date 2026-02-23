@@ -90,7 +90,8 @@ const ProductDetailPage = () => {
 
                 if (productData._id) {
                     // ✅ Robust ObjectId format guard (regex is safer than .length)
-                    if (!/^[a-f\d]{24}$/i.test(String(productData._id))) {
+                    if (!/^[a-f\d]{24}$/i.test(String(productData?._id))) {
+                        console.error('Invalid product ID detected:', productData?._id);
                         setError('Invalid product ID format');
                         setLoading(false);
                         return;
@@ -104,23 +105,9 @@ const ProductDetailPage = () => {
                         getAttributeTypes(),
                     ]);
 
-                    // STEP 1 — VERIFY RAW API RESPONSE
-                    console.group('[Variant Debug — API]');
-                    console.log('Raw variantsRes:', variantsRes);
-                    console.log('variantsRes.data:', variantsRes?.data);
-                    console.log('variantsRes.data?.data:', variantsRes?.data?.data);
-                    console.groupEnd();
-
-                    // ── Unwrap API responses (Axios interceptor already strips one .data layer)
+                    // ── Unwrap API responses (rescue chain handles all shape variants)
                     const raw = variantsRes?.data?.data ?? variantsRes?.data ?? variantsRes ?? [];
                     const variantsList = Array.isArray(raw) ? raw : [];
-
-                    // STEP 2 — VERIFY UNWRAPPED ARRAY
-                    console.group('[Variant Debug — Unwrapped]');
-                    console.log('raw value:', raw);
-                    console.log('Is array?', Array.isArray(raw));
-                    console.log('variantsList length:', variantsList.length);
-                    console.groupEnd();
 
                     const sizesRaw = sizesRes?.data?.data ?? sizesRes?.data ?? [];
                     const colorsRaw = colorsRes?.data?.data ?? colorsRes?.data ?? [];
@@ -137,27 +124,9 @@ const ProductDetailPage = () => {
                         (Array.isArray(attrsRaw) ? attrsRaw : []).map(a => [String(a._id), a])
                     );
 
-                    // ── Transformation layer: hydrate relational IDs → populated objects
-                    // Does NOT mutate original objects (spread into new objects)
-
-                    // STEP 3 — VERIFY STATUS FILTER IMPACT
-                    console.group('[Variant Debug — Before Filter]');
-                    console.log('variantsList sample:', variantsList.map(v => ({ id: v._id, status: v.status, isDeleted: v.isDeleted })));
-                    console.groupEnd();
-
-                    const filteredVariants = variantsList
-                        .filter(v => {
-                            const normalizedStatus = String(v.status || '').trim().toLowerCase();
-                            const notDeleted = v.isDeleted !== true;
-                            // Fallback to true if field is missing/undefined, assuming Active
-                            return (normalizedStatus === 'active' || normalizedStatus === '') && notDeleted;
-                        });
-
-                    console.group('[Variant Debug — After Filter]');
-                    console.log('Filtered count:', filteredVariants.length);
-                    console.groupEnd();
-
-                    const mappedVariants = filteredVariants.map(v => ({
+                    // ── Hydrate relational IDs → populated objects (no mutation of originals)
+                    // Backend already filters ACTIVE + isDeleted=false, no need to double-filter
+                    const mappedVariants = variantsList.map(v => ({
                         ...v,
                         // Hydrate size: prefer already-populated object, fall back to lookup
                         size: (v.size && typeof v.size === 'object')
@@ -171,21 +140,13 @@ const ProductDetailPage = () => {
                         attributes: Array.isArray(v.attributeValueIds)
                             ? v.attributeValueIds
                                 .map(id => attrMap[String(id)] ?? null)
-                                .filter(Boolean)   // drop any unresolved IDs safely
+                                .filter(Boolean)
                             : (Array.isArray(v.attributes) ? v.attributes : []),
-                        // ✅ Canonical inventory mapping — preserved from original logic
+                        // Canonical inventory mapping — stock is authoritative from inventory sub-doc
                         stock: v.inventory?.quantityOnHand ?? v.stock ?? 0,
-                        // ✅ resolvedPrice is preserved via spread — never overwritten
+                        // resolvedPrice preserved via spread — never overwritten
                     }));
 
-                    // STEP 4 — VERIFY HYDRATION MAP
-                    console.group('[Variant Debug — Hydrated]');
-                    console.log('Mapped variants count:', mappedVariants.length);
-                    console.log('Sample mapped variant:', mappedVariants[0]);
-                    console.groupEnd();
-
-                    // STEP 5 — VERIFY STATE SETTING
-                    console.log('[Variant Debug] About to set variants:', mappedVariants.length);
                     setVariants(mappedVariants);
                 }
             } catch (err) {

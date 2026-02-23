@@ -219,20 +219,8 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
                 let isDisabled = false;
                 let helperText = '';
 
-                // Sequential Logic: Size depends on Colour
-                if (attr.slug === 'size') {
-                    const colorAttr = relevantAttributes.find(a => a.slug === 'color');
-                    if (colorAttr && !selectedAttributes['color']) {
-                        isDisabled = true;
-                        helperText = `💡 Select ${colorAttr.name || 'Colour'} first`;
-                    } else if (colorAttr && selectedAttributes['color']) {
-                        // Find the human-readable name of the selected color
-                        const selectedColorValue = attributeValuesMap['color']?.find(v => (v.slug || v.value) === selectedAttributes['color']);
-                        if (selectedColorValue) {
-                            helperText = `Select size for ${selectedColorValue.value}`;
-                        }
-                    }
-                }
+                // Let the robust isOptionAvailable matrix handle UI disabling inherently
+                // instead of arbitrary hardcoded hierarchy.
 
                 return (
                     <AttributeGroup

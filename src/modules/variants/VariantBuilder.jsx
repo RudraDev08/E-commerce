@@ -19,12 +19,13 @@ import {
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
-import { productAPI, colorAPI, sizeAPI, variantAPI, attributeTypeAPI, attributeValueAPI } from '../../Api/api';
+import { productAPI, colorAPI, sizeAPI, variantAPI, variantDimensionAPI, attributeTypeAPI, attributeValueAPI } from '../../Api/api';
 import { uploadAPI } from '../../Api/uploadApi';
 
 import ProductSelectDropdown from '../../components/Shared/Dropdowns/ProductSelectDropdown';
 import SizeMultiSelectDropdown from '../../components/Shared/Dropdowns/SizeMultiSelectDropdown';
 import ColorMultiSelectDropdown from '../../components/Shared/Dropdowns/ColorMultiSelectDropdown';
+import DimensionWorkspace from './DimensionWorkspace.jsx';
 
 // --- FORMATTER ---
 const formatCurrency = (amount, currency = 'INR') => {
@@ -119,6 +120,7 @@ const VariantBuilder = () => {
     const [partialCommitWarning, setPartialCommitWarning] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [activeImageModalVariant, setActiveImageModalVariant] = useState(null);
+    const [generatingV2, setGeneratingV2] = useState(false);  // v2 API call in-flight
 
     const PAGE_SIZE = 50;
 
@@ -139,6 +141,7 @@ const VariantBuilder = () => {
                 productAPI.getById(productId),
                 sizeAPI.getAll({ status: 'ACTIVE' }),
                 colorAPI.getAll({ status: 'ACTIVE' }),
+                // Admin panel needs ALL statuses (DRAFT, ACTIVE, OUT_OF_STOCK, etc.)
                 variantAPI.getByProduct(productId),
                 attributeTypeAPI.getAll({ status: 'ACTIVE' }),
                 attributeValueAPI.getAll({ status: 'ACTIVE' })
@@ -204,6 +207,33 @@ const VariantBuilder = () => {
                     sizeId = sId;
                 }
 
+                // ── Preserve & normalize attributeValueIds ──────────────────────
+                // Normalize each entry: could be ObjectId string OR populated object
+                const rawAttrIds = Array.isArray(v.attributeValueIds) ? v.attributeValueIds : [];
+                const normalizedAttrValueIds = rawAttrIds.map(entry => {
+                    if (!entry) return null;
+                    // Populated object: { _id, name, ... }
+                    if (typeof entry === 'object' && entry._id) return entry._id.toString();
+                    // Plain ObjectId string
+                    return entry.toString();
+                }).filter(Boolean);
+
+                // ── Normalize attributeDimensions from backend ────────────────────
+                // This is the stable structured metadata the backend now returns.
+                // Used for identity key reconstruction — no reverse-scan needed.
+                // Format: [{ attributeId, attributeName, valueId }]
+                const rawAttrDims = Array.isArray(v.attributeDimensions) ? v.attributeDimensions : [];
+                const normalizedAttrDimensions = rawAttrDims
+                    .map(dim => {
+                        if (!dim || !dim.valueId) return null;
+                        return {
+                            attributeId: dim.attributeId ?? null,
+                            attributeName: dim.attributeName ?? null,
+                            valueId: typeof dim.valueId === 'object' ? dim.valueId.toString() : dim.valueId,
+                        };
+                    })
+                    .filter(Boolean);
+
                 return {
                     ...v,
                     isNew: false,
@@ -216,6 +246,10 @@ const VariantBuilder = () => {
                     displayColorName,
                     displayHex,
                     displayPalette,
+                    // ── Preserve attributeValueIds from DB (sorted for stable diffing) ──
+                    attributeValueIds: [...normalizedAttrValueIds].sort(),
+                    // ── Structured attribute metadata for deterministic identity keys ──
+                    attributeDimensions: normalizedAttrDimensions,
                     // Preserve precise decimals
                     price: typeof v.price === 'object' && v.price.$numberDecimal ? v.price.$numberDecimal : v.price?.toString() || "0",
                     status: (v.status === true || v.status?.toLowerCase() === 'active') ? 'ACTIVE' : v.status,
@@ -250,10 +284,12 @@ const VariantBuilder = () => {
         }
 
         // Helper: Cartesian Product of any number of arrays
+        // Each entry is [namespace, values[], attributeTypeId?]
+        // attributeTypeId is propagated per item so identity keys need no lookup.
         const cartesianProduct = (entries) => {
-            return entries.reduce((acc, [namespace, values]) => {
+            return entries.reduce((acc, [namespace, values, attributeTypeId]) => {
                 const results = [];
-                const dimensionData = values.map(v => ({ namespace, data: v }));
+                const dimensionData = values.map(v => ({ namespace, data: v, attributeTypeId }));
 
                 if (acc.length === 0) return dimensionData.map(d => [d]);
 
@@ -267,55 +303,76 @@ const VariantBuilder = () => {
         };
 
         // Prepare data for cartesian
+        // Each entry also carries attributeTypeId for stable identity key construction.
         const dimensionEntries = activeDimensions.map(([namespace, ids]) => {
             let values = [];
-            if (namespace === 'COLOR') values = allColors.filter(c => ids.includes(c._id));
-            else if (namespace.startsWith('SIZE:')) values = allSizes.filter(s => ids.includes(s._id));
-            else if (namespace.startsWith('ATTR:')) {
+            let attributeTypeId = null;
+            if (namespace === 'COLOR') {
+                values = allColors.filter(c => ids.includes(c._id));
+            } else if (namespace.startsWith('SIZE:')) {
+                values = allSizes.filter(s => ids.includes(s._id));
+            } else if (namespace.startsWith('ATTR:')) {
                 const typeName = namespace.replace('ATTR:', '');
                 const attrType = allAttributes.find(at => at.name === typeName);
+                attributeTypeId = attrType?._id ?? null;
                 values = attrType ? attrType.values.filter(v => ids.includes(v._id)) : [];
             }
-            return [namespace, values];
+            return [namespace, values, attributeTypeId];
         });
 
         const combinations = cartesianProduct(dimensionEntries);
 
-        // O(1) Identity Key Strategy for duplicate detection
-        const getIdentityKey = (combo) => {
-            return combo
-                .slice()
-                .sort((a, b) => a.namespace.localeCompare(b.namespace))
-                .map(c => `${c.namespace}:${c.data._id}`)
-                .join('|');
-        };
-
-        // Pre-index existing variants
-        const currentIdentitySet = new Set(variants.map(v => {
+        // ── DETERMINISTIC IDENTITY KEY ────────────────────────────────────────
+        // Identity keys are built ONLY from stored variant fields.
+        // NEVER depends on allAttributes reverse-scan.
+        // Works even when attribute types have zero values.
+        //
+        // Key format (sorted for stability):
+        //   COLOR:<colorId>|SIZE:<category>:<sizeId>|ATTR:<attributeId>:<valueId>
+        const buildIdentityKeyFromVariant = (v) => {
             const parts = [];
-            if (v.colorId) parts.push({ namespace: 'COLOR', data: { _id: v.colorId } });
-            if (v.sizes) v.sizes.forEach(s => parts.push({ namespace: `SIZE:${s.category}`, data: { _id: s.sizeId } }));
-            if (v.attributeValueIds) {
-                // Approximate attribute mapping for legacy/loaded checks
-                v.attributeValueIds.forEach(id => {
-                    const attrValId = typeof id === 'object' ? id._id : id;
-                    // Find which type this belongs to if possible
-                    allAttributes.forEach(at => {
-                        if (at.values.some(av => av._id === attrValId)) {
-                            parts.push({ namespace: `ATTR:${at.name}`, data: { _id: attrValId } });
-                        }
-                    });
+            if (v.colorId) parts.push(`COLOR:${v.colorId}`);
+            if (v.sizes?.length > 0) {
+                v.sizes.forEach(s => {
+                    const sid = typeof s.sizeId === 'object' ? s.sizeId._id ?? s.sizeId : s.sizeId;
+                    parts.push(`SIZE:${s.category}:${sid}`);
                 });
             }
-            return getIdentityKey(parts);
-        }));
+            if (v.attributeDimensions?.length > 0) {
+                v.attributeDimensions.forEach(dim => {
+                    // Key = ATTR:<attributeTypeId>:<valueId> — stable even if attr type has 0 values
+                    parts.push(`ATTR:${dim.attributeId ?? 'UNKNOWN'}:${dim.valueId}`);
+                });
+            }
+            return parts.sort().join('|');
+        };
+
+        // Key builder for a fresh combo from Cartesian generation
+        const buildIdentityKeyFromCombo = (combo) => {
+            const parts = [];
+            combo.forEach(dim => {
+                if (dim.namespace === 'COLOR') {
+                    parts.push(`COLOR:${dim.data._id}`);
+                } else if (dim.namespace.startsWith('SIZE:')) {
+                    const category = dim.namespace.replace('SIZE:', '');
+                    parts.push(`SIZE:${category}:${dim.data._id}`);
+                } else if (dim.namespace.startsWith('ATTR:')) {
+                    // dim.attributeTypeId is set during combo construction below
+                    parts.push(`ATTR:${dim.attributeTypeId ?? 'UNKNOWN'}:${dim.data._id}`);
+                }
+            });
+            return parts.sort().join('|');
+        };
+
+        // Pre-index existing variants using structured fields — no allAttributes scan
+        const currentIdentitySet = new Set(variants.map(v => buildIdentityKeyFromVariant(v)));
 
         const baseSku = (product.sku || product.slug || product.name.substring(0, 8)).replace(/[^a-z0-9]/gi, '').toUpperCase();
         const newVariants = [];
         let skipped = 0;
 
         combinations.forEach(combo => {
-            const identityKey = getIdentityKey(combo);
+            const identityKey = buildIdentityKeyFromCombo(combo);
             if (currentIdentitySet.has(identityKey)) {
                 skipped++;
                 return;
@@ -332,6 +389,8 @@ const VariantBuilder = () => {
                 imageGallery: [],
                 sizes: [],
                 attributeValueIds: [],
+                // ── Structured attribute metadata for stable identity (no reverse-scan) ──
+                attributeDimensions: [],
                 colorId: null,
                 // Display helpers
                 displayColorName: '',
@@ -354,7 +413,14 @@ const VariantBuilder = () => {
                     variantObj.sizes.push({ sizeId: dim.data._id, category });
                     variantObj.sizeCode = dim.data.code || dim.data.displayName;
                 } else if (dim.namespace.startsWith('ATTR:')) {
+                    // Flat ID list for backend compatibility
                     variantObj.attributeValueIds.push(dim.data._id);
+                    // Structured metadata for frontend identity — uses typeId from combo item
+                    variantObj.attributeDimensions.push({
+                        attributeId: dim.attributeTypeId ?? null,
+                        attributeName: dim.namespace.replace('ATTR:', ''),
+                        valueId: dim.data._id,
+                    });
                 }
             });
 
@@ -370,6 +436,39 @@ const VariantBuilder = () => {
             toast.error(`${skipped} configurations already exist.`);
         }
     };
+
+    // ── V2 GENERATE HANDLER ──────────────────────────────────────────────────
+    // Called by DimensionWorkspace when user clicks the Generate button.
+    // Hits POST /api/variants/v2/generate-dimensions and refreshes the grid.
+    const handleV2Generate = useCallback(async (apiPayload) => {
+        if (!product?._id && !apiPayload.productGroupId) {
+            return toast.error('No product group selected.');
+        }
+        setGeneratingV2(true);
+        const tid = toast.loading('Generating combinations...');
+        try {
+            const payload = {
+                ...apiPayload,
+                productGroupId: apiPayload.productGroupId || product._id,
+                brand: apiPayload.brand || product.brand?.name || '',
+                basePrice: apiPayload.basePrice || product.basePrice || 0,
+            };
+            const res = await variantDimensionAPI.generate(payload);
+            const { totalGenerated, skipped } = res.data.data;
+            toast.success(
+                `Generated ${totalGenerated} variant${totalGenerated !== 1 ? 's' : ''}.` +
+                (skipped > 0 ? ` (${skipped} already existed)` : ''),
+                { id: tid, duration: 4000 }
+            );
+            // Refresh the existing variants grid to reflect newly-persisted rows
+            await fetchAllData();
+        } catch (err) {
+            const msg = err?.response?.data?.message || err.message || 'Generation failed.';
+            toast.error(msg, { id: tid });
+        } finally {
+            setGeneratingV2(false);
+        }
+    }, [product, fetchAllData]);
 
     // --- GRID INTERACTIONS ---
     // Debounced UI update for performance
@@ -408,90 +507,111 @@ const VariantBuilder = () => {
     const saveChanges = async () => {
         const newItems = variants.filter(v => v.isNew);
         const editedItems = variants.filter(v => v.isEdited && !v.isNew);
-        if (newItems.length === 0 && editedItems.length === 0) return toast('No changes');
+        if (newItems.length === 0 && editedItems.length === 0) return toast('No changes to save.');
 
+        // Price validation
         const priceRegex = /^\d+(\.\d{1,2})?$/;
         for (const v of [...newItems, ...editedItems]) {
-            if (!priceRegex.test(v.price)) return toast.error(`Invalid price for SKU ${v.sku}`);
+            if (!priceRegex.test(v.price)) {
+                return toast.error(`Invalid price format for SKU: ${v.sku}`);
+            }
+        }
+
+        // OCC Guard — block save if any edited row is missing governance.version
+        if (editedItems.some(v => v.governance?.version === undefined || v.governance?.version === null)) {
+            return toast.error('Version missing. Refresh required before saving.');
         }
 
         setSaving(true);
         try {
-            // New Variants Creation
+            // ── CREATE new variants ──────────────────────────────────────────────
             if (newItems.length > 0) {
                 const payload = {
                     productId: product._id,
-                    productGroupId: product._id, // Support both naming variants 
+                    productGroupId: product._id,
                     variants: newItems.map(v => {
-                        // Find the size object in allSizes to get its category
                         const sizeMetadata = allSizes.find(s => s._id === v.sizeId);
+
+                        // ── Build deterministic attributeValueIds ──────────────────
+                        // Deduplicate + sort by string value so hash is stable
+                        const rawAttrIds = Array.isArray(v.attributeValueIds) ? v.attributeValueIds : [];
+                        const attrValueIds = [...new Set(
+                            rawAttrIds
+                                .filter(Boolean)
+                                .map(id => (typeof id === 'object' && id._id ? id._id.toString() : id.toString()))
+                        )].sort();
 
                         return {
                             attributes: { size: v.sizeCode, color: v.isColorway ? null : v.displayColorName },
-                            // Enterprise expects array of objects for sizes
-                            sizes: [{
-                                sizeId: v.sizeId,
-                                category: sizeMetadata?.category || 'DIMENSION'
-                            }],
+                            sizes: v.sizeId
+                                ? [{ sizeId: v.sizeId, category: sizeMetadata?.category || 'DIMENSION' }]
+                                : (v.sizes || []),
                             sku: v.sku,
                             price: v.price.toString(),
                             status: v.status || 'DRAFT',
                             colorwayName: v.isColorway ? v.colorwayName : undefined,
                             colorParts: v.isColorway ? v.colorParts.map(c => c._id) : undefined,
                             colorId: !v.isColorway ? v.colorId : undefined,
-                            imageGallery: v.imageGallery || []
+                            imageGallery: v.imageGallery || [],
+                            // ── REQUIRED: attributeValueIds for N-dimensional support ──
+                            attributeValueIds: attrValueIds,
                         };
                     })
                 };
                 await variantAPI.create(payload);
-                toast.success(`Created ${newItems.length} new variants`);
+                toast.success(`Created ${newItems.length} new variant${newItems.length > 1 ? 's' : ''}.`);
             }
 
-            // Existing Variants Update (Optimized Bulk Request Pattern)
+            // ── UPDATE existing variants (concurrent, per-row OCC) ───────────────
             if (editedItems.length > 0) {
-                // Future-proofed for DB Transaction BulkWrite endpoint
                 const updates = editedItems.map(v => ({
                     id: v._id,
                     price: v.price.toString(),
                     sku: v.sku,
                     status: v.status,
-                    'governance.version': v.governance?.version
+                    governance: { version: v.governance.version }
                 }));
 
-                // Fallback concurrent processing if bulkWrite API doesn't exist yet
-                // Use Promise.all with Catch for safety if legacy
                 let hasConflicts = false;
-                let validationErrors = [];
+                const validationErrors = [];
 
                 await Promise.all(updates.map(update =>
                     variantAPI.update(update.id, update).catch(e => {
+                        const status = e?.response?.status;
                         const code = e?.response?.data?.code;
-                        if (code === 'OCC_CONFLICT' || e?.response?.status === 409) {
+                        if (status === 409 || code === 'OCC_CONFLICT') {
                             hasConflicts = true;
                         } else if (code === 'VALIDATION_ERROR') {
-                            validationErrors.push(e?.response?.data?.message || 'Validation failed');
+                            validationErrors.push(e?.response?.data?.message || 'Validation failed.');
                         } else {
-                            throw e;
+                            throw e; // Re-throw unexpected errors to outer catch
                         }
                     })
                 ));
 
                 if (hasConflicts) {
-                    setPartialCommitWarning(true);
-                    toast.error('Partial commit: Some updates failed due to version conflicts. Reloaded authoritative data.');
-                } else if (validationErrors.length > 0) {
-                    toast.error(`Validation Errors: ${validationErrors[0]}`);
+                    // Section 6 — 409 handler: toast + auto-refetch
+                    toast.error('Data changed by another session. Refreshing...', { duration: 4000 });
+                    await fetchAllData(); // replaces state entirely, clears isEdited flags
+                    setPartialCommitWarning(false);
+                    return;
+                }
+
+                if (validationErrors.length > 0) {
+                    toast.error(`Validation Error: ${validationErrors[0]}`);
                 } else {
-                    toast.success(`Updated ${editedItems.length} variant(s)`);
+                    toast.success(`Updated ${editedItems.length} variant${editedItems.length > 1 ? 's' : ''}.`);
                 }
             }
 
-            // Always refetch entire variant list from backend to prevent partial commit drift
+            // Always refetch to replace state entirely and clear all isEdited/isNew flags
+            setPartialCommitWarning(false);
             await fetchAllData();
+
         } catch (error) {
-            setPartialCommitWarning(true);
-            toast.error(error.response?.data?.message || 'Bulk Save Interrupted. Check variants.');
-            await fetchAllData();
+            console.error('[saveChanges] Unexpected error:', error);
+            toast.error(error?.response?.data?.message || 'Save interrupted. Please retry.');
+            await fetchAllData(); // recover from partial commit drift
         } finally {
             setSaving(false);
         }
@@ -716,34 +836,27 @@ const VariantBuilder = () => {
 
             <main className="px-6 lg:px-8 py-8 space-y-6 max-w-[1600px] mx-auto">
 
-                {/* STAGE 1 & 2: DYNAMIC GENERATION ENGINE */}
+                {/* ═══════════ DIMENSION WORKSPACE v2 ═══════════ */}
                 <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                    <div className="flex justify-between items-center mb-6 cursor-pointer" onClick={() => setIsGenerating(!isGenerating)}>
-                        <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2"><SparklesIcon className="w-5 h-5 text-indigo-500" /> Dimension Workspace</h2>
-                        <div className="flex items-center gap-3">
-                            {Object.values(selectedDimensions).some(v => v.length > 0) && (
-                                <button onClick={() => setSelectedDimensions({})} className="text-[10px] font-bold text-red-500 hover:text-red-600 uppercase tracking-tight">Clear All</button>
-                            )}
-                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-md">{isGenerating ? 'Active' : 'Hidden'}</span>
-                        </div>
-                    </div>
-
-                    {isGenerating && (
-                        <div className="space-y-8 pt-4 border-t border-slate-100 animate-in fade-in duration-500">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-10">
-                                {availableDimensions.map(dim => (
-                                    <DimensionSelector key={dim.id} dim={dim} />
-                                ))}
-                            </div>
-
-                            <div className="flex justify-between items-center pt-6 border-t border-slate-50">
-                                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                                    Projected: <span className="text-indigo-600 font-black">{Object.values(selectedDimensions).filter(v => v.length > 0).reduce((acc, v) => acc * v.length, Object.values(selectedDimensions).some(v => v.length > 0) ? 1 : 0)} Combinations</span>
-                                </div>
-                                <button onClick={generateVariants} className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-xl flex items-center gap-2 hover:bg-slate-800 transition-all active:scale-95"><PlusIcon className="w-5 h-5" /> Generate Preview</button>
-                            </div>
-                        </div>
-                    )}
+                    <DimensionWorkspace
+                        productGroupId={product._id}
+                        productSlug={product.sku || product.slug || product.name?.substring(0, 8)}
+                        categoryId={product.categoryId || product.category?._id || product.category || null}
+                        brand={product.brand?.name || ''}
+                        basePrice={product.basePrice || 0}
+                        colors={allColors.map(c => ({
+                            id: c._id,
+                            label: c.displayName || c.name,
+                            hex: c.hexCode,
+                        }))}
+                        sizes={allSizes.map(s => ({
+                            id: s._id,
+                            label: s.displayName || s.value,
+                            sub: s.category,
+                        }))}
+                        onGenerate={handleV2Generate}
+                        generating={generatingV2}
+                    />
                 </section>
 
                 {/* STAGE 3: VIRTUALIZED/PAGINATED GRID */}
@@ -787,6 +900,12 @@ const VariantBuilder = () => {
                                                         {v.sizeCode} {!v.isNew && <LockClosedIcon className="w-3 h-3 text-slate-300" />}
                                                     </p>
                                                     <p className="text-xs font-semibold text-slate-500 truncate w-32">{v.displayColorName}</p>
+                                                    {/* Attribute value count badge — quick audit view */}
+                                                    {(v.attributeValueIds?.length > 0 || v.variantLabel) && (
+                                                        <p className="text-[10px] font-bold text-indigo-500 mt-0.5 truncate w-40" title={v.variantLabel || ''}>
+                                                            {v.variantLabel || `${v.attributeValueIds.length} attr${v.attributeValueIds.length !== 1 ? 's' : ''}`}
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>

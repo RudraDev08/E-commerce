@@ -413,34 +413,26 @@ attributeTypeSchema.statics.findByCategory = function (categoryId) {
 };
 
 // Governance: Lock Check
-attributeTypeSchema.pre('findOneAndUpdate', async function (next) {
-    const docToUpdate = await this.model.findOne(this.getQuery());
+// NOTE: In Mongoose v9, async middleware does NOT receive `next` as an argument.
+// Use the synchronous signature (next as first arg) or a plain async without next.
+attributeTypeSchema.pre('findOneAndUpdate', async function () {
+    const docToUpdate = await this.model.findOne(this.getQuery()).lean();
 
     // Allow if doc doesn't exist (it will fail anyway) or isn't locked
     if (!docToUpdate || !docToUpdate.isLocked) {
-        return next();
+        return; // Mongoose v9: just return from async middleware
     }
-
-    // If locked, check if we are trying to change critical fields
-    // This is tricky in findOneAndUpdate because 'this' refers to the query, not the doc.
-    // We inspected docToUpdate.
-
-    // Simplify: If locked, prevent ANY update unless it's unlocking (which is also an update, catch-22).
-    // Let's assume admins can unlock.
 
     // Better implementation: Check if 'isLocked' is being set to false in the update.
     const update = this.getUpdate();
-    if (update.isLocked === false || update.$set?.isLocked === false) {
-        return next();
+    if (update.isLocked === false || update?.$set?.isLocked === false) {
+        return; // Unlocking is permitted
     }
 
-    // If it remains locked, we block critical changes.
-    // For now, let's just warn or block deletes/structure changes.
-    // The user requirement says: "If createsVariant=true AND linked... prevent Changing type, Changing pricing behavior, Deleting type".
-    // This hook is for updates.
-
-    // Just allow it for now but add the hook stub as requested.
-    next();
+    // If it remains locked, we could throw here to block the update.
+    // For now, we log a warning and allow (prevent breaking existing flows).
+    console.warn('[AttributeType] Attempted update on a locked AttributeType. Consider blocking.');
+    // To hard-block: throw new Error('This AttributeType is locked and cannot be modified.');
 });
 
 const AttributeType = mongoose.models.AttributeType || mongoose.model('AttributeType', attributeTypeSchema);

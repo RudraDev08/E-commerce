@@ -7,7 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed:variant": "node scripts/seedDatabase.js"
+    "seed:variant": "node scripts/seedDatabase.js",
+    "seed:attributes": "node scripts/seedAttributes.js",
+    "test:attrs": "node --test Backend/tests/attribute.service.test.js"
   },
   "keywords": [],
   "author": "",
