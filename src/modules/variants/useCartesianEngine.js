@@ -19,8 +19,8 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
-export const MAX_COMBINATIONS = 500;   // hard stop — throws on generate
-export const WARN_COMBINATIONS = 200;   // warn banner threshold
+export const MAX_COMBINATIONS = 5000;   // Synced with Backend
+export const WARN_COMBINATIONS = 1000;  // Threshold to warn admin before generation
 const DEBOUNCE_MS = 120;   // how long to wait after last selection change
 
 // ── PURE HELPERS (no React) ──────────────────────────────────────────────────
@@ -47,7 +47,22 @@ function iterativeCartesian(activeDims) {
         const next = [];
         for (const partial of acc) {
             for (const val of dim.values) {
-                next.push({ ...partial, [dim.key]: val });
+                const combo = { ...partial, [dim.key]: val };
+
+                // Step 3 Logic: Produce attribute structured data
+                if (dim.type === 'ATTRIBUTE') {
+                    combo.attributeValueIds = combo.attributeValueIds || [];
+                    combo.attributeDimensions = combo.attributeDimensions || [];
+
+                    combo.attributeValueIds.push(val.id);
+                    combo.attributeDimensions.push({
+                        attributeId: dim.attributeId || dim.key,
+                        attributeName: dim.label || dim.attributeName,
+                        valueId: val.id
+                    });
+                }
+
+                next.push(combo);
             }
         }
         acc = next;
@@ -141,7 +156,11 @@ export function useCartesianEngine({ productSlug = 'VAR' } = {}) {
             const values = def.allValues
                 .filter(v => selIds.has(v.id))
                 .map(v => ({ ...v, slug: v.slug ?? toSlug(v.label) }));
-            if (values.length > 0) result.push({ key, label: def.label, values });
+            if (values.length > 0) result.push({
+                ...def, // spread def to get type, attributeId etc
+                key,
+                values
+            });
         }
         return result;
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,6 +203,8 @@ export function useCartesianEngine({ productSlug = 'VAR' } = {}) {
                 barcode: override.barcode ?? '',
                 isNew: true,
                 isEdited: !!Object.keys(override).length,
+                attributeValueIds: selection.attributeValueIds || [],
+                attributeDimensions: selection.attributeDimensions || []
             };
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,10 +216,31 @@ export function useCartesianEngine({ productSlug = 'VAR' } = {}) {
      * Register / update a dimension definition.
      * Call this once per dimension type when master data loads.
      */
-    const registerDimension = useCallback((key, label, allValues, iconType = 'attr') => {
+    const registerDimension = useCallback((key, labelOrConfig, allValues, iconType = 'attr') => {
         setDimensionDefs(prev => {
             const next = new Map(prev);
-            next.set(key, { key, label, icon: iconType, allValues });
+            if (labelOrConfig && typeof labelOrConfig === 'object') {
+                // New signature: registerDimension(key, { type, attributeId, values, ... })
+                const config = labelOrConfig;
+                next.set(key, {
+                    key,
+                    type: config.type || 'ATTRIBUTE',
+                    attributeId: config.attributeId || key,
+                    label: config.attributeName || config.label || key,
+                    allValues: config.allValues || config.values || [],
+                    icon: config.icon || 'attr'
+                });
+            } else {
+                // Old signature: registerDimension(key, label, allValues, iconType)
+                next.set(key, {
+                    key,
+                    label: labelOrConfig,
+                    icon: iconType,
+                    allValues,
+                    type: key === 'color' || key === 'size' ? 'BASE' : 'ATTRIBUTE',
+                    attributeId: key === 'color' || key === 'size' ? null : key
+                });
+            }
             return next;
         });
     }, []);
@@ -281,7 +323,12 @@ export function useCartesianEngine({ productSlug = 'VAR' } = {}) {
             if (key === 'color' || key === 'size' || !ids.size) continue;
             const validIds = [...ids].filter(Boolean);
             if (validIds.length > 0) {
-                attrDimensions.push({ attributeId: key, values: validIds });
+                const def = dimensionDefs.get(key);
+                attrDimensions.push({
+                    attributeId: key,
+                    attributeName: def?.label || def?.attributeName || key,
+                    values: validIds
+                });
             }
         }
 
@@ -316,6 +363,7 @@ export function useCartesianEngine({ productSlug = 'VAR' } = {}) {
         // Selectors
         isSelected,
         selectedCountFor,
+        selectedIds,
         buildApiPayload,
     };
 }

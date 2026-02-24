@@ -16,7 +16,9 @@ import SearchDocument from '../models/masters/SearchDocument.enterprise.js';
 import AttributeValue from '../models/AttributeValue.model.js';
 import logger from '../config/logger.js';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+import { createRedisConnection } from '../config/redis.js';
+
+const redis = createRedisConnection();
 const SEARCH_SYNC_QUEUE = 'search_sync_queue';
 
 class VariantService {

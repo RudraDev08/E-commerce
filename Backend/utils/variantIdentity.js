@@ -58,11 +58,14 @@ import crypto from 'crypto';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const LIMITS = Object.freeze({
-    MAX_AXES: 10,   // Color + Size + up to 8 attribute dimensions
-    MAX_VALUES_PER_AXIS: 50,   // Safety cap per individual axis
-    MAX_COMBINATIONS: 500,  // Cartesian product hard stop (per batch)
+    MAX_AXES: 7,   // Color + Size + up to 5 attribute dimensions
+    MAX_VALUES_PER_AXIS: 50,   // Fallback safety cap per individual axis
+    MAX_COLORS: 10, // Enterprise Guard: Prevent crazy colorway counts
+    MAX_SIZES: 20, // Enterprise Guard: Prevent sizing explosion
+    MAX_COMBINATIONS: 5000,  // Cartesian product hard stop (per batch)
     MAX_IDENTITY_BYTES: 1024, // Raw canonical string byte limit
-    MAX_ATTR_DIMENSIONS: 8,    // Dynamic attribute axes only (excludes Color+Size)
+    MAX_ATTR_DIMENSIONS: 5,    // Enterprise Guard: Dynamic attribute axes only
+    IDENTITY_VERSION: 1, // 6.2 Hash Algorithm Version sentinel
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -246,13 +249,13 @@ export function validateLimits(payload) {
         throw err;
     }
 
-    if (colorCount > LIMITS.MAX_VALUES_PER_AXIS) {
-        const err = new Error(`[variantIdentity] Color axis has ${colorCount} values (max ${LIMITS.MAX_VALUES_PER_AXIS}).`);
+    if (colorCount > LIMITS.MAX_COLORS) {
+        const err = new Error(`[variantIdentity] Color axis has ${colorCount} values (max ${LIMITS.MAX_COLORS}).`);
         err.statusCode = 400; err.code = 'LIMIT_EXCEEDED';
         throw err;
     }
-    if (sizeCount > LIMITS.MAX_VALUES_PER_AXIS) {
-        const err = new Error(`[variantIdentity] Size axis has ${sizeCount} values (max ${LIMITS.MAX_VALUES_PER_AXIS}).`);
+    if (sizeCount > LIMITS.MAX_SIZES) {
+        const err = new Error(`[variantIdentity] Size axis has ${sizeCount} values (max ${LIMITS.MAX_SIZES}).`);
         err.statusCode = 400; err.code = 'LIMIT_EXCEEDED';
         throw err;
     }

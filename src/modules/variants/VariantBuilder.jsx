@@ -37,6 +37,14 @@ const formatCurrency = (amount, currency = 'INR') => {
     }).format(amount);
 };
 
+const safeFix = (val, decimals = 2) => {
+    if (val === null || val === undefined) return "0.00";
+    // Handle $numberDecimal if present
+    const raw = typeof val === 'object' && val.$numberDecimal ? val.$numberDecimal : val;
+    const n = parseFloat(raw);
+    return isNaN(n) ? "0.00" : n.toFixed(decimals);
+};
+
 // ============================================================================
 // COMPONENT: Image Modal (Offloads DOM nodes from the main grid)
 // ============================================================================
@@ -121,14 +129,13 @@ const VariantBuilder = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [activeImageModalVariant, setActiveImageModalVariant] = useState(null);
     const [generatingV2, setGeneratingV2] = useState(false);  // v2 API call in-flight
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+    const [statusConfirmModal, setStatusConfirmModal] = useState(null); // { id, newStatus, currentStock }
+    const [selectedVariantIds, setSelectedVariantIds] = useState([]); // For Bulk Actions
 
     const PAGE_SIZE = 50;
 
-    useEffect(() => {
-        fetchAllData();
-    }, [productId]);
-
-    const fetchAllData = async () => {
+    const fetchAllData = useCallback(async () => {
         if (!productId || String(productId).length !== 24) {
             toast.error('Invalid Product ID');
             setLoading(false);
@@ -234,6 +241,14 @@ const VariantBuilder = () => {
                     })
                     .filter(Boolean);
 
+                // Build a nice label for the table from attributes
+                const labels = normalizedAttrDimensions.map(d => {
+                    const type = loadedAttrTypes.find(t => t._id === d.attributeId || t.name === d.attributeName);
+                    const val = type?.values?.find(v => v._id === d.valueId);
+                    return val?.value || d.valueId;
+                });
+                const variantLabel = labels.join(' / ');
+
                 return {
                     ...v,
                     isNew: false,
@@ -246,6 +261,7 @@ const VariantBuilder = () => {
                     displayColorName,
                     displayHex,
                     displayPalette,
+                    variantLabel,
                     // ── Preserve attributeValueIds from DB (sorted for stable diffing) ──
                     attributeValueIds: [...normalizedAttrValueIds].sort(),
                     // ── Structured attribute metadata for deterministic identity keys ──
@@ -265,7 +281,22 @@ const VariantBuilder = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [productId]);
+
+    const toggleDimensionSelection = useCallback((namespace, id) => {
+        setSelectedDimensions(prev => {
+            const current = prev[namespace] || [];
+            const updated = current.includes(id)
+                ? current.filter(existing => existing !== id)
+                : [...current, id];
+
+            return { ...prev, [namespace]: updated };
+        });
+    }, []);
+
+    useEffect(() => {
+        fetchAllData();
+    }, [productId, fetchAllData]);
 
     // --- DYNAMIC CARTESIAN ENGINE ---
     const generateVariants = () => {
@@ -339,12 +370,13 @@ const VariantBuilder = () => {
                 });
             }
             if (v.attributeDimensions?.length > 0) {
-                v.attributeDimensions.forEach(dim => {
+                v.attributeDimensions.forEach((dim, idx) => {
                     // Key = ATTR:<attributeTypeId>:<valueId> — stable even if attr type has 0 values
-                    parts.push(`ATTR:${dim.attributeId ?? 'UNKNOWN'}:${dim.valueId}`);
+                    const attrId = dim.attributeId || dim.attributeTypeId || dim.attributeName || `ATTR-${idx}`;
+                    parts.push(`ATTR:${attrId}:${dim.valueId}`);
                 });
             }
-            return parts.sort().join('|');
+            return parts.sort().join('|') || `V-${v._id || Math.random().toString(36).slice(2, 9)}`;
         };
 
         // Key builder for a fresh combo from Cartesian generation
@@ -358,7 +390,8 @@ const VariantBuilder = () => {
                     parts.push(`SIZE:${category}:${dim.data._id}`);
                 } else if (dim.namespace.startsWith('ATTR:')) {
                     // dim.attributeTypeId is set during combo construction below
-                    parts.push(`ATTR:${dim.attributeTypeId ?? 'UNKNOWN'}:${dim.data._id}`);
+                    const attrId = dim.attributeTypeId || dim.namespace.replace('ATTR:', '') || 'UNKNOWN';
+                    parts.push(`ATTR:${attrId}:${dim.data._id}`);
                 }
             });
             return parts.sort().join('|');
@@ -470,20 +503,52 @@ const VariantBuilder = () => {
         }
     }, [product, fetchAllData]);
 
+    // --- SEARCH DEBOUNCE ---
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
     // --- GRID INTERACTIONS ---
     // Debounced UI update for performance
     const updateVariant = useCallback((id, field, value) => {
+        const variant = variants.find(v => v._id === id);
+
+        // Safety Guard: STATUS CHANGE Confirmation
+        if (field === 'status' && !variant.isNew) {
+            const isDeactivating = ['ARCHIVED', 'OUT_OF_STOCK'].includes(value);
+            const hasStock = (variant.inventory?.quantityOnHand || variant.stock || 0) > 0;
+
+            if (isDeactivating && hasStock) {
+                setStatusConfirmModal({ id, newStatus: value, currentStock: variant.inventory?.quantityOnHand || variant.stock });
+                return;
+            }
+
+            if (value === 'ARCHIVED' && !window.confirm("Archiving a variant will remove it from the customer website. Continue?")) {
+                return;
+            }
+        }
+
         setVariants(prev => prev.map(v => v._id === id ? { ...v, [field]: value, isEdited: true } : v));
-    }, []);
+    }, [variants]);
+
+    const confirmStatusChange = () => {
+        if (!statusConfirmModal) return;
+        const { id, newStatus } = statusConfirmModal;
+        setVariants(prev => prev.map(v => v._id === id ? { ...v, status: newStatus, isEdited: true } : v));
+        setStatusConfirmModal(null);
+    };
 
     const deleteVariant = useCallback((id, isNew) => {
         if (isNew) {
             setVariants(prev => prev.filter(v => v._id !== id));
+            setSelectedVariantIds(prev => prev.filter(vid => vid !== id));
             toast.success('Removed');
         } else {
             if (!window.confirm('Delete variant? This is permanent.')) return;
             const previous = [...variants];
             setVariants(prev => prev.filter(v => v._id !== id));
+            setSelectedVariantIds(prev => prev.filter(vid => vid !== id));
             variantAPI.delete(id)
                 .then(() => toast.success('Deleted'))
                 .catch(err => {
@@ -492,6 +557,39 @@ const VariantBuilder = () => {
                 });
         }
     }, [variants]);
+
+    const cloneVariant = useCallback(async (id) => {
+        const tid = toast.loading('Cloning variant...');
+        try {
+            const res = await variantAPI.clone(id, { copyInventory: true });
+            toast.success('Variant Cloned as DRAFT', { id: tid });
+            await fetchAllData();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Clone failed', { id: tid });
+        }
+    }, [fetchAllData]);
+
+    const handleBulkStatusUpdate = useCallback(async (newStatus) => {
+        if (selectedVariantIds.length === 0) return;
+        if (!window.confirm(`Update ${selectedVariantIds.length} variants to ${newStatus}?`)) return;
+
+        const tid = toast.loading(`Updating ${selectedVariantIds.length} variants...`);
+        try {
+            // Sequential updates for simplicity + OCC support
+            // Alternatively, backend could support a bulk update endpoint
+            await Promise.all(selectedVariantIds.map(id => {
+                const v = variants.find(item => item._id === id);
+                if (v.isNew) return Promise.resolve();
+                return variantAPI.update(id, { status: newStatus, governance: { version: v.governance?.version } });
+            }));
+            toast.success('Bulk update complete', { id: tid });
+            setSelectedVariantIds([]);
+            await fetchAllData();
+        } catch (err) {
+            toast.error('One or more updates failed. Check for version conflicts.', { id: tid });
+            await fetchAllData();
+        }
+    }, [selectedVariantIds, variants, fetchAllData]);
 
     const VALID_TRANSITIONS = {
         DRAFT: ['ACTIVE', 'ARCHIVED'],
@@ -621,17 +719,24 @@ const VariantBuilder = () => {
     const filteredVariants = useMemo(() => {
         return variants.filter(v => {
             if (filter === 'new' && !v.isNew) return false;
-            if (!searchTerm) return true;
-            const term = searchTerm.toLowerCase();
+            if (!debouncedSearchTerm) return true;
+            const term = debouncedSearchTerm.toLowerCase();
             return v.sku?.toLowerCase().includes(term) || v.displayColorName?.toLowerCase().includes(term) || v.sizeCode?.toLowerCase().includes(term);
         });
-    }, [variants, filter, searchTerm]);
+    }, [variants, filter, debouncedSearchTerm]);
 
     const totalPages = Math.ceil(filteredVariants.length / PAGE_SIZE);
     const paginatedVariants = useMemo(() => {
         const start = (currentPage - 1) * PAGE_SIZE;
         return filteredVariants.slice(start, start + PAGE_SIZE);
     }, [filteredVariants, currentPage]);
+
+    // Pagination guard: reset page if totalPages shrinks below current
+    useEffect(() => {
+        if (currentPage > 1 && totalPages > 0 && currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [totalPages, currentPage]);
 
     const getImageUrl = (image) => {
         if (!image) return null;
@@ -669,6 +774,15 @@ const VariantBuilder = () => {
         } catch (error) {
             toast.error('Upload failed', { id: toastId });
         }
+    }, [variants, updateVariant]);
+
+    const handleRemoveImage = useCallback((variantId, index) => {
+        const currentVariant = variants.find(v => v._id === variantId);
+        if (!currentVariant) return;
+        const gallery = currentVariant.imageGallery || [];
+        const updated = gallery.filter((_, i) => i !== index);
+        updateVariant(variantId, 'imageGallery', updated);
+        setActiveImageModalVariant(prev => prev && prev._id === variantId ? { ...prev, imageGallery: updated } : prev);
     }, [variants, updateVariant]);
 
     const handleSetPrimary = useCallback((variantId, targetIndex) => {
@@ -714,6 +828,7 @@ const VariantBuilder = () => {
 
         return dims;
     }, [product, allColors, allSizes, allAttributes]);
+
 
     const DimensionSelector = ({ dim }) => {
         const selected = selectedDimensions[dim.id] || [];
@@ -774,17 +889,6 @@ const VariantBuilder = () => {
         );
     };
 
-    const toggleDimensionSelection = (namespace, id) => {
-        setSelectedDimensions(prev => {
-            const current = prev[namespace] || [];
-            const updated = current.includes(id)
-                ? current.filter(existing => existing !== id)
-                : [...current, id];
-
-            return { ...prev, [namespace]: updated };
-        });
-    };
-
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div></div>;
     if (!product) return <div className="p-10 text-center font-bold text-slate-500">Product Not Found</div>;
@@ -793,6 +897,27 @@ const VariantBuilder = () => {
 
     return (
         <div className="min-h-screen bg-slate-50 pb-20 font-sans">
+            {/* STATUS CONFIRMATION MODAL */}
+            {statusConfirmModal && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden p-6">
+                        <div className="flex items-center gap-3 text-amber-600 mb-4">
+                            <ExclamationTriangleIcon className="w-8 h-8" />
+                            <h3 className="text-lg font-bold">Dangerous Action Detected</h3>
+                        </div>
+                        <p className="text-sm text-slate-600 mb-6">
+                            You are changing status to <span className="font-bold text-slate-900">{statusConfirmModal.newStatus}</span>, but this variant still has
+                            <span className="font-bold text-indigo-600 mx-1">{statusConfirmModal.currentStock} units</span> in stock.
+                            Active stock should be transferred or cleared before deactivating.
+                        </p>
+                        <div className="flex gap-3 justify-end">
+                            <button onClick={() => setStatusConfirmModal(null)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+                            <button onClick={confirmStatusChange} className="px-4 py-2 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-md">Proceed Anyway</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {activeImageModalVariant && (
                 <ImageManagerModal
                     variant={activeImageModalVariant}
@@ -862,9 +987,27 @@ const VariantBuilder = () => {
                 {/* STAGE 3: VIRTUALIZED/PAGINATED GRID */}
                 <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[700px]">
                     <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 flex-shrink-0">
-                        <div className="flex gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
-                            <button onClick={() => setFilter('all')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${filter === 'all' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>All</button>
-                            <button onClick={() => setFilter('new')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${filter === 'new' ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:bg-slate-50'}`}>Drafts</button>
+                        <div className="flex items-center gap-4">
+                            <div className="flex gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                                <button onClick={() => setFilter('all')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${filter === 'all' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'}`}>All</button>
+                                <button onClick={() => setFilter('new')} className={`px-4 py-1.5 text-xs font-bold rounded-md ${filter === 'new' ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:bg-slate-50'}`}>Drafts</button>
+                            </div>
+
+                            {selectedVariantIds.length > 0 && (
+                                <div className="flex items-center gap-2 border-l border-slate-200 pl-4 animate-in fade-in slide-in-from-left-2 transition-all">
+                                    <span className="text-xs font-bold text-slate-500">{selectedVariantIds.length} Selected</span>
+                                    <select
+                                        onChange={(e) => handleBulkStatusUpdate(e.target.value)}
+                                        className="text-[10px] font-bold uppercase py-1.5 pl-3 pr-8 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    >
+                                        <option value="">Bulk Action: Update Status</option>
+                                        <option value="ACTIVE">Set Active</option>
+                                        <option value="OUT_OF_STOCK">Set OOS</option>
+                                        <option value="ARCHIVED">Set Archived</option>
+                                    </select>
+                                    <button onClick={() => setSelectedVariantIds([])} className="text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase px-2">Cancel</button>
+                                </div>
+                            )}
                         </div>
                         <input type="text" placeholder="Search SKU..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="border border-slate-200 px-4 py-2 rounded-lg text-sm w-64 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
                     </div>
@@ -873,7 +1016,18 @@ const VariantBuilder = () => {
                         <table className="w-full text-left text-sm border-collapse">
                             <thead className="sticky top-0 bg-slate-100/90 backdrop-blur z-10 shadow-sm">
                                 <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                    <th className="px-6 py-3">Variant</th>
+                                    <th className="px-6 py-3 w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedVariantIds.length === paginatedVariants.length && paginatedVariants.length > 0}
+                                            onChange={(e) => {
+                                                if (e.target.checked) setSelectedVariantIds(paginatedVariants.map(v => v._id));
+                                                else setSelectedVariantIds([]);
+                                            }}
+                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                    </th>
+                                    <th className="px-2 py-3">Variant</th>
                                     <th className="px-4 py-3 w-40">SKU Ref</th>
                                     <th className="px-4 py-3 w-32">Price</th>
                                     <th className="px-4 py-3 w-32">Resolved</th>
@@ -884,8 +1038,20 @@ const VariantBuilder = () => {
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {paginatedVariants.map((v) => (
-                                    <tr key={v._id} className={`hover:bg-white transition-colors ${v.isNew ? 'bg-indigo-50/20' : ''}`}>
+                                    <tr key={v._id} className={`hover:bg-white transition-colors ${v.isNew ? 'bg-indigo-50/20' : ''} ${selectedVariantIds.includes(v._id) ? 'bg-indigo-50/40' : ''}`}>
                                         <td className="px-6 py-4">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedVariantIds.includes(v._id)}
+                                                onChange={() => {
+                                                    setSelectedVariantIds(prev =>
+                                                        prev.includes(v._id) ? prev.filter(id => id !== v._id) : [...prev, v._id]
+                                                    );
+                                                }}
+                                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                            />
+                                        </td>
+                                        <td className="px-2 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-lg shadow-sm border border-slate-200 overflow-hidden flex shrink-0 relative">
                                                     {v.isColorway ? (
@@ -897,9 +1063,9 @@ const VariantBuilder = () => {
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-slate-800 leading-tight flex items-center gap-1">
-                                                        {v.sizeCode} {!v.isNew && <LockClosedIcon className="w-3 h-3 text-slate-300" />}
+                                                        {v.sizeCode || 'Fixed'} {!v.isNew && <LockClosedIcon className="w-3 h-3 text-slate-300" />}
                                                     </p>
-                                                    <p className="text-xs font-semibold text-slate-500 truncate w-32">{v.displayColorName}</p>
+                                                    <p className="text-xs font-semibold text-slate-500 truncate w-32">{v.displayColorName || 'Default'}</p>
                                                     {/* Attribute value count badge — quick audit view */}
                                                     {(v.attributeValueIds?.length > 0 || v.variantLabel) && (
                                                         <p className="text-[10px] font-bold text-indigo-500 mt-0.5 truncate w-40" title={v.variantLabel || ''}>
@@ -922,7 +1088,7 @@ const VariantBuilder = () => {
                                         <td className="px-4 py-4 relative group">
                                             {v.resolvedPrice && !v.isNew ? (
                                                 <div className="font-semibold text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5 inline-flex items-center gap-1 cursor-default">
-                                                    <span>₹{parseFloat(v.resolvedPrice?.$numberDecimal || v.resolvedPrice || 0).toFixed(2)}</span>
+                                                    <span>₹{safeFix(v.resolvedPrice)}</span>
                                                     {v.priceResolutionLog?.length > 0 && (
                                                         <div className="w-4 h-4 rounded-full bg-emerald-200 text-emerald-700 flex items-center justify-center text-[10px] cursor-help">i</div>
                                                     )}
@@ -940,7 +1106,7 @@ const VariantBuilder = () => {
                                                                 <span className="text-slate-400 truncate w-32" title={log.source}>
                                                                     {log.source === 'BASE' ? 'Base Price' : log.modifierType || 'Modifier'}
                                                                 </span>
-                                                                <span className="text-emerald-400 font-mono">+₹{parseFloat(log.appliedAmount?.$numberDecimal || log.appliedAmount || 0).toFixed(2)}</span>
+                                                                <span className="text-emerald-400 font-mono">+₹{safeFix(log.appliedAmount)}</span>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -963,7 +1129,14 @@ const VariantBuilder = () => {
                                             )}
                                         </td>
                                         <td className="px-4 py-4 text-right">
-                                            <button onClick={() => deleteVariant(v._id, v.isNew)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
+                                            <div className="flex items-center justify-end gap-1">
+                                                {!v.isNew && (
+                                                    <button onClick={() => cloneVariant(v._id)} className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Clone to Draft">
+                                                        <Square3Stack3DIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                                <button onClick={() => deleteVariant(v._id, v.isNew)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

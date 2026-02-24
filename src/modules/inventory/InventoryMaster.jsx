@@ -45,7 +45,9 @@ const OutStockIcon = () => (
   </svg>
 );
 
-const API_BASE = 'http://localhost:5000/api/inventory';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE = `${API_URL}/inventory`;
+const WAREHOUSE_API = `${API_URL}/warehouses`;
 
 const InventoryMaster = () => {
   // State
@@ -83,7 +85,7 @@ const InventoryMaster = () => {
 
   const fetchWarehouses = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/warehouses');
+      const res = await axios.get(WAREHOUSE_API);
       if (res.data.success) setWarehouses(res.data.data);
     } catch (err) {
       console.error("Failed to load warehouses");

@@ -217,26 +217,17 @@ const DimensionPanel = memo(function DimensionPanel({
 // ─────────────────────────────────────────────────────────────────────────────
 // VARIANT ROW (single editable grid row)
 // ─────────────────────────────────────────────────────────────────────────────
-const VariantRow = memo(function VariantRow({ row, attributeKeys, onUpdate, onDelete }) {
+const VariantRow = memo(function VariantRow({ row, hasColor, hasSize, attributeKeys, onUpdate, onDelete }) {
     const inputCls = `w-full text-xs font-semibold px-2.5 py-1.5 border border-slate-200 rounded-lg 
     focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent bg-white transition`;
 
     return (
         <tr className="group hover:bg-indigo-50/30 transition-colors border-b border-slate-100 last:border-0">
-            {/* Combination summary */}
+            {/* Identity / Key column */}
             <td className="px-4 py-3 sticky left-0 bg-white group-hover:bg-indigo-50/30 z-10">
                 <div className="flex items-center gap-2.5 min-w-[180px]">
-                    {row.selections.color?.hex && (
-                        <span
-                            className="w-6 h-6 rounded-full border-2 border-white shadow flex-shrink-0"
-                            style={{ background: row.selections.color.hex }}
-                        />
-                    )}
                     <div className="min-w-0">
-                        <p className="font-bold text-slate-800 text-xs leading-tight truncate max-w-[200px]">
-                            {row.dimensionOrder.map(k => row.selections[k]?.label).filter(Boolean).join(' · ')}
-                        </p>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate max-w-[200px]">
+                        <p className="font-mono text-[9px] text-slate-400 truncate max-w-[180px]">
                             {row.combinationKey}
                         </p>
                     </div>
@@ -246,10 +237,36 @@ const VariantRow = memo(function VariantRow({ row, attributeKeys, onUpdate, onDe
                 </div>
             </td>
 
+            {/* Base Dimension: Color */}
+            {hasColor && (
+                <td className="px-3 py-3">
+                    <div className="flex items-center justify-center gap-2">
+                        {row.selections.color?.hex && (
+                            <span
+                                className="w-4 h-4 rounded-full border border-slate-200 shadow-sm shrink-0"
+                                style={{ background: row.selections.color.hex }}
+                            />
+                        )}
+                        <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                            {row.selections.color?.label || '—'}
+                        </span>
+                    </div>
+                </td>
+            )}
+
+            {/* Base Dimension: Size */}
+            {hasSize && (
+                <td className="px-3 py-3 text-center">
+                    <span className="text-xs font-black text-slate-700 bg-slate-100 rounded-lg px-2 py-1">
+                        {row.selections.size?.label || '—'}
+                    </span>
+                </td>
+            )}
+
             {/* Dynamic attribute columns */}
             {attributeKeys.map(k => (
                 <td key={k} className="px-3 py-3 text-center">
-                    <span className="text-xs font-semibold text-slate-600 bg-slate-100 rounded-lg px-2.5 py-1 whitespace-nowrap">
+                    <span className="text-xs font-semibold text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1 whitespace-nowrap">
                         {row.selections[k]?.label ?? '—'}
                     </span>
                 </td>
@@ -337,7 +354,9 @@ function VariantGrid({ rows, dimensionOrder, updateRow, onDelete, search }) {
     const totalPages = Math.max(1, Math.ceil(total / PAGE));
     const paginated = filtered.slice((page - 1) * PAGE, page * PAGE);
 
-    // Attribute column keys = everything that's not color/size
+    // Column definitions
+    const hasColor = dimensionOrder.includes('color');
+    const hasSize = dimensionOrder.includes('size');
     const attrKeys = dimensionOrder.filter(k => k !== 'color' && k !== 'size');
 
     if (rows.length === 0) {
@@ -356,7 +375,9 @@ function VariantGrid({ rows, dimensionOrder, updateRow, onDelete, search }) {
                 <table className="w-full text-left border-collapse">
                     <thead className="sticky top-0 bg-slate-100/95 backdrop-blur z-10 shadow-sm">
                         <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                            <th className="px-4 py-3 sticky left-0 bg-slate-100/95 z-20 min-w-[220px]">Combination</th>
+                            <th className="px-4 py-3 sticky left-0 bg-slate-100/95 z-20 min-w-[200px]">Identity</th>
+                            {hasColor && <th className="px-3 py-3 text-center">Color</th>}
+                            {hasSize && <th className="px-3 py-3 text-center">Size</th>}
                             {attrKeys.map(k => (
                                 <th key={k} className="px-3 py-3 text-center capitalize whitespace-nowrap">
                                     {k.replace(/^attr[-_]?/i, '')}
@@ -374,6 +395,8 @@ function VariantGrid({ rows, dimensionOrder, updateRow, onDelete, search }) {
                             <VariantRow
                                 key={row.combinationKey}
                                 row={row}
+                                hasColor={hasColor}
+                                hasSize={hasSize}
                                 attributeKeys={attrKeys}
                                 onUpdate={updateRow}
                                 onDelete={onDelete}
@@ -495,7 +518,7 @@ export default function DimensionWorkspace({
         dimensionDefs, dimensionOrder, generatedRows, previewCount,
         willExplode, willWarn,
         registerDimension, removeDimension, toggleValue, selectAll, deselectAll,
-        updateRow, reset, isSelected, selectedCountFor, buildApiPayload,
+        updateRow, reset, isSelected, selectedCountFor, selectedIds, buildApiPayload,
     } = engine;
 
     // ── Section B: attribute panels state ────────────────────────────────────
@@ -540,21 +563,19 @@ export default function DimensionWorkspace({
     }, [sizes, registerDimension]);
 
     // ── Register attribute panels into the engine ─────────────────────────────
-    // Each time a panel is added we register its dimension so the Cartesian
-    // engine picks it up immediately. On remove we unregister it.
     useEffect(() => {
         attributePanels.forEach(panel => {
-            if (!panel.availableValues?.length) return;
-            registerDimension(
-                panel.attributeMasterId,
-                panel.attributeName,
-                panel.availableValues.map(v => ({
+            // Register all available values pool with the engine
+            registerDimension(panel.attributeMasterId, {
+                type: 'ATTRIBUTE',
+                attributeId: panel.attributeMasterId,
+                attributeName: panel.attributeName,
+                values: panel.availableValues.map(v => ({
                     id: v.id,
                     label: v.displayName || v.value,
-                    slug: v.slug ?? toSlug(v.displayName || v.value || ''),
-                })),
-                'attr',
-            );
+                    slug: v.slug ?? (v.displayName || v.value ? toSlug(v.displayName || v.value) : '')
+                }))
+            });
         });
     }, [attributePanels, registerDimension]);
 
@@ -599,8 +620,12 @@ export default function DimensionWorkspace({
     const _doGenerate = useCallback(async () => {
         setShowExplosionModal(false);
         if (!onGenerate) return;
-        const payload = buildApiPayload(productGroupId, brand, basePrice);
-        await onGenerate(payload, visibleRows);
+        const apiPayload = buildApiPayload(productGroupId, brand, basePrice);
+
+        // Step 6: Debug payload confirm
+        console.log("Generate payload:", apiPayload);
+
+        await onGenerate(apiPayload, visibleRows);
     }, [buildApiPayload, onGenerate, productGroupId, brand, basePrice, visibleRows]);
 
     // ── Derived: IDs already in Section B (for dropdown deduplication) ───────

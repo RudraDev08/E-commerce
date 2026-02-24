@@ -89,6 +89,21 @@ inventorySchema.statics.getTotalStock = async function (variantId) {
  * Uses atomic findOneAndUpdate with $expr validator
  */
 inventorySchema.statics.reserveStock = async function (variantId, warehouseId, quantity, session) {
+    const VariantMaster = mongoose.models.VariantMaster || mongoose.model('VariantMaster');
+    const variant = await VariantMaster.findById(variantId).session(session);
+
+    if (!variant) {
+        throw new Error('Variant not found');
+    }
+
+    if (variant.status === 'ARCHIVED') {
+        throw new Error('Archived variants cannot modify stock');
+    }
+
+    if (variant.status !== 'ACTIVE') {
+        throw new Error('Cannot reserve stock for inactive variant');
+    }
+
     const result = await this.findOneAndUpdate(
         {
             variant: variantId,
@@ -120,6 +135,13 @@ inventorySchema.statics.reserveStock = async function (variantId, warehouseId, q
  * Release reserved stock safely
  */
 inventorySchema.statics.releaseStock = async function (variantId, warehouseId, quantity, session) {
+    const VariantMaster = mongoose.models.VariantMaster || mongoose.model('VariantMaster');
+    const variant = await VariantMaster.findById(variantId).session(session);
+
+    if (variant && variant.status === 'ARCHIVED') {
+        throw new Error('Archived variants cannot modify stock');
+    }
+
     const result = await this.findOneAndUpdate(
         {
             variant: variantId,
@@ -147,6 +169,13 @@ inventorySchema.statics.releaseStock = async function (variantId, warehouseId, q
  * Prevents negative stock
  */
 inventorySchema.statics.adjustStock = async function (variantId, warehouseId, adjustment, transactionType, referenceId, notes, session) {
+    const VariantMaster = mongoose.models.VariantMaster || mongoose.model('VariantMaster');
+    const variant = await VariantMaster.findById(variantId).session(session);
+
+    if (variant && variant.status === 'ARCHIVED') {
+        throw new Error('Archived variants cannot modify stock');
+    }
+
     // 1. Validate if reduction is possible (for negative adjustment)
     if (adjustment < 0) {
         const doc = await this.findOne({ variant: variantId, warehouse: warehouseId }).session(session);

@@ -22,6 +22,7 @@ import { ValidationError } from '../../utils/ApiError.js';
 import { validateLimits, validateCardinality } from '../../utils/variantIdentity.js';
 import GenerationAudit from '../../models/GenerationAudit.model.js';
 import logger from '../../config/logger.js';
+import { variantGenerationQueue } from '../../src/queues/variantQueue.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INPUT VALIDATION
@@ -129,78 +130,112 @@ export const generateDimensions = asyncHandler(async (req, res) => {
     validateDimensionBody(req.body);
 
     const t0 = Date.now();
-    let result;
-    let auditError = null;
+    const batchId = `batch-${t0}-${Math.random().toString(36).slice(2, 8)}`;
 
-    try {
-        result = await generateVariantDimensions(req.body);
-    } catch (err) {
-        auditError = err.message;
-        // Write failure audit before re-throwing
-        try {
-            await GenerationAudit.create({
-                batchId: `failed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                productGroupId: req.body.productGroupId,
-                generatedBy: req.user?._id ?? null,
-                action: 'GENERATE',
-                axesSnapshot: {
-                    color: req.body.baseDimensions?.color ?? [],
-                    size: req.body.baseDimensions?.size ?? [],
-                    attrs: req.body.attributeDimensions ?? [],
-                },
-                result: { totalGenerated: 0, totalSkipped: 0, raceDuplicates: 0, durationMs: Date.now() - t0, error: auditError },
-                tenantId: req.body.tenantId ?? 'GLOBAL',
-            });
-        } catch (auditErr) {
-            logger.warn('[VariantDimension] Failed to write failure audit log', { auditErr: auditErr.message });
-        }
-        throw err;
-    }
+    // ── STEP 1: Calculate count to decide Sync vs Async ──────────────────────
+    const parsedInput = fromApiInput(req.body);
+    const count = countCombinations(parsedInput.dimensions.filter(d => !d.disabled && d.values.length > 0));
 
-    // SECTION 10: Write generation audit log
-    try {
-        await GenerationAudit.create({
-            batchId: result.batchId ?? `batch-${Date.now()}`,
-            productGroupId: req.body.productGroupId,
-            generatedBy: req.user?._id ?? null,
-            action: 'GENERATE',
-            axesSnapshot: {
-                color: req.body.baseDimensions?.color ?? [],
-                size: req.body.baseDimensions?.size ?? [],
-                attrs: req.body.attributeDimensions ?? [],
-            },
-            result: {
-                totalGenerated: result.totalGenerated,
-                totalSkipped: result.skipped,
-                raceDuplicates: result.raceDuplicates ?? 0,
-                durationMs: Date.now() - t0,
-                error: null,
-            },
-            tenantId: req.body.tenantId ?? 'GLOBAL',
+    // If batch is small (e.g. < 50), run synchronously for better DX and UI responsiveness
+    if (count <= 50) {
+        logger.info(`[VariantDimension] Running small batch synchronously (${count} combos)`, {
+            productGroupId: req.body.productGroupId
         });
-    } catch (auditErr) {
-        logger.warn('[VariantDimension] Audit log write failed (non-fatal)', { auditErr: auditErr.message });
+
+        const result = await generateVariantDimensions({
+            ...req.body,
+            _batchId: batchId,
+            createdBy: req.user?._id ?? null,
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: `Generated ${result.totalGenerated} variants successfully.`,
+            data: result,
+        });
     }
 
-    logger.info('[VariantDimension] Generation complete', {
-        productGroupId: req.body.productGroupId,
-        totalGenerated: result.totalGenerated,
-        skipped: result.skipped,
-        raceDuplicates: result.raceDuplicates ?? 0,
-        batchId: result.batchId,
-        durationMs: Date.now() - t0,
-    });
+    // ── STEP 2: Large batch enqueued to Redis/BullMQ ──────────────────────────
+    let job;
+    try {
+        job = await variantGenerationQueue.add('generate', {
+            ...req.body,
+            _batchId: batchId,
+            createdBy: req.user?._id ?? null,
+        }, {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 5000 },
+            removeOnComplete: { age: 3600 },
+            removeOnFail: false
+        });
 
-    return res.status(201).json({
+        logger.info(`[VariantDimension] Generation job ${job.id} enqueued`, {
+            productGroupId: req.body.productGroupId,
+            batchId,
+        });
+    } catch (queueErr) {
+        // Fallback: If Redis is down but batch is not too massive, try running sync anyway
+        if (count <= 200) {
+            logger.warn(`[VariantDimension] Redis unavailable. Falling back to sync execution for mid-sized batch.`, { error: queueErr.message });
+            const result = await generateVariantDimensions({
+                ...req.body,
+                _batchId: batchId,
+                createdBy: req.user?._id ?? null,
+            });
+            return res.status(201).json({
+                success: true,
+                message: `Generated ${result.totalGenerated} variants (Synchronous Fallback).`,
+                data: result,
+            });
+        }
+
+        logger.error(`[VariantDimension] Queue unavailable and batch too large for sync.`, { error: queueErr.message });
+        return res.status(503).json({
+            success: false,
+            message: 'Background processing queue is currently unavailable. Please try again later.',
+        });
+    }
+
+    return res.status(202).json({
         success: true,
-        message: result.message ??
-            `Generated ${result.totalGenerated} variant(s). Skipped ${result.skipped} existing.`,
+        message: 'Large variant generation started in background',
+        jobId: job.id,
+        batchId,
         data: {
-            ...result,
-            durationMs: Date.now() - t0,
+            jobId: job.id,
+            status: 'processing',
+            totalExpected: count
         },
     });
 });
+
+/**
+ * GET /api/variants/v2/jobs/:id
+ * ──────────────────────────────
+ * Check the status of a Variant Generation Queue job
+ */
+export const getGenerationJobStatus = asyncHandler(async (req, res) => {
+    const job = await variantGenerationQueue.getJob(req.params.id);
+
+    if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+    }
+
+    const state = await job.getState();
+    const progress = job.progress || 0;
+
+    return res.status(200).json({
+        success: true,
+        data: {
+            jobId: job.id,
+            status: state,
+            progress: progress,
+            returnvalue: job.returnvalue || null,
+            failedReason: job.failedReason || null
+        }
+    });
+});
+
 
 /**
  * POST /api/variants/v2/diff-dimensions
@@ -249,4 +284,4 @@ export const diffDimensionsHandler = asyncHandler(async (req, res) => {
     });
 });
 
-export default { previewDimensions, generateDimensions, diffDimensionsHandler };
+export default { previewDimensions, generateDimensions, diffDimensionsHandler, getGenerationJobStatus };

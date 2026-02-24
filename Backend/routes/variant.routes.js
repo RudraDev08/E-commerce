@@ -45,6 +45,12 @@ router.post('/', variantController.create);
 router.put('/:id', variantController.update);
 
 /**
+ * Archive-to-Edit Clone Flow
+ * Requires admin authentication
+ */
+router.post('/:id/clone', variantController.clone);
+
+/**
  * Soft delete a variant
  * Requires admin authentication
  */

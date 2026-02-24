@@ -152,6 +152,16 @@ export const updateAttributeType = async (req, res) => {
 
         const updates = { ...req.body };
 
+        // 🟣 Phase 4.3 Dimension Locking
+        if (updates.createsVariant !== undefined && updates.createsVariant !== attributeType.createsVariant) {
+            if (updates.allowRegeneration !== true) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Changing 'createsVariant' affects the entire variant matrix. Please confirm by setting 'allowRegeneration': true in the request."
+                });
+            }
+        }
+
         if (updates.name) {
             updates.slug = slugify(updates.name, { lower: true, strict: true });
             updates.code = updates.name.toUpperCase().replace(/\s+/g, '_');

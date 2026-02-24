@@ -13,7 +13,116 @@ import VariantMaster from '../../models/masters/VariantMaster.enterprise.js';
 import SizeMaster from '../../models/masters/SizeMaster.enterprise.js';
 import ColorMaster from '../../models/masters/ColorMaster.enterprise.js';
 import AttributeValue from '../../models/AttributeValue.model.js';
+import ProductGroupSnapshot from '../../models/Product/ProductGroupSnapshot.js';
+import { SnapshotService } from '../../services/snapshot.service.js';
 import { generateConfigHash } from '../../utils/configHash.util.js';
+import mongoose from 'mongoose';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ✅ Step 3 — GET PRODUCT GROUP SNAPSHOT (Customer Website / High-Scale Optimized)
+ * GET /api/v1/product-group/:id/snapshot
+ */
+export async function getProductGroupSnapshot(req, res) {
+  try {
+    const { id } = req.params;
+    let snapshot = await SnapshotService.getSnapshot(id);
+
+    if (!snapshot) {
+      return res.status(404).json({ success: false, message: 'Snapshot not found.' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: snapshot,
+      source: 'SNAPSHOT_ENGINE'
+    });
+  } catch (err) {
+    console.error('[getProductGroupSnapshot]', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch snapshot.', error: err.message });
+  }
+}
+
+/**
+ * ✅ 6.3 Matrix Visualization Tool (Admin)
+ * GET /api/v1/product-group/:id/matrix
+ * Returns a 2D/3D grid view of generated variants to spot missing holes.
+ */
+export async function getMatrixPreview(req, res) {
+  try {
+    const { id } = req.params;
+    let snapshot = await SnapshotService.getSnapshot(id);
+
+    if (!snapshot || !snapshot.dimensions) {
+      return res.status(404).json({ success: false, message: 'No snapshot available to build matrix.' });
+    }
+
+    const { dimensions, variantMap } = snapshot;
+    const colors = dimensions.colors || [];
+    const sizes = dimensions.sizes || [];
+
+    // Build the grid: Rows = Colors, Cols = Sizes
+    const grid = [];
+
+    // Handle products with NO colors or NO sizes gracefully
+    if (colors.length === 0 && sizes.length > 0) {
+      const row = { id: 'default', label: 'Default Color', cells: [] };
+      for (const size of sizes) {
+        // Find matching variant
+        const found = Object.values(variantMap).find(v => v.sku && v.sku.includes(size._id)); // simplistic match
+        // Realistically, variantMap keys are configHash. 
+        // Since we don't have the hash builder here easily, we do a lookup.
+        // A better way is matching variants directly.
+      }
+    }
+
+    // Since variantMap keys are hashes, let's fetch raw simplified variants to build the matrix cleanly
+    const variants = await VariantMaster.find({ productGroupId: id })
+      .select('_id status inventory.quantityOnHand colorId sizes')
+      .populate('colorId', 'name hexCode')
+      .populate('sizes.sizeId', 'value')
+      .lean();
+
+    // Map by color -> size
+    const matrix = {};
+    const colorAxes = new Map();
+    const sizeAxes = new Map();
+
+    variants.forEach(v => {
+      const cId = v.colorId ? v.colorId._id.toString() : 'NONE';
+      const cName = v.colorId ? v.colorId.name : 'Default';
+
+      const sId = (v.sizes && v.sizes[0] && v.sizes[0].sizeId) ? v.sizes[0].sizeId._id.toString() : 'NONE';
+      const sName = (v.sizes && v.sizes[0] && v.sizes[0].sizeId) ? v.sizes[0].sizeId.value : 'Default';
+
+      if (!colorAxes.has(cId)) colorAxes.set(cId, { id: cId, label: cName });
+      if (!sizeAxes.has(sId)) sizeAxes.set(sId, { id: sId, label: sName });
+
+      if (!matrix[cId]) matrix[cId] = {};
+      matrix[cId][sId] = {
+        variantId: v._id,
+        status: v.status,
+        stock: v.inventory?.quantityOnHand || 0
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        yAxis: Array.from(colorAxes.values()), // Rows
+        xAxis: Array.from(sizeAxes.values()),  // Columns
+        matrix
+      }
+    });
+
+  } catch (err) {
+    console.error('[getMatrixPreview]', err);
+    return res.status(500).json({ success: false, message: 'Failed to build matrix.', error: err.message });
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -24,6 +133,7 @@ import { generateConfigHash } from '../../utils/configHash.util.js';
  * Called inside the controller — never inside a Mongoose virtual to stay lean().
  */
 function flattenVariant(v) {
+  const sizeObj = v.sizeId || (v.sizes && v.sizes[0] ? v.sizes[0].sizeId : null);
   return {
     _id: v._id,
     status: v.status,
@@ -31,15 +141,15 @@ function flattenVariant(v) {
     compareAtPrice: v.compareAtPrice ? parseFloat(v.compareAtPrice.toString()) : null,
     imageGallery: v.imageGallery ?? [],
 
-    size: v.sizeId
+    size: sizeObj
       ? {
-        _id: v.sizeId._id,
-        displayName: v.sizeId.displayName,
-        value: v.sizeId.value,
-        category: v.sizeId.category,
-        gender: v.sizeId.gender,
+        _id: sizeObj._id,
+        displayName: sizeObj.displayName,
+        value: sizeObj.value,
+        category: sizeObj.category,
+        gender: sizeObj.gender,
         // Expose common measurement fields without duplicating the master
-        measurements: v.sizeId.measurements ?? null,
+        measurements: sizeObj.measurements ?? null,
       }
       : null,
 
@@ -136,6 +246,9 @@ export async function createVariant(req, res) {
       governance: { createdBy: req.user?._id },
     });
 
+    // ✅ Recompute Snapshot (Debounced)
+    SnapshotService.triggerRecompute(productGroupId);
+
     return res.status(201).json({
       success: true,
       message: 'Variant created successfully.',
@@ -171,8 +284,8 @@ export async function getVariantsByProductGroup(req, res) {
 
     // Fetch only ACTIVE variants — single query, fully populated, lean for performance
     const variants = await VariantMaster.find({ productGroupId, status: 'ACTIVE' })
-      .select('price compareAtPrice status imageGallery sizeId colorId attributeValueIds configHash')
-      .populate('sizeId', 'displayName value category gender measurements normalizedRank')
+      .select('price compareAtPrice status imageGallery sizes colorId attributeValueIds configHash')
+      .populate('sizes.sizeId', 'displayName value category gender measurements normalizedRank')
       .populate('colorId', 'name displayName hexCode rgbCode colorFamily visualCategory')
       .populate({
         path: 'attributeValueIds',
@@ -243,7 +356,7 @@ export async function getVariantsByProductGroup(req, res) {
 export async function getVariantById(req, res) {
   try {
     const variant = await VariantMaster.findById(req.params.id)
-      .populate('sizeId', 'displayName value category gender measurements')
+      .populate('sizes.sizeId', 'displayName value category gender measurements')
       .populate('colorId', 'name displayName hexCode imageUrl colorFamily')
       .populate({
         path: 'attributeValueIds',
@@ -271,28 +384,54 @@ export async function getVariantById(req, res) {
 export async function updateVariant(req, res) {
   try {
     const { id } = req.params;
+    const { version: directVersion, governance } = req.body;
+    const version = directVersion !== undefined ? directVersion : governance?.version;
 
-    // Strip identity fields — they must never be patched directly
-    const { configHash, sizeId, colorId, productGroupId, attributeValueIds, ...safeUpdates } = req.body;
-    if (sizeId || colorId || productGroupId || attributeValueIds || configHash) {
+    if (version === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot update sizeId, colorId, productGroupId, attributeValueIds, or configHash. Create a new variant instead.',
+        message: 'Optimistic Concurrency Control requires "version" in request body.'
+      });
+    }
+
+    // Strip identity fields — they must never be patched directly
+    const { configHash, sizeId, colorId, productGroup, productGroupId, attributeValueIds, attributeDimensions, sizes, ...safeUpdates } = req.body;
+
+    // Check if any identity modifying fields are passed
+    if (attributeValueIds || attributeDimensions || configHash || productGroup || productGroupId || sizeId || colorId || sizes) {
+      return res.status(400).json({
+        success: false,
+        message: 'Variant identity is immutable. Archive and recreate instead.',
       });
     }
 
     safeUpdates['governance.updatedBy'] = req.user?._id;
 
-    const variant = await VariantMaster.findByIdAndUpdate(id, safeUpdates, {
-      new: true,
-      runValidators: true,
-    }).lean();
+    // ✅ Step 3 — Require Version Match on Update (Optimistic Locking)
+    const updated = await VariantMaster.findOneAndUpdate(
+      { _id: id, 'governance.version': version },
+      {
+        $set: safeUpdates,
+        $inc: { 'governance.version': 1 }
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    ).lean();
 
-    if (!variant) {
-      return res.status(404).json({ success: false, message: 'Variant not found.' });
+    if (!updated) {
+      return res.status(409).json({
+        success: false,
+        message: 'Variant was modified by another admin or version mismatch.',
+        error: 'CONFLICT'
+      });
     }
 
-    return res.status(200).json({ success: true, message: 'Variant updated.', data: variant });
+    // ✅ Recompute Snapshot (Debounced)
+    SnapshotService.triggerRecompute(updated.productGroupId);
+
+    return res.status(200).json({ success: true, message: 'Variant updated.', data: updated });
   } catch (err) {
     console.error('[updateVariant]', err);
     return res.status(500).json({ success: false, message: 'Failed to update variant.', error: err.message });
@@ -335,4 +474,107 @@ function dedupeById(arr) {
     seen.add(key);
     return true;
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLONE VARIANT (Archive-to-Edit Flow)
+// POST /api/v1/variants/:id/clone
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function cloneVariant(req, res) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { id } = req.params;
+
+    // 1. Fetch original variant
+    const originalVariant = await VariantMaster.findById(id).lean().session(session);
+    if (!originalVariant) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: 'Variant not found.' });
+    }
+
+    // 2. Prepare new payload by merging original and updates
+    const cloneData = { ...originalVariant, ...req.body };
+    delete cloneData._id;
+    delete cloneData.createdAt;
+    delete cloneData.updatedAt;
+    delete cloneData.__v;
+    delete cloneData.configHash; // Will regenerate
+    delete cloneData.sku; // Will regenerate
+    delete cloneData.generationBatchId;
+
+    // Optional inventory copying
+    let activeQty = 0;
+    const WarehouseMaster = mongoose.models.WarehouseMaster;
+    const VariantInventory = mongoose.models.VariantInventory;
+    let defaultWarehouse = null;
+
+    if (req.body.copyInventory && WarehouseMaster && VariantInventory) {
+      defaultWarehouse = await WarehouseMaster.findOne({ isDefault: true }).session(session);
+      if (defaultWarehouse) {
+        const oldInv = await VariantInventory.findOne({ variant: originalVariant._id, warehouse: defaultWarehouse._id }).session(session);
+        if (oldInv) {
+          activeQty = oldInv.quantity;
+        }
+      }
+    }
+
+    // New SKU generation using legacy strategy, or we let the model generate one.
+    cloneData.skuStrategy = 'AUTO';
+    cloneData.sku = undefined;
+
+    // For now we set status to DRAFT
+    cloneData.status = 'DRAFT';
+    if (req.user && req.user._id) {
+      cloneData.governance = cloneData.governance || {};
+      cloneData.governance.createdBy = req.user._id;
+      cloneData.governance.updatedBy = req.user._id;
+      cloneData.governance.isLocked = false;
+      cloneData.governance.version = 1;
+    }
+
+    // 3. Create
+    const newVariant = new VariantMaster(cloneData);
+    await newVariant.save({ session });
+
+    // 4. Update usage stats if necessary
+    const sizeIds = cloneData.sizes?.map(s => s.sizeId).filter(Boolean) || (cloneData.sizeId ? [cloneData.sizeId] : []);
+    if (sizeIds.length > 0 && mongoose.models.SizeMaster) {
+      await Promise.all(
+        sizeIds.map(sId => mongoose.models.SizeMaster.incrementUsage(sId).session(session))
+      );
+    }
+
+    // 5. Create Inventory record if requested
+    if (req.body.copyInventory && defaultWarehouse && VariantInventory) {
+      await VariantInventory.create([{
+        variant: newVariant._id,
+        warehouse: defaultWarehouse._id,
+        quantity: activeQty,
+        reservedQuantity: 0
+      }], { session });
+    }
+
+    await session.commitTransaction();
+
+    // ✅ Recompute Snapshot (Debounced)
+    SnapshotService.triggerRecompute(newVariant.productGroupId);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Variant cloned successfully. Old variant is untouched.',
+      data: newVariant
+    });
+
+  } catch (err) {
+    await session.abortTransaction();
+    console.error('[cloneVariant]', err);
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: 'Clone would result in a duplicate variant.' });
+    }
+    return res.status(500).json({ success: false, message: 'Failed to clone variant.', error: err.message });
+  } finally {
+    session.endSession();
+  }
 }

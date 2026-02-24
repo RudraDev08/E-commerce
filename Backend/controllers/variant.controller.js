@@ -330,9 +330,18 @@ exports.update = async (req, res) => {
         const { id } = req.params;
         const updates = req.body;
 
+        const immutableFields = ['attributeValueIds', 'attributeDimensions', 'configHash', 'productGroup', 'productGroupId'];
+        const hasImmutableUpdate = immutableFields.some(field => Object.prototype.hasOwnProperty.call(updates, field));
+
+        if (hasImmutableUpdate) {
+            return res.status(400).json({
+                success: false,
+                message: 'Variant identity is immutable. Archive and recreate instead.'
+            });
+        }
+
         // Prevent updating critical fields
         delete updates.sku;
-        delete updates.configHash;
         delete updates._id;
 
         const variant = await VariantMaster.findByIdAndUpdate(
@@ -382,7 +391,7 @@ exports.delete = async (req, res) => {
         }
 
         // Soft delete
-        variant.status = 'deleted';
+        variant.status = 'ARCHIVED';
         await variant.save({ session });
 
         // Decrement usageCount for all sizes this variant held
@@ -397,7 +406,7 @@ exports.delete = async (req, res) => {
 
         return res.json({
             success: true,
-            message: 'Variant deleted successfully',
+            message: 'Variant archived successfully',
             data: variant
         });
     } catch (error) {
@@ -490,3 +499,107 @@ exports.addImages = async (req, res) => {
         });
     }
 };
+
+/**
+ * Archive-to-Edit Clone Flow (Admin)
+ * POST /api/admin/variants/:id/clone
+ */
+exports.clone = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const { id } = req.params;
+
+        // 1. Find original variant
+        const originalVariant = await VariantMaster.findById(id).lean().session(session);
+        if (!originalVariant) {
+            await session.abortTransaction();
+            return res.status(404).json({ success: false, message: 'Variant not found' });
+        }
+
+        // 2. Prepare new variant payload (Copy, new configHash logic will be handled automatically by pre-save hooks on save depending on implementation, but safer to generate new configHash directly or just let the model handle it if we are copying it)
+        // Wait, pre-save hook regenerates configHash automatically when identity changes. Since we are creating a *new* document, we need a new SKU and new identity? 
+        // No, the prompt says "If admin wants to change attributes: Archive old variant, Create new variant... POST /variants/:id/clone"
+        // And "Copy variant, New configHash, New SKU, Status = DRAFT, Old variant remains archived".
+        // Wait, creating an EXACT copy will yield the same configHash, and unique index will throw 11000 E11000 duplicate key error.
+        // Wait! The prompt says "If admin wants to change attributes: ... Create new variant". 
+        // BUT the endpoint is `/variants/:id/clone`. 
+        // If it's a clone, you would pass the new attributes in req.body?
+
+        // Let's assume req.body contains the changes (like new attributeValueIds).
+        // If req.body is empty, it'll just fail because configHash will be identical.
+        // So we apply updates from req.body to the clone before saving.
+
+        const cloneData = { ...originalVariant, ...req.body };
+        delete cloneData._id;
+        delete cloneData.createdAt;
+        delete cloneData.updatedAt;
+        delete cloneData.__v;
+        delete cloneData.configHash; // Let pre-save hook generate new one
+        delete cloneData.sku; // Will generate a new one
+        delete cloneData.generationBatchId;
+
+        // Generate new SKU
+        const sizeValues = cloneData.sizes?.map(s => s.value) || [];
+        const color = cloneData.colorId ? await ColorMaster.findById(cloneData.colorId).session(session) : null;
+        cloneData.sku = await VariantMaster.generateSKU(
+            cloneData.brand || originalVariant.brand, // Fallback if applicable
+            cloneData.productGroupId,
+            sizeValues,
+            color?.name || cloneData.displayColorName
+        );
+
+        cloneData.status = 'DRAFT';
+
+        // 3. Create clone
+        const newVariant = new VariantMaster(cloneData);
+        await newVariant.save({ session });
+
+        // 4. Update sizes usage
+        const sizeIds = cloneData.sizes?.map(s => s.sizeId).filter(Boolean) || (cloneData.sizeId ? [cloneData.sizeId] : []);
+        if (sizeIds.length > 0) {
+            await Promise.all(
+                sizeIds.map(sizeId => SizeMaster.incrementUsage(sizeId).session(session))
+            );
+        }
+
+        // 5. Default Warehouse
+        const defaultWarehouse = await WarehouseMaster.findOne({ isDefault: true }).session(session);
+        if (defaultWarehouse) {
+            // Check if we need to copy inventory. Prompt: "Copy inventory if required". 
+            // We can check `req.body.copyInventory`
+            let activeQty = 0;
+            if (req.body.copyInventory) {
+                const oldInv = await VariantInventory.findOne({ variant: originalVariant._id, warehouse: defaultWarehouse._id }).session(session);
+                if (oldInv) { activeQty = oldInv.quantity; }
+            }
+
+            await VariantInventory.create([{
+                variant: newVariant._id,
+                warehouse: defaultWarehouse._id,
+                quantity: req.body.copyInventory ? activeQty : 0,
+                reservedQuantity: 0
+            }], { session });
+        }
+
+        await session.commitTransaction();
+
+        res.status(201).json({
+            success: true,
+            message: 'Variant cloned successfully. Old variant is untouched.',
+            data: newVariant
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error('Error cloning variant:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to clone variant',
+            error: error.message
+        });
+    } finally {
+        session.endSession();
+    }
+};
+

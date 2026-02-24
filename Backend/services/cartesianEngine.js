@@ -85,7 +85,7 @@ import { generateConfigHash } from '../utils/configHash.util.js';
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const DEFAULT_MAX_COMBINATIONS = 500;
+export const DEFAULT_MAX_COMBINATIONS = 5000;  // Synced with enterprise limits
 export const HARD_CAP_COMBINATIONS = 10_000; // Never generate more than this
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,8 +118,8 @@ export function normalizeDimensionValue(raw, dimensionKey) {
     const label = String(raw.label ?? raw.displayName ?? raw.name ?? raw.value ?? id);
     const slug = raw.slug ?? toSlug(label);
 
-    const { id: _id, _id: __id, label: _label, displayName: _dn, name: _n, slug: _s, value: _v, ...rest } = raw;  // eslint-disable-line no-unused-vars
-    const meta = { ...rest };
+    const { id: _id, _id: __id, label: _label, displayName: _dn, name: _n, slug: _s, value: _v, meta: _meta, ...rest } = raw;  // eslint-disable-line no-unused-vars
+    const meta = { ...(_meta || {}), ...rest };
 
     if (!id) throw new Error(`[CartesianEngine] DimensionValue in "${dimensionKey}" has no resolvable id`);
 
@@ -153,7 +153,15 @@ export function normalizeDimension(raw) {
         }
     }
 
-    return { key, label, disabled, values };
+    return {
+        key,
+        label,
+        disabled,
+        values,
+        type: raw.type ?? (key === 'color' || key === 'size' ? 'BASE' : 'ATTRIBUTE'),
+        attributeId: raw.attributeId ?? (key === 'color' || key === 'size' ? null : key),
+        attributeName: raw.attributeName ?? label
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -205,12 +213,14 @@ export function guardExplosion(count, limit = DEFAULT_MAX_COMBINATIONS) {
  * @param {string}  productGroupId
  * @param {Object.<string, DimensionValue>} selections
  * @returns {string} 64-char hex
+ */
 export function buildConfigHash(productGroupId, selections) {
     const colorId = selections['color']?.id;
     const sizeId = selections['size']?.id;
     const attributeValueIds = Object.entries(selections)
-        .filter(([key]) => key !== 'color' && key !== 'size')
-        .map(([, val]) => val.id);
+        .filter(([key]) => key !== 'color' && key !== 'size' && key !== 'attributeValueIds' && key !== 'attributeDimensions')
+        .map(([, val]) => val?.id)
+        .filter(Boolean);
 
     return generateConfigHash({
         productGroupId,
@@ -273,6 +283,11 @@ export function buildVariantCombinations({
         (d) => !d.disabled && d.values.length > 0
     );
 
+    // 🟠 STEP 2 — Check Backend Combination Log
+    if (process.env.VARIANT_DEBUG === 'true' || process.env.NODE_ENV === 'development') {
+        console.log("[VariantDebug] Dimension Groups:", activeDims.map(d => ({ key: d.key, count: d.values.length })));
+    }
+
     if (activeDims.length === 0) {
         return [];
     }
@@ -290,13 +305,33 @@ export function buildVariantCombinations({
         const next = [];
         for (const existingSelection of acc) {
             for (const value of dim.values) {
-                next.push({
+                const combo = {
                     ...existingSelection,
                     [dim.key]: value,
-                });
+                };
+
+                // Step 3 Logic: Produce attribute structured data
+                if (dim.type === 'ATTRIBUTE') {
+                    combo.attributeValueIds = [...(existingSelection.attributeValueIds || [])];
+                    combo.attributeDimensions = [...(existingSelection.attributeDimensions || [])];
+
+                    combo.attributeValueIds.push(value.id);
+                    combo.attributeDimensions.push({
+                        attributeId: dim.attributeId || dim.key,
+                        attributeName: dim.attributeName || dim.label,
+                        valueId: value.id
+                    });
+                }
+
+                next.push(combo);
             }
         }
         acc = next;
+    }
+
+    // 🟠 STEP 2 — Log Generated Combinations
+    if (process.env.VARIANT_DEBUG === 'true' || process.env.NODE_ENV === 'development') {
+        console.log(`[VariantDebug] Generated Combinations: ${acc.length}`);
     }
 
     // 5. Map to final VariantCombination objects
@@ -307,6 +342,8 @@ export function buildVariantCombinations({
         configHash: buildConfigHash(productGroupId, selections),
         selections,
         dimensionOrder,
+        attributeValueIds: selections.attributeValueIds || [],
+        attributeDimensions: selections.attributeDimensions || [],
     }));
 }
 
@@ -468,13 +505,16 @@ export function fromApiInput(apiBody = {}) {
         if (!attrDim.attributeId) continue;
         dimensions.push({
             key: attrDim.attributeId,
-            label: attrDim.label ?? attrDim.attributeId,
+            label: attrDim.label ?? attrDim.attributeName ?? attrDim.attributeId,
             values: attrDim.values ?? [],
             disabled: attrDim.disabled ?? false,
+            type: 'ATTRIBUTE',
+            attributeId: attrDim.attributeId,
+            attributeName: attrDim.attributeName ?? attrDim.label ?? attrDim.attributeId
         });
     }
 
-    return { productGroupId, dimensions, maxCombinations, _batchId: crypto.randomUUID() };
+    return { productGroupId, dimensions: dimensions.map(normalizeDimension), maxCombinations, _batchId: crypto.randomUUID() };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

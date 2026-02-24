@@ -19,6 +19,7 @@ connectDB();
 
 // Start Background Workers
 startReservationWorker();
+await import('./workers/variantWorker.js'); // Starts BullMQ worker
 
 const PORT = process.env.PORT || 5000;
 

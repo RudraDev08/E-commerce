@@ -2,7 +2,8 @@ import express from 'express';
 import {
     createOrder,
     getOrderById,
-    getMyOrders
+    getMyOrders,
+    updateOrderStatus
 } from '../../controllers/Order/OrderController.js';
 
 import { protect } from '../../middlewares/auth.middleware.js';
@@ -17,5 +18,8 @@ router.get('/my-orders', protect, getMyOrders);
 
 // Get Single Order
 router.get('/:orderId', protect, getOrderById);
+
+// ✅ Update Order Status (Admin)
+router.put('/:orderId/status', protect, updateOrderStatus);
 
 export default router;

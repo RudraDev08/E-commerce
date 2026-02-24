@@ -1,0 +1,145 @@
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:02:46.010Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:02:46.050Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:02:46.051Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:02:46.051Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:18.501Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:22:18.545Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:18.585Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:22:18.597Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:22:18.598Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:22:18.598Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:18.740Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:18.921Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:19.137Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:19.401Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:19.711Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:20.066Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:20.471Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:20.938Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:21.450Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:22.009Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:22.611Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:23.274Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:23.988Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:24.750Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:25.552Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:26.417Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:27.328Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:28.318Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:29.335Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:30.397Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:31.512Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:32.666Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:33.875Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:35.153Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:36.463Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:37.817Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:39.226Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:40.686Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:42.198Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:43.761Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:45.373Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:47.033Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:48.750Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:22:50.512Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:01.457Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:23:01.502Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:01.540Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:23:01.552Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:23:01.552Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:23:01.553Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:01.660Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:01.826Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:02.043Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:02.308Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:02.616Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:02.968Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:03.372Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:03.836Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:04.349Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:04.910Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:05.524Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:06.177Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:06.889Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:07.651Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:08.457Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:09.321Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:10.228Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:11.182Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:12.193Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:13.245Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:14.352Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:15.519Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:16.731Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:48.365Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:23:48.405Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:48.442Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:23:48.455Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:23:48.456Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:23:48.456Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:48.563Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:48.730Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:48.946Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:49.208Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:49.524Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:49.882Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:50.288Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:50.753Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:51.270Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:51.828Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:52.434Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:53.093Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:53.805Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:54.568Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:55.371Z"}
+{"error":"","level":"error","message":"[VariantQueue] Redis connection error","service":"backend-api","timestamp":"2026-02-24T14:23:56.227Z"}
+{"error":"","level":"error","message":"[Redis Queue] Connection failed (suppressing further spam)","service":"backend-api","timestamp":"2026-02-24T14:27:46.284Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:27:46.334Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:27:46.418Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:27:46.477Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:27:46.478Z"}
+{"error":"","level":"error","message":"[Redis Worker] Connection failed (suppressing further spam)","service":"backend-api","timestamp":"2026-02-24T14:27:46.490Z"}
+{"error":"","level":"error","message":"[Redis Queue] Connection failed (suppressing further spam)","service":"backend-api","timestamp":"2026-02-24T14:29:38.091Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:29:38.157Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:29:38.222Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:29:38.223Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:29:38.223Z"}
+{"error":"","level":"error","message":"[Redis Worker] Connection failed (suppressing further spam)","service":"backend-api","timestamp":"2026-02-24T14:29:38.228Z"}
+{"error":"","level":"error","message":"[Redis Queue] Connection failed (suppressing further spam)","service":"backend-api","timestamp":"2026-02-24T14:30:46.817Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:30:46.861Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:30:46.916Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:30:46.917Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:30:46.918Z"}
+{"error":"","level":"error","message":"[Redis Worker] Connection failed (suppressing further spam)","service":"backend-api","timestamp":"2026-02-24T14:30:46.921Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:33:43.114Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:34:23.517Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:35:25.390Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:35:25.446Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:35:25.447Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:35:25.447Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:37:21.105Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:37:21.164Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:37:21.165Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:37:21.166Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:42:57.273Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:42:57.337Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:42:57.338Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:42:57.338Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:45:05.005Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:45:05.089Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:45:05.090Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:45:05.091Z"}
+{"level":"error","message":"[Redis] Connection closed permanently. Exiting process.","service":"backend-api","timestamp":"2026-02-24T14:45:20.156Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:46:15.292Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:46:15.437Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:46:15.439Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:46:15.439Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:47:42.196Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:47:42.252Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:47:42.253Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:47:42.253Z"}
+{"level":"error","message":"[Redis] Connection closed permanently. Exiting process.","service":"backend-api","timestamp":"2026-02-24T14:47:57.316Z"}
+{"level":"info","message":"Starting Inventory Reservation TTL Worker (Registered)...","service":"backend-api","timestamp":"2026-02-24T14:49:09.542Z"}
+{"level":"info","message":"Server started successfully","service":"backend-api","timestamp":"2026-02-24T14:49:09.602Z"}
+{"level":"info","message":"🚀 Server URL: http://localhost:5000","service":"backend-api","timestamp":"2026-02-24T14:49:09.603Z"}
+{"level":"info","message":"📊 Health Check: http://localhost:5000/health","service":"backend-api","timestamp":"2026-02-24T14:49:09.604Z"}

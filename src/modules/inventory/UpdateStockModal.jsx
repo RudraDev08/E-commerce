@@ -16,8 +16,9 @@ import {
     RefreshCw
 } from "lucide-react";
 
-const API_BASE = "http://localhost:5000/api/inventory";
-const WAREHOUSE_API = "http://localhost:5000/api/warehouses";
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE = `${API_URL}/inventory`;
+const WAREHOUSE_API = `${API_URL}/warehouses`;
 
 const UpdateStockModal = ({ inventory, onClose, onSuccess }) => {
     const [updateType, setUpdateType] = useState('add');

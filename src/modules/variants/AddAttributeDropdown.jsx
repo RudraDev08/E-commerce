@@ -103,12 +103,26 @@ export default function AddAttributeDropdown({
             const valRes = await attributeValueAPI.getAll({ status: 'active', limit: 1000 });
             const allVals = valRes.data.data || valRes.data || [];
 
-            // Step 3: Group values by typeId
+            // Step 3: Group values by attribute type ID (defensive)
             const grouped = {};
             allVals.forEach(v => {
-                const tid = v.typeId || v.type || v.attributeTypeId;
-                if (!tid) return;
-                const key = typeof tid === 'object' ? tid._id?.toString() : tid.toString();
+                let typeRef =
+                    v.typeId ||
+                    v.type ||
+                    v.attributeTypeId ||
+                    v.attributeType ||
+                    v.attributeMasterId;
+
+                if (!typeRef) {
+                    console.warn("AttributeValue missing type reference:", v);
+                    return;
+                }
+
+                const key =
+                    typeof typeRef === 'object'
+                        ? typeRef._id?.toString()
+                        : typeRef.toString();
+
                 if (!grouped[key]) grouped[key] = [];
                 grouped[key].push(v);
             });

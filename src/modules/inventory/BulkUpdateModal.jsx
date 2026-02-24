@@ -4,7 +4,8 @@ import axios from 'axios';
 import Papa from 'papaparse';
 import { toast } from 'react-hot-toast';
 
-const API_BASE = 'http://localhost:5000/api/inventory';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE = `${API_URL}/inventory`;
 
 const BulkUpdateModal = ({ onClose, onSuccess }) => {
     const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'manual'
@@ -280,8 +281,8 @@ const BulkUpdateModal = ({ onClose, onSuccess }) => {
                                                         <td className="px-4 py-2 text-sm font-mono text-gray-900">{row.sku}</td>
                                                         <td className="px-4 py-2 text-sm text-gray-900">
                                                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${row.updateType === 'add' ? 'bg-green-100 text-green-800' :
-                                                                    row.updateType === 'deduct' ? 'bg-red-100 text-red-800' :
-                                                                        'bg-blue-100 text-blue-800'
+                                                                row.updateType === 'deduct' ? 'bg-red-100 text-red-800' :
+                                                                    'bg-blue-100 text-blue-800'
                                                                 }`}>
                                                                 {row.updateType.toUpperCase()}
                                                             </span>

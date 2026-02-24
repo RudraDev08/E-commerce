@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
 import Decimal from 'decimal.js';
-import { generateConfigHash, sortAttributeValueIds } from '../../utils/configHash.util.js';
+import { buildVariantIdentity, sortAttributeValueIds } from '../../utils/configHash.util.js';
+import { LIMITS } from '../../utils/variantIdentity.js';
 
 // Lazy import to avoid circular dependency — resolved at hook execution time
 let _assertCategoryScope = null;
@@ -96,12 +97,13 @@ const variantMasterSchema = new mongoose.Schema(
         },
 
         // Zero-to-many attribute values (processor, material, RAM capacity, etc.)
-        attributeValueIds: [
-            {
+        attributeValueIds: {
+            type: [{
                 type: mongoose.Schema.Types.ObjectId,
                 ref: 'AttributeValue',
-            },
-        ],
+            }],
+            immutable: true,
+        },
 
         // ── SECTION 6: Persisted structured dimension metadata ──────────────┄
         // This replaces runtime reconstruction from populated attributeValueIds.
@@ -203,6 +205,13 @@ const variantMasterSchema = new mongoose.Schema(
             type: String,
             unique: true,
             index: true,
+            immutable: true,
+        },
+
+        identityVersion: {
+            type: Number,
+            default: LIMITS.IDENTITY_VERSION || 1,
+            immutable: true
         },
 
         // ═══════════════════════════════════════════════
@@ -370,24 +379,20 @@ variantMasterSchema.pre('save', async function () {
  * [STEP 2] Hash & Dedup Middleware
  * Deduplicate attributes and regenerate configHash whenever identity changes.
  */
-variantMasterSchema.pre('save', function () {
-    if (this.isModified('productGroupId') ||
+variantMasterSchema.pre('save', function (next) {
+    if (this.isModified('colorId') ||
         this.isModified('sizes') ||
-        this.isModified('colorId') ||
-        this.isModified('attributeValueIds') ||
-        this.isModified('attributeDimensions')) {
+        this.isModified('attributeValueIds')) {
 
-        if (this.attributeValueIds && this.attributeValueIds.length > 0) {
-            this.attributeValueIds = sortAttributeValueIds(this.attributeValueIds);
-        }
-
-        this.configHash = generateConfigHash({
+        this.configHash = buildVariantIdentity({
             productGroupId: this.productGroupId,
             colorId: this.colorId,
             sizes: this.sizes,
             attributeValueIds: this.attributeValueIds
         });
     }
+
+    next();
 });
 
 /**

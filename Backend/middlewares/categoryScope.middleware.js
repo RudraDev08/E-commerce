@@ -51,6 +51,7 @@ import mongoose from 'mongoose';
 import CategoryAttribute from '../models/CategoryAttribute.model.js';
 import AttributeValue from '../models/AttributeValue.model.js';
 import ProductGroupMaster from '../models/masters/ProductGroupMaster.enterprise.js';
+import Product from '../src/modules/product/product.model.js';
 import { ValidationError, NotFoundError } from '../utils/ApiError.js';
 import { asyncHandler } from './errorHandler.middleware.js';
 import logger from '../config/logger.js';
@@ -126,12 +127,33 @@ export async function assertCategoryScope(productGroupId, attributeValueIds) {
     }
 
     // ── 3. Resolve ProductGroup → Category ────────────────────────────────────
-    const productGroup = await ProductGroupMaster.findById(productGroupId)
+    let productGroup = await ProductGroupMaster.findById(productGroupId)
         .select('_id categoryId name')
         .lean();
 
     if (!productGroup) {
-        throw new NotFoundError(`ProductGroup "${productGroupId}" not found`);
+        // Fallback: try the legacy Product model (collection: 'products').
+        // Products have a `category` field rather than `categoryId`.
+        const legacyProduct = await Product.findById(productGroupId)
+            .select('_id category name')
+            .lean();
+
+        if (!legacyProduct) {
+            throw new NotFoundError(`ProductGroup "${productGroupId}" not found in productgroupmasters or products`);
+        }
+
+        // Synthesise a compatible object so the rest of the function works.
+        productGroup = {
+            _id: legacyProduct._id,
+            name: legacyProduct.name,
+            // Map `category` → `categoryId` for uniform handling below.
+            categoryId: legacyProduct.category ?? null,
+        };
+
+        logger.info('[CategoryScope] Fell back to legacy Product model', {
+            productGroupId,
+            productName: legacyProduct.name,
+        });
     }
 
     // NOTE: ProductGroupMaster currently has no `categoryId` field.

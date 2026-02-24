@@ -51,45 +51,59 @@ export function sortAttributeValueIds(ids = []) {
  * @param {Array<string|ObjectId>}          [params.attributeValueIds] — optional, order-independent
  * @returns {string} 64-char hex SHA-256 hash
  */
-export function generateConfigHash({
+export function buildVariantIdentity({
     productGroupId,
     colorId,
-    sizeId,
-    sizeIds,
     sizes,
-    attributeValueIds = [],
+    attributeValueIds
 }) {
-    if (!productGroupId) throw new Error('configHash: productGroupId is required');
 
-    // ── 1. Resolve size IDs from any of the three representations ─────────────
-    //    Priority: explicit sizeIds[] > sizes[{sizeId}] array > legacy sizeId scalar
-    let resolvedSizeIds = [];
-    if (Array.isArray(sizeIds) && sizeIds.length > 0) {
-        resolvedSizeIds = sizeIds.map(id => id.toString());
-    } else if (Array.isArray(sizes) && sizes.length > 0) {
-        resolvedSizeIds = sizes
-            .map(s => (s.sizeId ? s.sizeId.toString() : null))
-            .filter(Boolean);
-    } else if (sizeId) {
-        resolvedSizeIds = [sizeId.toString()];
+    const identityParts = [];
+
+    // 1️⃣ Product Group (Scoped uniqueness)
+    if (!productGroupId) {
+        throw new Error("productGroupId required for identity hash");
     }
-    resolvedSizeIds.sort(); // deterministic order
 
-    // ── 2. Sort attribute value IDs ────────────────────────────────────────────
-    const sortedAttrs = sortAttributeValueIds(attributeValueIds);
+    identityParts.push(`pg:${productGroupId.toString()}`);
 
-    // ── 3. Build the canonical hash input ─────────────────────────────────────
-    //    Empty slots become empty strings so the separator character '|' is always
-    //    present, preventing two different combos from producing identical raw inputs.
-    const raw = [
-        productGroupId.toString(),
-        resolvedSizeIds.join(','),        // '' if no sizes
-        colorId ? colorId.toString() : '', // '' if no color
-        sortedAttrs.join('|'),            // '' if no attributes
-    ].join('::');
+    // 2️⃣ Color
+    if (colorId) {
+        identityParts.push(`color:${colorId.toString()}`);
+    }
 
-    return crypto.createHash('sha256').update(raw).digest('hex');
+    // 3️⃣ Sizes (handle array safely)
+    if (Array.isArray(sizes) && sizes.length > 0) {
+        const normalizedSizes = sizes
+            .map(s => s.sizeId.toString())
+            .sort();
+
+        for (const sizeId of normalizedSizes) {
+            identityParts.push(`size:${sizeId}`);
+        }
+    }
+
+    // 4️⃣ Attributes (sorted for determinism)
+    if (Array.isArray(attributeValueIds) && attributeValueIds.length > 0) {
+        const sortedAttrs = attributeValueIds
+            .map(id => id.toString())
+            .sort();
+
+        for (const attrId of sortedAttrs) {
+            identityParts.push(`attr:${attrId}`);
+        }
+    }
+
+    // 5️⃣ Final deterministic string
+    const identityString = identityParts.join('|');
+
+    // 6️⃣ SHA-256 hash
+    return crypto
+        .createHash('sha256')
+        .update(identityString)
+        .digest('hex');
 }
 
-// ── BACKWARD-COMPATIBLE DEFAULT EXPORT ────────────────────────────────────────
-export default generateConfigHash;
+// ── BACKWARD-COMPATIBLE ALIAS ──────────────────────────────
+export const generateConfigHash = buildVariantIdentity;
+export default buildVariantIdentity;

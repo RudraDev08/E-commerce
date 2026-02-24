@@ -14,7 +14,9 @@ import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
 import InventoryReservation from '../models/InventoryReservation.model.js';
 import logger from '../config/logger.js';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+import { createRedisConnection } from '../config/redis.js';
+
+const redis = createRedisConnection();
 const RESERVATION_RATE_LIMIT_KEY = 'reservation_rate_limit';
 const MAX_RESERVATIONS_PER_USER = 5;
 const RATE_LIMIT_WINDOW = 60; // seconds

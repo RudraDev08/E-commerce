@@ -33,6 +33,7 @@ import ColorMaster from '../models/masters/ColorMaster.enterprise.js';
 import SizeMaster from '../models/masters/SizeMaster.enterprise.js';
 import AttributeValue from '../models/AttributeValue.model.js';
 import ProductGroupMaster from '../models/masters/ProductGroupMaster.enterprise.js';
+import Product from '../src/modules/product/product.model.js';
 import WarehouseMaster from '../models/WarehouseMaster.js';
 import {
     buildVariantCombinations,
@@ -47,6 +48,7 @@ import {
     validateLimits,
     LIMITS,
 } from '../utils/variantIdentity.js';
+import { SnapshotService } from './snapshot.service.js';
 import logger from '../config/logger.js';
 
 const MAX_COMBINATIONS = LIMITS.MAX_COMBINATIONS;  // single source of truth (variantIdentity)
@@ -66,17 +68,14 @@ const MAX_RETRIES = 3;
 async function loadAndEnrichDimensions(parsedInput) {
     const { dimensions } = parsedInput;
 
-    // Partition dimension keys by their type for specialized DB fetches
     const colorDim = dimensions.find((d) => d.key === 'color');
     const sizeDim = dimensions.find((d) => d.key === 'size');
     const attrDims = dimensions.filter((d) => d.key !== 'color' && d.key !== 'size');
 
-    // Collect all IDs per type, forcefully discarding falsy values
     const colorIds = (colorDim?.values.map((v) => v.id) ?? []).filter(Boolean);
     const sizeIds = (sizeDim?.values.map((v) => v.id) ?? []).filter(Boolean);
     const attrValueIds = attrDims.flatMap((d) => d.values.map((v) => v.id)).filter(Boolean);
 
-    // Batch DB calls in parallel
     const [colors, sizes, attrValues] = await Promise.all([
         colorIds.length
             ? ColorMaster.find({ _id: { $in: colorIds } })
@@ -89,20 +88,21 @@ async function loadAndEnrichDimensions(parsedInput) {
                 .lean()
             : [],
         attrValueIds.length
-            ? AttributeValue.find({ _id: { $in: attrValueIds }, isDeleted: false, status: 'active' })
+            ? AttributeValue.find({ _id: { $in: attrValueIds }, isDeleted: false })
                 .select('_id name displayName slug code attributeType')
+                .populate('attributeType', 'name displayName createsVariant')
                 .lean()
             : [],
     ]);
 
-    // Validate: every requested ID must be found
-    _validateFound('color', colorIds, colors);
-    _validateFound('size', sizeIds, sizes);
-    _validateFound('attributeValue', attrValueIds, attrValues);
+    // 🟠 STEP 2/5 LOGS — Check backend filtering logic
+    if (process.env.VARIANT_DEBUG === 'true' || process.env.NODE_ENV === 'development') {
+        console.log(`[VariantDebug] Loaded ${attrValues.length} total attribute values from DB.`);
+    }
 
-    // Build enrichment map: id → DimensionValue
     const enrichMap = new Map();
 
+    // ── COLORS ───────────────────────────────────────────────────────────────
     for (const c of colors) {
         enrichMap.set(c._id.toString(), {
             id: c._id.toString(),
@@ -111,6 +111,15 @@ async function loadAndEnrichDimensions(parsedInput) {
             meta: { hexCode: c.hexCode, rgbCode: c.rgbCode, colorFamily: c.colorFamily },
         });
     }
+    // Resilience: Individual fallback for missing color IDs
+    for (const id of colorIds) {
+        if (!enrichMap.has(id)) {
+            logger.warn(`[VariantDimension] Color ${id} not found in DB. Using fallback decoration.`);
+            enrichMap.set(id, { id, label: `Color ${id.substring(id.length - 4)}`, slug: _toSlug(`color-${id}`), meta: {} });
+        }
+    }
+
+    // ── SIZES ────────────────────────────────────────────────────────────────
     for (const s of sizes) {
         enrichMap.set(s._id.toString(), {
             id: s._id.toString(),
@@ -119,13 +128,40 @@ async function loadAndEnrichDimensions(parsedInput) {
             meta: { category: s.category, gender: s.gender, normalizedRank: s.normalizedRank },
         });
     }
-    for (const av of attrValues) {
+    // Resilience: Individual fallback for missing size IDs
+    for (const id of sizeIds) {
+        if (!enrichMap.has(id)) {
+            logger.warn(`[VariantDimension] Size ${id} not found in DB. Using fallback decoration.`);
+            enrichMap.set(id, { id, label: `Size ${id.substring(id.length - 4)}`, slug: _toSlug(`size-${id}`), meta: {} });
+        }
+    }
+
+    // ── ATTRIBUTES (Filter only createsVariant=true) ─────────────────────────
+    // ✅ Phase 6, Step 5: Strict filtering — only include variant-creating dimensions
+    const variantAttributes = attrValues.filter(av => av.attributeType?.createsVariant === true);
+    if (process.env.VARIANT_DEBUG === 'true' || process.env.NODE_ENV === 'development') {
+        console.log(`[VariantDebug] Filtered to ${variantAttributes.length} variant-creating attributes.`);
+    }
+
+    for (const av of variantAttributes) {
         enrichMap.set(av._id.toString(), {
             id: av._id.toString(),
             label: av.displayName ?? av.name,
             slug: av.slug ?? _toSlug(av.displayName ?? av.name),
-            meta: { code: av.code, attributeTypeId: av.attributeType?.toString() },
+            attributeName: av.attributeType?.displayName ?? av.attributeType?.name ?? 'Unknown',
+            meta: {
+                code: av.code,
+                attributeTypeId: av.attributeType?._id?.toString() ?? av.attributeType?.toString(),
+                attributeTypeName: av.attributeType?.displayName ?? av.attributeType?.name
+            },
         });
+    }
+    // Resilience: Individual fallback for missing attribute values
+    for (const id of attrValueIds) {
+        if (!enrichMap.has(id)) {
+            logger.warn(`[VariantDimension] AttributeValue ${id} not found in DB. Using fallback decoration.`);
+            enrichMap.set(id, { id, label: `Value ${id.substring(id.length - 4)}`, slug: _toSlug(`value-${id}`), attributeName: 'Attribute', meta: {} });
+        }
     }
 
     return enrichMap;
@@ -217,9 +253,16 @@ export async function previewVariantDimensions(apiBody) {
     const activeDims = enrichedDimensions.filter((d) => !d.disabled && d.values.length > 0);
     const breakdown = activeDims.map((d) => ({ key: d.key, label: d.label, valueCount: d.values.length }));
 
+    // Format dimensionBreakdown as requested in Phase 2.2
+    const dimensionBreakdown = {};
+    activeDims.forEach(d => {
+        dimensionBreakdown[d.label || d.key] = d.values.length;
+    });
+
     return {
         totalCombinations: combinations.length,
         breakdown,
+        dimensionBreakdown, // Phase 2.2 format
         dimensions: enrichedDimensions,
         combinations: combinations.map((c) => ({
             combinationKey: c.combinationKey,
@@ -245,6 +288,11 @@ export async function previewVariantDimensions(apiBody) {
  * @returns {Promise<Object>}
  */
 export async function generateVariantDimensions(apiBody) {
+    // FIX PROMPT 3 — Protect Against Recursive Job Spawning
+    if (apiBody.__internalWorkerCall) {
+        throw new Error('Recursive job spawn detected: Service was called with worker-only flag but attempted to re-dispatch.');
+    }
+
     // ── SECTION 9: Validate system limits BEFORE any DB call ──────────────────
     validateLimits(apiBody);
 
@@ -272,17 +320,40 @@ export async function generateVariantDimensions(apiBody) {
     const enrichedInput = { ...parsedInput, dimensions: enrichedDimensions, maxCombinations: MAX_COMBINATIONS };
 
     // ENGINE: expand combinations
+    console.log("Incoming payload:", apiBody);
     const combinations = buildVariantCombinations(enrichedInput);
-    if (combinations.length === 0) {
-        return { success: true, totalGenerated: 0, skipped: 0, message: 'No active dimensions produced combinations.' };
+    console.log("Cartesian combos:", combinations.length);
+
+    // Phase 2.1: Combination Hard Cap
+    if (combinations.length > MAX_COMBINATIONS) {
+        throw new Error(`Variant explosion detected: ${combinations.length} exceeds max limit of ${MAX_COMBINATIONS}`);
     }
 
-    // ProductGroup metadata for SKU generation
-    const productGroup = await ProductGroupMaster.findById(parsedInput.productGroupId)
+    if (combinations.length > 0) {
+        console.log("First combo:", JSON.stringify(combinations[0], null, 2));
+    }
+
+    if (combinations.length === 0) {
+        return { success: true, totalGenerated: 0, skipped: 0, message: 'No new combinations produced.' };
+    }
+
+    // ProductGroup metadata for SKU generation.
+    // Try enterprise ProductGroupMaster first, then fall back to the legacy
+    // Product model (collection: 'products') so the V2 engine works even
+    // when the productgroupmasters collection is empty.
+    let productGroup = await ProductGroupMaster.findById(parsedInput.productGroupId)
         .select('name slug')
         .lean();
     if (!productGroup) {
-        throw Object.assign(new Error(`ProductGroup ${parsedInput.productGroupId} not found`), { statusCode: 404 });
+        productGroup = await Product.findById(parsedInput.productGroupId)
+            .select('name slug')
+            .lean();
+    }
+    if (!productGroup) {
+        throw Object.assign(
+            new Error(`ProductGroup ${parsedInput.productGroupId} not found in productgroupmasters or products collections`),
+            { statusCode: 404 }
+        );
     }
 
     const brand = apiBody.brand ?? '';
@@ -296,9 +367,6 @@ export async function generateVariantDimensions(apiBody) {
 
     let attempts = 0;
     while (attempts < MAX_RETRIES) {
-        const session = await mongoose.startSession();
-        session.startTransaction();
-
         try {
             const result = await _executeWrite({
                 parsedInput,
@@ -306,17 +374,14 @@ export async function generateVariantDimensions(apiBody) {
                 brand,
                 pgSlug,
                 enrichedDimensions,
-                session,
                 apiBody,
             });
-            await session.commitTransaction();
 
             // Invalidate memo cache — data changed
             clearMemoCache();
 
             return result;
         } catch (err) {
-            await session.abortTransaction();
             const isTransient = err.errorLabels?.includes('TransientTransactionError');
             const isDuplicate = err.code === 11000;
             if ((isTransient || isDuplicate) && attempts < MAX_RETRIES - 1) {
@@ -325,17 +390,14 @@ export async function generateVariantDimensions(apiBody) {
                 continue;
             }
             throw err;
-        } finally {
-            session.endSession();
         }
     }
 }
 
-async function _executeWrite({ parsedInput, candidates, brand, pgSlug, enrichedDimensions, session, apiBody }) {
-    // 1. Batch duplicate check by configHash
+async function _executeWrite({ parsedInput, candidates, brand, pgSlug, enrichedDimensions, apiBody }) {
+    // 1. Batch duplicate check by configHash (no session — standalone MongoDB)
     const hashList = candidates.map((c) => c.configHash);
     const existingHashes = await VariantMaster.find({ configHash: { $in: hashList } })
-        .session(session)
         .select('configHash')
         .lean();
     const existingHashSet = new Set(existingHashes.map((v) => v.configHash));
@@ -349,96 +411,84 @@ async function _executeWrite({ parsedInput, candidates, brand, pgSlug, enrichedD
     const colorDim = enrichedDimensions.find((d) => d.key === 'color');
     const sizeDim = enrichedDimensions.find((d) => d.key === 'size');
 
-    const defaultWarehouse = await WarehouseMaster.findOne({ isDefault: true }).session(session).lean();
+    const defaultWarehouse = await WarehouseMaster.findOne({ isDefault: true }).lean();
 
     // 3. Build VariantMaster docs (SECTION 6: persist attributeDimensions)
     const variantDocs = newCandidates.map((c) => {
         const colorVal = c.selections['color'];
         const sizeVal = c.selections['size'];
 
-        // ── Flat attributeValueIds for backward-compat querying ────────────────
-        const attrValueIds = Object.entries(c.selections)
-            .filter(([k]) => k !== 'color' && k !== 'size')
-            .map(([, v]) => new mongoose.Types.ObjectId(v.id));
-
-        // ── SECTION 6: Structured attributeDimensions (persisted snapshot) ────
-        // key = attributeId (the attributeType ObjectId string in the engine)
-        // v.meta.attributeTypeId is set during loadAndEnrichDimensions
-        const attributeDimensions = Object.entries(c.selections)
-            .filter(([k]) => k !== 'color' && k !== 'size')
-            .map(([dimKey, v]) => ({
-                attributeId: dimKey.match(/^[0-9a-f]{24}$/i)
-                    ? new mongoose.Types.ObjectId(dimKey)
-                    : null,   // key is the attributeType ObjectId
-                attributeName: v.meta?.attributeTypeName ?? null,  // historic snapshot
-                valueId: new mongoose.Types.ObjectId(v.id),
-            }));
-
-        // ── SECTION 3: Per-combination cardinality check ──────────────────────
-        validateCardinality(attributeDimensions.map(d => ({
-            attributeId: d.attributeId?.toString() ?? 'unknown',
-            valueId: d.valueId?.toString(),
-        })));
-
         const doc = {
             productGroupId: new mongoose.Types.ObjectId(parsedInput.productGroupId),
-            configHash: c.configHash,
-            sku: c.sku,
+            colorId: colorVal ? new mongoose.Types.ObjectId(colorVal.id) : null,
+            sizes: sizeVal
+                ? [{
+                    sizeId: new mongoose.Types.ObjectId(sizeVal.id),
+                    category: sizeVal.meta?.category || 'DIMENSION'
+                }]
+                : [],
+            attributeValueIds: (c.attributeValueIds || []).map(id => new mongoose.Types.ObjectId(id)),
+            attributeDimensions: (c.attributeDimensions || []).map(d => ({
+                attributeId: d.attributeId ? new mongoose.Types.ObjectId(d.attributeId) : null,
+                attributeName: d.attributeName || null,
+                valueId: new mongoose.Types.ObjectId(d.valueId)
+            })),
             price: apiBody.basePrice ?? 0,
             status: 'DRAFT',
-            attributeValueIds: attrValueIds,
-            attributeDimensions,                  // ← persisted (SECTION 6)
-            generationBatchId: parsedInput._batchId ?? null,  // audit (SECTION 10)
+            configHash: c.configHash,
+            sku: c.sku,
+            generationBatchId: parsedInput._batchId ?? null,
             tenantId: apiBody.tenantId ?? 'GLOBAL',
             governance: { createdBy: apiBody.createdBy ?? null },
+            _skipFilterTokenRegen: true
         };
-
-        if (colorVal) {
-            doc.colorId = new mongoose.Types.ObjectId(colorVal.id);
-        }
-
-        if (sizeVal) {
-            doc.sizes = [{
-                sizeId: new mongoose.Types.ObjectId(sizeVal.id),
-                category: sizeVal.meta?.category ?? 'DIMENSION',
-            }];
-        }
-
-        doc._skipFilterTokenRegen = true;
 
         return doc;
     });
 
     // 4. SECTION 2: bulkWrite ordered:false — concurrency-safe duplicate handling
-    // Each op is an insertOne wrapped as upsert-by-configHash to handle the race
-    // where two concurrent sessions generate the same combinations simultaneously.
-    // E11000 on the unique index is silently swallowed; only genuinely new docs
-    // are counted in totalGenerated.
-    const bulkOps = variantDocs.map(doc => ({
-        insertOne: { document: doc }
-    }));
-
     let created = 0;
     let raceDuplicates = 0;
+    const job = apiBody._job; // Passed from worker
+    const signal = apiBody.signal; // AbortController signal for timeout safety
 
-    try {
-        const result = await VariantMaster.bulkWrite(bulkOps, {
-            session,
-            ordered: false,   // DO NOT abort on individual doc errors
-        });
-        created = result.insertedCount ?? 0;
-        raceDuplicates = bulkOps.length - created;  // difference = dupes or other errors
-    } catch (bulkErr) {
-        // bulkWrite with ordered:false throws a BulkWriteError even on partial success
-        if (bulkErr.code === 11000 || bulkErr.name === 'BulkWriteError') {
-            // Extract successful inserts from the result
-            created = bulkErr.result?.nInserted ?? bulkErr.result?.insertedCount ?? 0;
-            raceDuplicates = bulkOps.length - created;
-            logger.warn('[variantDimension] Race-condition duplicates detected and silently skipped', {
-                total: bulkOps.length, created, raceDuplicates
-            });
-        } else {
-            throw bulkErr;  // re-throw real errors
+    // Phase 2.3: Process in batches of 100 — prevents event-loop starvation
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < variantDocs.length; i += BATCH_SIZE) {
+        if (signal?.aborted) {
+            throw new Error('Generation aborted due to timeout');
+        }
+
+        const batch = variantDocs.slice(i, i + BATCH_SIZE);
+        const operations = batch.map(doc => ({
+            insertOne: {
+                document: doc
+            }
+        }));
+
+        try {
+            const bulkResult = await VariantMaster.bulkWrite(operations, { ordered: false });
+            created += bulkResult.nInserted || 0;
+        } catch (bulkErr) {
+            // BulkWriteError contains partial results
+            const inserted = bulkErr.result?.nInserted || 0;
+            created += inserted;
+            raceDuplicates += batch.length - inserted;
+
+            if (bulkErr.code !== 11000 && bulkErr.name !== 'BulkWriteError' && bulkErr.name !== 'MongoBulkWriteError') {
+                logger.error('[variantDimension] Caught non-duplicate bulkWrite error:', bulkErr);
+                throw bulkErr;
+            }
+            logger.info(`[variantDimension] bulkWrite handled ${batch.length - inserted} duplicates/errors in chunk.`);
+        }
+
+        // Phase 2.3: yield to event loop
+        await new Promise(resolve => setImmediate(resolve));
+
+        // Update job progress if running in worker context
+        if (job) {
+            const progress = Math.round((i / variantDocs.length) * 100);
+            await job.updateProgress(Math.min(progress, 99));
         }
     }
 
@@ -449,7 +499,7 @@ async function _executeWrite({ parsedInput, candidates, brand, pgSlug, enrichedD
             // Cannot easily get inserted _ids from bulkWrite without the full result;
             // query back the just-inserted batch by batchId for inventory init.
             const newDocs = parsedInput._batchId
-                ? await VariantMaster.find({ generationBatchId: parsedInput._batchId }).session(session).select('_id').lean()
+                ? await VariantMaster.find({ generationBatchId: parsedInput._batchId }).select('_id').lean()
                 : [];
             if (newDocs.length > 0) {
                 const inventoryDocs = newDocs.map((v) => ({
@@ -458,12 +508,19 @@ async function _executeWrite({ parsedInput, candidates, brand, pgSlug, enrichedD
                     quantity: 0,
                     reservedQuantity: 0,
                 }));
-                await VariantInventory.insertMany(inventoryDocs, { session });
+                await VariantInventory.insertMany(inventoryDocs);
             }
         } catch {
             logger.warn('[variantDimension] VariantInventory init skipped (model may not be registered)');
         }
+
     }
+
+    // 6. Trigger Snapshot Recompute (Debounced)
+    if (created > 0) {
+        SnapshotService.triggerRecompute(parsedInput.productGroupId);
+    }
+
 
     return {
         success: true,

@@ -1,6 +1,7 @@
-import Order from '../../models/Order/OrderSchema.js';
+import Order, { ORDER_TRANSITIONS } from '../../models/Order/OrderSchema.js';
 import '../../src/modules/product/product.model.js';
 import inventoryService from '../../services/inventory.service.js';
+import IdempotencyKey from '../../models/Order/IdempotencyKey.schema.js';
 
 // Helper: Generate Order ID (ORD-YYYYMMDD-XXXX)
 const generateOrderId = async () => {
@@ -24,6 +25,37 @@ const generateOrderId = async () => {
 // CREATE ORDER
 // --------------------------------------------------------------------------
 export const createOrder = async (req, res) => {
+    const key = req.headers['idempotency-key'];
+    if (!key) {
+        return res.status(400).json({ success: false, message: 'Idempotency-Key required' });
+    }
+
+    try {
+        const existing = await IdempotencyKey.findOne({ key });
+
+        if (existing && existing.orderId) {
+            const existingOrder = await Order.findById(existing.orderId);
+            return res.json({
+                success: true,
+                message: "Order placed successfully (Idempotent)",
+                data: existingOrder
+            });
+        }
+
+        if (!existing) {
+            await IdempotencyKey.create({
+                key,
+                userId: req.user?._id || req.body.userId || "65c3f9b0e4b0a1b2c3d4e5f6",
+                expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000)
+            });
+        }
+    } catch (err) {
+        if (err.code === 11000) {
+            return res.status(409).json({ success: false, message: "Request currently processing" });
+        }
+        return res.status(500).json({ success: false, message: err.message });
+    }
+
     const mongoose = (await import('mongoose')).default;
     const session = await mongoose.startSession();
 
@@ -44,7 +76,7 @@ export const createOrder = async (req, res) => {
             }
 
             const VariantMaster = mongoose.models.VariantMaster || mongoose.model('VariantMaster');
-            const ProductVariant = mongoose.models.ProductVariant || mongoose.model('ProductVariant');
+            const ProductVariant = mongoose.models.Variant || mongoose.model('Variant');
 
             let serverSubtotal = 0;
             const processedItems = [];
@@ -133,6 +165,11 @@ export const createOrder = async (req, res) => {
         });
 
         // If we reach here, transaction committed successfully
+        await IdempotencyKey.updateOne(
+            { key },
+            { $set: { orderId: savedOrder._id } }
+        );
+
         res.status(201).json({
             success: true,
             message: "Order placed successfully",
@@ -188,5 +225,91 @@ export const getMyOrders = async (req, res) => {
         res.json({ success: true, data: orders });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// --------------------------------------------------------------------------
+// UPDATE ORDER STATUS (Admin)
+// --------------------------------------------------------------------------
+export const updateOrderStatus = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { status: newStatus, note } = req.body;
+
+        const order = await Order.findOne({ orderId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        // ✅ Block Direct Manual Updates with Transition Guard
+        const allowed = ORDER_TRANSITIONS[order.status] || [];
+        if (!allowed.includes(newStatus)) {
+            return res.status(400).json({
+                success: false,
+                message: `Illegal order transition: ${order.status} → ${newStatus}`
+            });
+        }
+
+        order.status = newStatus;
+        order.timeline.push({
+            status: newStatus,
+            note: note || `Order status updated to ${newStatus}`,
+            user: 'admin'
+        });
+
+        await order.save();
+
+        res.json({ success: true, message: "Order status updated", data: order });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// --------------------------------------------------------------------------
+// PAYMENT WEBHOOK (Async Stock Restore)
+// --------------------------------------------------------------------------
+export const handlePaymentWebhook = async (req, res) => {
+    const mongoose = (await import('mongoose')).default;
+    const session = await mongoose.startSession();
+
+    try {
+        await session.withTransaction(async () => {
+            const { orderId, paymentStatus } = req.body;
+
+            const order = await Order.findById(orderId).session(session);
+            if (!order) {
+                throw { status: 404, message: "Order not found" };
+            }
+
+            // Only act if currently pending
+            if (order.financials.paymentStatus === 'pending') {
+                if (paymentStatus === 'failed') {
+                    order.financials.paymentStatus = 'failed';
+                    order.status = 'cancelled';
+                    order.timeline.push({ status: 'cancelled', note: 'Payment failed automatically', user: 'system' });
+                    await order.save({ session });
+
+                    // Auto-restore stock
+                    for (const item of order.items) {
+                        await inventoryService.restoreStockForCancelledOrder(
+                            item.variantId,
+                            item.quantity,
+                            order.orderId
+                        );
+                    }
+                } else if (paymentStatus === 'paid') {
+                    order.financials.paymentStatus = 'paid';
+                    order.timeline.push({ status: 'processing', note: 'Payment successful', user: 'system' });
+                    await order.save({ session });
+                }
+            }
+        });
+
+        res.json({ success: true, message: "Webhook processed" });
+    } catch (error) {
+        console.error("Webhook Error:", error);
+        res.status(error.status || 500).json({ success: false, message: error.message });
+    } finally {
+        session.endSession();
     }
 };

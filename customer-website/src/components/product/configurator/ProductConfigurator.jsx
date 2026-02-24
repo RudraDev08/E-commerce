@@ -63,31 +63,34 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
             }
 
             // 2. BACKFILL: Map structured Size/Color to attributes if not redundant
-            if (v.size && typeof v.size === 'object') {
+            const sizeData = v.size || v.sizeId || (v.sizes && v.sizes[0] ? v.sizes[0].sizeId : null);
+            if (sizeData && typeof sizeData === 'object') {
                 // Remove existing 'size' if present to avoid duplication (trust populated field more)
                 validAttrs = validAttrs.filter(a => (a.attributeType?.slug || a.attributeType) !== 'size');
                 validAttrs.push({
                     attributeType: 'size',
                     attributeValue: {
-                        slug: v.size.name, // Use Name as slug for simplicity if code is missing
-                        value: v.size.name,
-                        id: v.size._id
+                        slug: sizeData.name || sizeData.value || sizeData.displayName || sizeData._id,
+                        value: sizeData.name || sizeData.value || sizeData.displayName || sizeData._id,
+                        id: sizeData._id
                     }
                 });
             }
 
-            if (v.color && typeof v.color === 'object') {
+            const colorData = v.color || v.colorId;
+            if (colorData && typeof colorData === 'object') {
                 validAttrs = validAttrs.filter(a => (a.attributeType?.slug || a.attributeType) !== 'color');
                 validAttrs.push({
                     attributeType: 'color',
                     attributeValue: {
-                        slug: v.color.name,
-                        value: v.color.name,
-                        id: v.color._id,
-                        hexCode: v.color.hexCode
+                        slug: colorData.name || colorData.displayName || colorData._id,
+                        value: colorData.name || colorData.displayName || colorData._id,
+                        id: colorData._id,
+                        hexCode: colorData.hexCode
                     }
                 });
             }
+
 
             validAttrs.forEach(attr => {
                 if (!attr) return;
@@ -194,24 +197,6 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
     }, [resolvedVariant, onVariantChange]);
 
     if (loadingConfig) return <div className="animate-pulse h-20 bg-gray-100 rounded"></div>;
-
-    // DEBUG INSTRUMENTATION
-    if (relevantAttributes.length === 0) {
-        console.group('[Configurator Debug]');
-        console.log('Incoming variants length:', variants?.length);
-        console.log('First variant sample:', variants?.[0]);
-        console.log('Attribute Config Source:', attributeTypesConfig);
-        console.groupEnd();
-
-        return (
-            <div style={{ color: 'red', border: '1px solid red', padding: 10, margin: '10px 0', borderRadius: 4 }}>
-                <h4 style={{ margin: '0 0 5px 0' }}>⚠ Configurator Debug</h4>
-                <p style={{ margin: 0, fontSize: 13 }}>Variants received: {variants?.length}</p>
-                <p style={{ margin: 0, fontSize: 13 }}>Relevant Attributes resovled to 0.</p>
-                <p style={{ margin: 0, fontSize: 13 }}>Check Console BSON B-Tree for mismatch.</p>
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-6">

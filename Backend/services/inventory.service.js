@@ -1,6 +1,7 @@
 import InventoryLedger from '../models/inventory/InventoryLedger.model.js';
 import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
 import Variant from '../models/variant/variantSchema.js';
+import { SnapshotService } from './snapshot.service.js';
 import mongoose from 'mongoose';
 
 /**
@@ -138,6 +139,15 @@ class InventoryService {
         performedBy: 'SYSTEM',
         performedByRole: 'ADMIN'
       });
+
+      // ✅ Recompute Snapshot
+      const VariantMaster = mongoose.models.VariantMaster || (mongoose.models.Variant ? mongoose.models.Variant : null);
+      if (VariantMaster) {
+        const variant = await VariantMaster.findById(updatedInventory.variantId).select('productGroupId');
+        if (variant && variant.productGroupId) {
+          SnapshotService.triggerRecompute(variant.productGroupId);
+        }
+      }
 
       return { success: true, inventory: updatedInventory, quantityChange };
     } catch (error) {

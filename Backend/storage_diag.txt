@@ -1,0 +1,168 @@
+Connecting to URI: mongodb://localhost:27017/AdminPanel
+
+
+=== 🔎 STEP 1 — Confirm AttributeValue Exists in Database ===
+Total AttributeValues in DB: 93
+Active AttributeValues: 93
+
+
+=== 🔎 STEP 2 — Locate "Storage" AttributeType & Links ===
+✅ "Storage" AttributeType found:
+{
+  "_id": "699c1a9d10edec4c5bbaeb50",
+  "code": "LAPTOP_STORAGE",
+  "__v": 0,
+  "applicableCategories": [],
+  "availableChannels": [
+    "B2C"
+  ],
+  "availableRegions": [
+    "GLOBAL"
+  ],
+  "businessRules": {
+    "affectsPrice": false,
+    "affectsSKU": true,
+    "affectsShipping": false,
+    "affectsStock": true,
+    "requiresImage": false
+  },
+  "category": "technical",
+  "createdAt": "2026-02-23T09:15:09.896Z",
+  "createsVariant": false,
+  "description": "SSD storage capacity",
+  "displayName": "SSD Storage",
+  "displayStyle": "inline",
+  "filterDisplayType": "checkbox",
+  "inputType": "button",
+  "isDeleted": false,
+  "isDeprecated": false,
+  "isLocked": false,
+  "measurementConfig": {
+    "allowedUnits": [],
+    "hasMeasurements": false,
+    "measurementFields": [],
+    "precision": 0,
+    "unit": "none"
+  },
+  "name": "Laptop Storage",
+  "seo": {
+    "includeInUrl": false,
+    "metaKeywords": [],
+    "structuredDataType": "none",
+    "urlFormat": "slug"
+  },
+  "showInFilters": true,
+  "showInProductCard": false,
+  "showInVariants": true,
+  "slug": "laptop-storage",
+  "sortingConfig": {
+    "displayOrder": 4
+  },
+  "status": "active",
+  "updatedAt": "2026-02-23T09:15:09.896Z",
+  "validationRules": {
+    "allowCustomValue": false,
+    "allowMultipleSelection": false,
+    "isRequired": false,
+    "maxSelection": 1,
+    "minSelection": 0
+  },
+  "version": 1
+}
+
+Values linked exactly to attributeType: ObjectId("699c1a9d10edec4c5bbaeb50"): 4
+
+✅ Sample "Storage" AttributeValue document:
+{
+  "_id": "699c1a9d10edec4c5bbaeb51",
+  "code": "LS256",
+  "attributeType": "699c1a9d10edec4c5bbaeb50",
+  "__v": 0,
+  "analytics": {
+    "averageRating": 0,
+    "cartAddCount": 0,
+    "popularityScore": 0,
+    "purchaseCount": 0,
+    "returnRate": 0,
+    "reviewCount": 0,
+    "trendingScore": 0,
+    "viewCount": 0
+  },
+  "applicableCategories": [],
+  "availabilityRules": {
+    "availableChannels": [],
+    "availableCountries": [],
+    "availableForSegments": [],
+    "availableRegions": [],
+    "bundleOnly": false,
+    "canBeBundled": true,
+    "excludedCountries": [],
+    "excludedRegions": [],
+    "isAvailable": true,
+    "minOrderQuantity": 1
+  },
+  "compatibilityRules": {
+    "compatibleWith": [],
+    "incompatibleWith": [],
+    "requires": []
+  },
+  "createdAt": "2026-02-23T09:15:09.903Z",
+  "displayAssets": {
+    "images": [],
+    "interactiveAssets": [],
+    "videos": []
+  },
+  "displayName": "256 GB SSD",
+  "displayOrder": 1,
+  "inventoryModifiers": {
+    "isBackorderable": false,
+    "isPreorderable": false,
+    "outOfStockBehavior": "show_disabled",
+    "stockModifier": 0
+  },
+  "isDeleted": false,
+  "materialData": {
+    "certifications": [],
+    "materialBlend": []
+  },
+  "name": "256GB SSD",
+  "pricingModifiers": {
+    "costModifierType": "none",
+    "modifierType": "none",
+    "tieredPricing": [],
+    "value": 0
+  },
+  "seo": {
+    "metaKeywords": [],
+    "searchKeywords": []
+  },
+  "slug": "256gb-ssd",
+  "status": "active",
+  "styleData": {
+    "occasions": [],
+    "seasons": []
+  },
+  "technicalData": {
+    "certifications": [],
+    "technicalSpecs": []
+  },
+  "translations": [],
+  "updatedAt": "2026-02-23T09:15:09.903Z",
+  "visualData": {
+    "galleryImages": [],
+    "swatchType": "none"
+  }
+}
+
+
+=== 🔎 STEP 3 — Verify Status Field Consistency ===
+Status of this sample value is: "active"
+
+
+=== 🔎 STEP 4 & 5 — Simulating API Response & Frontend Mapping ===
+Frontend Mapping Code Snippet from AddAttributeDropdown.jsx (Patched):
+const tid = v.typeId || v.type || v.attributeTypeId || v.attributeType;
+
+Checking valueMap for Storage ID (699c1a9d10edec4c5bbaeb50):
+❌ Mapping failed! The Storage ID is missing from valueMap keys.
+valueMap keys generated: ["6984d6b237975efce7ce9321","6984d6b237975efce7ce9324"]
