@@ -8,6 +8,8 @@ import {
   cloneVariant,
   getProductGroupSnapshot,
   getMatrixPreview,
+  repairVariant,
+  repairProductGroupVariants,
 } from '../../controllers/variant/variantController.js';
 import {
   createVariant as createVariantLegacy,
@@ -63,16 +65,17 @@ router.post('/v2/generate-dimensions', validateCategoryScope, generateDimensions
 router.get('/v2/jobs/:id', getGenerationJobStatus);
 router.post('/v2/diff-dimensions', diffDimensionsHandler);  // pure in-process, no auth needed
 
+// ✅ 10. Integrity Repair Path
+router.post('/:id/repair', repairVariant);
+router.post('/group/:id/repair', repairProductGroupVariants);
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LEGACY ADMIN ROUTE — VariantBuilder in admin panel
 // GET /api/variants/product/:productId
 // Queries old Variant model (variantSchema.js) with `product` field
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/product/:productId', (req, res) => {
-  req.query.productId = req.params.productId;
-  return getVariantsLegacy(req, res);
-});
+router.get('/product/:productGroupId', getVariantsByProductGroup);
 
 // Read all variants (with optional ?productId query): GET /api/variants
 router.get('/', getVariantsLegacy);
@@ -81,7 +84,7 @@ router.get('/', getVariantsLegacy);
 router.post('/', upload.array('images', 10), createVariantLegacy);
 
 // Update: PUT /api/variants/:id
-router.put('/:id', upload.array('images', 10), updateVariantLegacy);
+router.put('/:id', updateVariant);
 
 // Delete: DELETE /api/variants/:id
 router.delete('/:id', deleteVariantLegacy);

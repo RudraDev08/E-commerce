@@ -15,7 +15,8 @@ import {
     PhotoIcon,
     ExclamationTriangleIcon,
     ChevronLeftIcon,
-    ChevronRightIcon
+    ChevronRightIcon,
+    Square3Stack3DIcon,
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -172,6 +173,9 @@ const VariantBuilder = () => {
             }));
             setAllAttributes(groupedAttributes);
 
+            // 🔎 Phase 4 — Verify API response shape
+            console.log('[VariantBuilder] Raw API variants:', varRes.data);
+
             const existingArgs = (varRes.data.data || []).map(v => {
                 const isColorway = !!v.colorwayName || (v.colorParts && v.colorParts.length > 0);
                 let displayColorName = 'N/A';
@@ -197,7 +201,7 @@ const VariantBuilder = () => {
                     }
                 }
 
-                let sizeCode = 'N/A';
+                let sizeCode = 'Fixed'; // Default for attribute-only variants (no Size axis)
                 let sizeId = null;
 
                 // Support Enterprise schema (v.sizes array) or legacy (v.sizeId / v.size)
@@ -205,12 +209,12 @@ const VariantBuilder = () => {
                 const sizeObj = enterpriseSize || v.sizeId || v.size;
 
                 if (sizeObj && typeof sizeObj === 'object') {
-                    sizeCode = sizeObj.code || sizeObj.name || sizeObj.displayName || 'N/A';
+                    sizeCode = sizeObj.code || sizeObj.name || sizeObj.displayName || 'Fixed';
                     sizeId = sizeObj._id;
-                } else {
+                } else if (sizeObj) {
                     const sId = sizeObj;
-                    const matchedSize = loadedSizes.find(s => s._id === sId);
-                    sizeCode = matchedSize?.code || matchedSize?.name || matchedSize?.displayName || v.attributes?.size || 'N/A';
+                    const matchedSize = loadedSizes.find(s => s._id === sId || s._id?.toString() === sId?.toString());
+                    sizeCode = matchedSize?.code || matchedSize?.name || matchedSize?.displayName || v.attributes?.size || 'Fixed';
                     sizeId = sId;
                 }
 
@@ -242,12 +246,24 @@ const VariantBuilder = () => {
                     .filter(Boolean);
 
                 // Build a nice label for the table from attributes
+                // FIX: was incorrectly referencing `loadedAttrTypes` — use `loadedTypes`
                 const labels = normalizedAttrDimensions.map(d => {
-                    const type = loadedAttrTypes.find(t => t._id === d.attributeId || t.name === d.attributeName);
-                    const val = type?.values?.find(v => v._id === d.valueId);
-                    return val?.value || d.valueId;
+                    const attrType = loadedTypes.find(t =>
+                        t._id === d.attributeId ||
+                        t._id?.toString() === d.attributeId?.toString() ||
+                        t.name === d.attributeName
+                    );
+
+                    // Resolution Priority: Type-Specific Values > Global Attribute Values > Colors > Sizes
+                    const attrVal = (attrType?.values || loadedVals).find(val =>
+                        val._id === d.valueId ||
+                        val._id?.toString() === d.valueId?.toString()
+                    ) || (d.attributeName?.toLowerCase() === 'color' ? loadedColors.find(c => c._id === d.valueId || c._id?.toString() === d.valueId?.toString()) : null)
+                        || (d.attributeName?.toLowerCase() === 'size' ? loadedSizes.find(s => s._id === d.valueId || s._id?.toString() === d.valueId?.toString()) : null);
+
+                    return attrVal?.name || attrVal?.displayName || attrVal?.value || d.attributeName || d.valueId;
                 });
-                const variantLabel = labels.join(' / ');
+                const variantLabel = labels.filter(Boolean).join(' / ');
 
                 return {
                     ...v,
@@ -256,18 +272,26 @@ const VariantBuilder = () => {
                     sizeCode,
                     size: typeof v.size === 'object' ? v.size : null,
                     sizeId,
+                    // colorId: string ID used for OCC / save payloads
                     colorId,
+                    // rawColorId: full populated color object — used for Color column display
+                    // (the spread `...v` sets colorId to the populated obj, then we override
+                    //  colorId with just the string ID above, so we preserve the obj separately)
+                    rawColorId: (typeof v.colorId === 'object' && v.colorId?._id) ? v.colorId : null,
                     isColorway,
                     displayColorName,
                     displayHex,
                     displayPalette,
                     variantLabel,
-                    // ── Preserve attributeValueIds from DB (sorted for stable diffing) ──
-                    attributeValueIds: [...normalizedAttrValueIds].sort(),
+                    // ── Preserve attributeValueIds from DB — keep populated objects for Attributes column ──
+                    // normalizedAttrValueIds contains string IDs for diffing; raw v.attributeValueIds
+                    // may contain populated objects which we need for the Attributes column display.
+                    attributeValueIds: Array.isArray(v.attributeValueIds) ? v.attributeValueIds : [],
+                    attributeValueIdsSorted: [...normalizedAttrValueIds].sort(), // for hash diffing
                     // ── Structured attribute metadata for deterministic identity keys ──
                     attributeDimensions: normalizedAttrDimensions,
                     // Preserve precise decimals
-                    price: typeof v.price === 'object' && v.price.$numberDecimal ? v.price.$numberDecimal : v.price?.toString() || "0",
+                    price: typeof v.price === 'object' && v.price.$numberDecimal ? v.price.$numberDecimal : v.price?.toString() || '0',
                     status: (v.status === true || v.status?.toLowerCase() === 'active') ? 'ACTIVE' : v.status,
                     // Explicitly preserve governance so OCC version is available at save time
                     governance: v.governance ?? null,
@@ -667,6 +691,7 @@ const VariantBuilder = () => {
                     price: v.price.toString(),
                     sku: v.sku,
                     status: v.status,
+                    imageGallery: v.imageGallery || [],
                     governance: { version: v.governance.version }
                 }));
 
@@ -1027,12 +1052,14 @@ const VariantBuilder = () => {
                                             className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                         />
                                     </th>
-                                    <th className="px-2 py-3">Variant</th>
+                                    <th className="px-3 py-3 w-40">Color</th>
+                                    <th className="px-3 py-3 w-28">Size</th>
+                                    <th className="px-3 py-3">Attributes</th>
                                     <th className="px-4 py-3 w-40">SKU Ref</th>
-                                    <th className="px-4 py-3 w-32">Price</th>
-                                    <th className="px-4 py-3 w-32">Resolved</th>
+                                    <th className="px-4 py-3 w-28">Price</th>
+                                    <th className="px-4 py-3 w-28">Resolved</th>
                                     <th className="px-4 py-3 w-24">Media</th>
-                                    <th className="px-4 py-3 w-36">Governance</th>
+                                    <th className="px-4 py-3 w-36">Status</th>
                                     <th className="px-4 py-3 w-12 text-right"></th>
                                 </tr>
                             </thead>
@@ -1051,29 +1078,100 @@ const VariantBuilder = () => {
                                                 className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                             />
                                         </td>
-                                        <td className="px-2 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-lg shadow-sm border border-slate-200 overflow-hidden flex shrink-0 relative">
-                                                    {v.isColorway ? (
-                                                        v.displayPalette.map((h, i) => <div key={i} className="flex-1 h-full" style={{ background: h }}></div>)
-                                                    ) : (
-                                                        <div className="w-full h-full" style={{ background: v.displayHex }}></div>
-                                                    )}
-                                                    {v.isNew && <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-indigo-500 shadow-sm border border-white"></span>}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-slate-800 leading-tight flex items-center gap-1">
-                                                        {v.sizeCode || 'Fixed'} {!v.isNew && <LockClosedIcon className="w-3 h-3 text-slate-300" />}
+                                        {/* ── COLOR COLUMN ─────────────────────────────── */}
+                                        <td className="px-3 py-4">
+                                            <div className="flex items-center gap-2">
+                                                {/* Color swatch */}
+                                                <div
+                                                    className="w-7 h-7 rounded-md border border-slate-200 shadow-sm shrink-0"
+                                                    style={{ background: v.displayHex || v.rawColorId?.hexCode || (v.isColorway ? 'linear-gradient(135deg,#f00,#00f)' : '#e2e8f0') }}
+                                                    title={v.displayColorName}
+                                                />
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-bold text-slate-700 truncate max-w-[100px]">
+                                                        {v.displayColorName ||
+                                                            v.rawColorId?.displayName ||
+                                                            v.rawColorId?.name ||
+                                                            (v.isColorway ? v.colorwayName : null) ||
+                                                            <span className="text-slate-400 italic">No Color</span>}
                                                     </p>
-                                                    <p className="text-xs font-semibold text-slate-500 truncate w-32">{v.displayColorName || 'Default'}</p>
-                                                    {/* Attribute value count badge — quick audit view */}
-                                                    {(v.attributeValueIds?.length > 0 || v.variantLabel) && (
-                                                        <p className="text-[10px] font-bold text-indigo-500 mt-0.5 truncate w-40" title={v.variantLabel || ''}>
-                                                            {v.variantLabel || `${v.attributeValueIds.length} attr${v.attributeValueIds.length !== 1 ? 's' : ''}`}
-                                                        </p>
+                                                    {(v.rawColorId?.hexCode || v.displayHex) && (
+                                                        <p className="text-[10px] font-mono text-slate-400">{v.rawColorId?.hexCode || v.displayHex}</p>
                                                     )}
                                                 </div>
+                                                {!v.isNew && <LockClosedIcon className="w-3 h-3 text-slate-300 shrink-0" />}
                                             </div>
+                                        </td>
+
+                                        {/* ── SIZE COLUMN ──────────────────────────────── */}
+                                        <td className="px-3 py-4">
+                                            {(() => {
+                                                // Pull from sizes[] array (enterprise schema) or sizeCode fallback
+                                                const sizeEntries = Array.isArray(v.sizes) && v.sizes.length > 0
+                                                    ? v.sizes
+                                                        .map(s => s.sizeId?.displayName || s.sizeId?.value || s.sizeId?.name)
+                                                        .filter(Boolean)
+                                                    : null;
+
+                                                if (sizeEntries?.length) {
+                                                    return (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {sizeEntries.map((sz, i) => (
+                                                                <span key={i} className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded text-[10px] font-bold">
+                                                                    {sz}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                }
+                                                if (v.sizeCode && v.sizeCode !== 'Fixed') {
+                                                    return (
+                                                        <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded text-[10px] font-bold">
+                                                            {v.sizeCode}
+                                                        </span>
+                                                    );
+                                                }
+                                                return <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Fixed</span>;
+                                            })()}
+                                        </td>
+
+                                        {/* ── ATTRIBUTES COLUMN ────────────────────────── */}
+                                        <td className="px-3 py-4">
+                                            {(() => {
+                                                // Prefer populated objects from API response
+                                                const attrObjs = Array.isArray(v.attributeValueIds)
+                                                    ? v.attributeValueIds.filter(a => a && typeof a === 'object' && a._id)
+                                                    : [];
+
+                                                if (attrObjs.length > 0) {
+                                                    return (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {attrObjs.map((attr, i) => (
+                                                                <span
+                                                                    key={attr._id || i}
+                                                                    className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-[10px] font-bold"
+                                                                    title={attr.attributeType?.displayName || attr.attributeType?.name || ''}
+                                                                >
+                                                                    {attr.displayName || attr.name || attr.code}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                }
+                                                // Fallback: use variantLabel built from attributeDimensions
+                                                if (v.variantLabel) {
+                                                    return (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {v.variantLabel.split(' / ').map((lbl, i) => (
+                                                                <span key={i} className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-[10px] font-bold">
+                                                                    {lbl}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                }
+                                                return <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">None</span>;
+                                            })()}
                                         </td>
                                         <td className="px-4 py-4">
                                             <input type="text" value={v.sku || ''} readOnly={v.status === 'LOCKED' || v.status?.toLowerCase() === 'active'} onChange={e => updateVariant(v._id, 'sku', e.target.value)} className="w-full font-mono text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 focus:bg-white focus:border-indigo-500 outline-none read-only:bg-slate-100 read-only:text-slate-400" />
@@ -1120,8 +1218,16 @@ const VariantBuilder = () => {
                                             </button>
                                         </td>
                                         <td className="px-4 py-4">
-                                            {v.status === 'LOCKED' || v.status === 'ARCHIVED' ? (
-                                                <span className="px-2 py-1 font-bold text-[10px] uppercase tracking-wider rounded bg-slate-100 text-slate-500 border border-slate-200 inline-block">{v.status}</span>
+                                            {v.status === 'LOCKED' || v.status === 'ARCHIVED' || v.governance?.isLocked ? (
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={`px-2 py-1 font-bold text-[10px] uppercase tracking-wider rounded inline-block ${v.status === 'ACTIVE'
+                                                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                                        : v.status === 'DRAFT'
+                                                            ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                                            : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                                        }`}>{v.status}</span>
+                                                    {v.governance?.isLocked && <LockClosedIcon className="w-3 h-3 text-slate-400" title="Locked" />}
+                                                </div>
                                             ) : (
                                                 <select value={v.status || 'DRAFT'} onChange={e => updateVariant(v._id, 'status', e.target.value)} className="w-full text-xs font-bold uppercase py-1 border-0 bg-transparent text-slate-700 cursor-pointer focus:ring-0 appearance-none">
                                                     {getAllowedStatuses(v.status || 'DRAFT').map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}

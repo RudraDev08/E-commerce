@@ -1,6 +1,7 @@
 import ProductVariant from "../../models/variant/variantSchema.js";
 import VariantMaster from "../../models/masters/VariantMaster.enterprise.js";
 import inventoryService from "../../services/inventory.service.js";
+import { SnapshotService } from "../../services/snapshot.service.js";
 import mongoose from "mongoose";
 
 /* CREATE — Enterprise bulk (VariantMaster) or legacy single (ProductVariant) */
@@ -361,10 +362,49 @@ export const updateVariant = async (req, res) => {
 
 /* DELETE */
 export const deleteVariant = async (req, res) => {
-  const variantId = req.params.id;
-  await ProductVariant.findByIdAndDelete(variantId);
+  try {
+    const variantId = req.params.id;
 
-  res.json({ success: true, message: "Variant deleted" });
+    if (!mongoose.Types.ObjectId.isValid(variantId)) {
+      return res.status(400).json({ success: false, message: 'Invalid variant ID format.' });
+    }
+
+    // 1. Identify valid productGroupId for snapshot recompute BEFORE deletion
+    const [legacy, enterprise] = await Promise.all([
+      ProductVariant.findById(variantId).select('product').lean(),
+      VariantMaster.findById(variantId).select('productGroupId').lean()
+    ]);
+
+    const productGroupId = enterprise?.productGroupId || legacy?.product;
+
+    // 2. Hard delete from both collections
+    const [delLegacy, delEnterprise] = await Promise.all([
+      ProductVariant.findByIdAndDelete(variantId),
+      VariantMaster.findByIdAndDelete(variantId)
+    ]);
+
+    if (!delLegacy && !delEnterprise) {
+      return res.status(404).json({ success: false, message: 'Variant not found in any collection.' });
+    }
+
+    // 3. Trigger Snapshot Recompute (Critical for cache consistency)
+    if (productGroupId) {
+      SnapshotService.triggerRecompute(productGroupId);
+    }
+
+    // 4. Cleanup high-volume secondary data (Inventory)
+    try {
+      await inventoryService.softDeleteInventory(variantId, 'SYSTEM_DELETE');
+    } catch (invErr) {
+      // Non-fatal: inventory might not have been initialized yet
+      console.warn(`[deleteVariant] Inventory cleanup skipped/failed for ${variantId}:`, invErr.message);
+    }
+
+    return res.json({ success: true, message: "Variant permanently deleted." });
+  } catch (error) {
+    console.error('[deleteVariant] Error:', error);
+    return res.status(500).json({ success: false, message: 'Internal Server Error during deletion.', error: error.message });
+  }
 };
 
 /* TOGGLE ACTIVE / INACTIVE */

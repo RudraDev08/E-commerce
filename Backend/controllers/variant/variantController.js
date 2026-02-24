@@ -15,6 +15,7 @@ import ColorMaster from '../../models/masters/ColorMaster.enterprise.js';
 import AttributeValue from '../../models/AttributeValue.model.js';
 import ProductGroupSnapshot from '../../models/Product/ProductGroupSnapshot.js';
 import { SnapshotService } from '../../services/snapshot.service.js';
+import { VariantIntegrityService } from '../../services/variantIntegrity.service.js';
 import { generateConfigHash } from '../../utils/configHash.util.js';
 import mongoose from 'mongoose';
 
@@ -280,11 +281,16 @@ export async function createVariant(req, res) {
 
 export async function getVariantsByProductGroup(req, res) {
   try {
-    const { productGroupId } = req.params;
+    const productGroupId = req.params.productGroupId || req.query.productId;
+    const filter = { productGroupId };
 
-    // Fetch only ACTIVE variants — single query, fully populated, lean for performance
-    const variants = await VariantMaster.find({ productGroupId, status: 'ACTIVE' })
-      .select('price compareAtPrice status imageGallery sizes colorId attributeValueIds configHash')
+    // Support PDP frontend explicitly requesting ACTIVE only
+    if (req.query.status === 'ACTIVE') {
+      filter.status = 'ACTIVE';
+    }
+
+    // Fetch variants — single query, fully populated, lean for performance
+    const variants = await VariantMaster.find(filter)
       .populate('sizes.sizeId', 'displayName value category gender measurements normalizedRank')
       .populate('colorId', 'name displayName hexCode rgbCode colorFamily visualCategory')
       .populate({
@@ -305,6 +311,15 @@ export async function getVariantsByProductGroup(req, res) {
         count: 0,
         data: [],
         message: 'No active variants found for this product group.',
+      });
+    }
+
+    // ── Admin Bypass (Raw unflattened data) ─────────────────────
+    if (req.query.raw === 'true') {
+      return res.status(200).json({
+        success: true,
+        count: variants.length,
+        data: variants,
       });
     }
 
@@ -384,18 +399,32 @@ export async function getVariantById(req, res) {
 export async function updateVariant(req, res) {
   try {
     const { id } = req.params;
-    const { version: directVersion, governance } = req.body;
+
+    // Single destructure — extracts version/governance for OCC check, strips all identity
+    // fields  and governance from the safe update payload in one pass.
+    // ⚠️ governance MUST NOT be in $set — it would conflict with $inc: {'governance.version': 1}
+    const {
+      version: directVersion,
+      governance,
+      configHash,
+      sizeId,
+      colorId,
+      productGroup,
+      productGroupId,
+      attributeValueIds,
+      attributeDimensions,
+      sizes,
+      ...safeUpdates
+    } = req.body;
+
     const version = directVersion !== undefined ? directVersion : governance?.version;
 
     if (version === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'Optimistic Concurrency Control requires "version" in request body.'
+        message: 'Optimistic Concurrency Control requires "version" in request body.',
       });
     }
-
-    // Strip identity fields — they must never be patched directly
-    const { configHash, sizeId, colorId, productGroup, productGroupId, attributeValueIds, attributeDimensions, sizes, ...safeUpdates } = req.body;
 
     // Check if any identity modifying fields are passed
     if (attributeValueIds || attributeDimensions || configHash || productGroup || productGroupId || sizeId || colorId || sizes) {
@@ -405,36 +434,101 @@ export async function updateVariant(req, res) {
       });
     }
 
-    safeUpdates['governance.updatedBy'] = req.user?._id;
-
     // ✅ Step 3 — Require Version Match on Update (Optimistic Locking)
-    const updated = await VariantMaster.findOneAndUpdate(
-      { _id: id, 'governance.version': version },
-      {
-        $set: safeUpdates,
-        $inc: { 'governance.version': 1 }
-      },
-      {
-        new: true,
-        runValidators: true
-      }
-    ).lean();
+    //
+    // MongoDB RULES on path conflicts in a single update:
+    //   ✅ ALLOWED:  $set: { 'governance.updatedBy': x } + $inc: { 'governance.version': 1 }
+    //      (dot-notation sub-fields of same parent in DIFFERENT operators = OK)
+    //   ❌ BLOCKED:  $set: { governance: {...} } + $inc: { 'governance.version': 1 }
+    //      (full object key conflicts with dot-notation sub-key = WriteConflict)
+    //
+    // safeUpdates is safe — 'governance' object was stripped during destructure above.
+    // We add governance sub-fields as explicit dot-notation keys (never the full object).
+    console.log('[updateVariant] safeUpdates:', JSON.stringify(safeUpdates));
 
-    if (!updated) {
-      return res.status(409).json({
+    // Build the update: keep governance writes completely separate from field writes.
+    // Mongoose can sometimes re-merge dot-notation keys with object keys. 
+    // Using two explicit $set groups prevents any cross-contamination.
+    // ✅ Step 3 — Refactored to .save() for hook support (Image Gallery, Validations)
+    const variantDoc = await VariantMaster.findById(id);
+
+    if (!variantDoc) {
+      return res.status(404).json({
         success: false,
-        message: 'Variant was modified by another admin or version mismatch.',
-        error: 'CONFLICT'
+        message: 'Variant not found.',
       });
     }
+
+    // Check OCC version manually (redundant if optimisticConcurrency is on, but keeps logic explicit)
+    // Note: variantDoc.governance.version is the DB value. 'version' is the value from the UI.
+    const currentVersion = variantDoc.governance?.version ?? 1;
+    if (currentVersion !== version) {
+      return res.status(409).json({
+        success: false,
+        message: `Version mismatch. UI has version ${version} but DB has ${currentVersion}. Please refresh.`,
+        error: 'CONFLICT',
+        code: 'OCC_CONFLICT'
+      });
+    }
+
+    // ✅ Apply safe business field updates using .set() for better Mongoose tracking
+    if (safeUpdates.price !== undefined) variantDoc.set('price', safeUpdates.price);
+    if (safeUpdates.sku !== undefined) variantDoc.set('sku', safeUpdates.sku);
+    if (safeUpdates.status !== undefined) variantDoc.set('status', safeUpdates.status);
+    if (safeUpdates.imageGallery !== undefined) variantDoc.set('imageGallery', safeUpdates.imageGallery);
+    if (safeUpdates.compareAtPrice !== undefined) variantDoc.set('compareAtPrice', safeUpdates.compareAtPrice);
+
+    // Apply any other safe non-governance fields
+    Object.entries(safeUpdates).forEach(([k, v]) => {
+      const skipped = ['price', 'sku', 'status', 'imageGallery', 'compareAtPrice', 'governance', '_id', '__v'];
+      if (!skipped.includes(k) && !k.startsWith('governance')) {
+        variantDoc.set(k, v);
+      }
+    });
+
+    // Auditor metadata
+    if (!variantDoc.governance) variantDoc.governance = {};
+    if (req.user?._id) {
+      variantDoc.set('governance.updatedBy', req.user._id);
+    }
+    variantDoc.set('governance.updatedAt', new Date());
+
+    // Save triggers pre('save') hooks. 
+    // Since optimisticConcurrency: true is set in schema, this will throw VersionError if version changed.
+    const updated = await variantDoc.save();
 
     // ✅ Recompute Snapshot (Debounced)
     SnapshotService.triggerRecompute(updated.productGroupId);
 
     return res.status(200).json({ success: true, message: 'Variant updated.', data: updated });
   } catch (err) {
-    console.error('[updateVariant]', err);
-    return res.status(500).json({ success: false, message: 'Failed to update variant.', error: err.message });
+    console.error('[updateVariant] Error details:', err);
+
+    // Explicitly handle Mongoose VersionError (OCC)
+    if (err.name === 'VersionError' || err.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: 'Conflict: This variant was modified elsewhere. Please refresh and try again.',
+        error: 'CONFLICT',
+        code: 'OCC_CONFLICT'
+      });
+    }
+
+    // Handle Validation Errors
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+        error: 'VALIDATION_ERROR'
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Internal Server error during variant update.',
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 }
 
@@ -576,5 +670,73 @@ export async function cloneVariant(req, res) {
     return res.status(500).json({ success: false, message: 'Failed to clone variant.', error: err.message });
   } finally {
     session.endSession();
+  }
+}
+
+/**
+ * ✅ 10. PRODUCT DATA INTEGRITY REPAIR
+ * Manual trigger for fixing broken variants.
+ */
+export async function repairVariant(req, res) {
+  try {
+    const { id } = req.params;
+    const variant = await VariantMaster.findById(id);
+
+    if (!variant) {
+      return res.status(404).json({ success: false, message: 'Variant not found' });
+    }
+
+    const result = await VariantIntegrityService.validateAndRepairVariant(variant);
+
+    if (result.success) {
+      // ✅ Recompute Snapshot
+      if (variant.productGroupId) {
+        SnapshotService.triggerRecompute(variant.productGroupId);
+      }
+      return res.json(result);
+    } else {
+      return res.status(422).json(result);
+    }
+  } catch (err) {
+    console.error('[repairVariant]', err);
+    return res.status(500).json({ success: false, message: 'Repair processing failed', error: err.message });
+  }
+}
+/**
+ * ✅ 11. BULK DATA INTEGRITY REPAIR (Product Group Level)
+ * Repaires all variants linked to a specific product group.
+ */
+export async function repairProductGroupVariants(req, res) {
+  try {
+    const { id } = req.params; // productGroupId
+    const variants = await VariantMaster.find({ productGroupId: id });
+
+    if (!variants.length) {
+      return res.status(404).json({ success: false, message: 'No variants found for this product group' });
+    }
+
+    const results = await Promise.all(
+      variants.map(v => VariantIntegrityService.validateAndRepairVariant(v))
+    );
+
+    const totalIssues = results.reduce((acc, r) => acc + r.issuesFound.length, 0);
+    const totalFixes = results.reduce((acc, r) => acc + r.fixesApplied.length, 0);
+
+    // ✅ Recompute Snapshot
+    SnapshotService.triggerRecompute(id);
+
+    return res.json({
+      success: true,
+      message: `Processed ${variants.length} variants.`,
+      summary: {
+        totalIssues,
+        totalFixes,
+        variantsProcessed: variants.length
+      }
+    });
+
+  } catch (err) {
+    console.error('[repairProductGroupVariants]', err);
+    return res.status(500).json({ success: false, message: 'Bulk repair failed', error: err.message });
   }
 }

@@ -379,7 +379,7 @@ variantMasterSchema.pre('save', async function () {
  * [STEP 2] Hash & Dedup Middleware
  * Deduplicate attributes and regenerate configHash whenever identity changes.
  */
-variantMasterSchema.pre('save', function (next) {
+variantMasterSchema.pre('save', function () {
     if (this.isModified('colorId') ||
         this.isModified('sizes') ||
         this.isModified('attributeValueIds')) {
@@ -391,8 +391,6 @@ variantMasterSchema.pre('save', function (next) {
             attributeValueIds: this.attributeValueIds
         });
     }
-
-    next();
 });
 
 /**
@@ -580,7 +578,9 @@ variantMasterSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], async f
     const newStatus = setUpdate.status || update.status;
     if (newStatus === 'ACTIVE') {
         if (!update.$set) update.$set = {};
-        if (!update.$set.governance) update.$set.governance = {};
+        // ⚠️ DO NOT set update.$set.governance = {} — this creates a parent key that
+        // conflicts with $inc: {'governance.version': 1} on MongoDB 5+ (ConflictingUpdateOperators)
+        // Dot-notation key is self-sufficient and does NOT require parent initialization.
         update.$set['governance.isLocked'] = true;
     }
 

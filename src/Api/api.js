@@ -60,7 +60,7 @@ export const productAPI = {
 export const variantAPI = {
     getAll: (params) => api.get('/variants', { params }),
     getById: (id) => api.get(`/variants/${id}`),
-    getByProduct: (productId) => api.get(`/variants/product/${productId}`),
+    getByProduct: (productId) => api.get(`/variants/product/${productId}?raw=true`),
     create: (data) => api.post('/variants', data),
     generateVariants: (data) => api.post('/variants/generate', data),
     update: (id, data) => api.put(`/variants/${id}`, data),
