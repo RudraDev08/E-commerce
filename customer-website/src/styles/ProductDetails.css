@@ -275,6 +275,89 @@
     text-decoration: line-through;
 }
 
+/* Phase 5 — placeholder before variant selected */
+.price-placeholder {
+    font-size: 14px;
+    font-style: italic;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.price-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #DCFCE7;
+    color: #166534;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 100px;
+}
+
+.price-saving {
+    font-size: 13px;
+    color: var(--status-success);
+    margin: 4px 0 0;
+}
+
+/* Buy Now button */
+.btn-buy-now {
+    padding: 14px 24px;
+    background: transparent;
+    color: var(--accent-primary);
+    border: 2px solid var(--accent-primary);
+    border-radius: var(--radius-md);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.btn-buy-now:hover {
+    background: var(--accent-primary);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* OOS banner — Phase 4 */
+.oos-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: #FFF7ED;
+    border: 1px solid #FED7AA;
+    border-radius: var(--radius-md);
+    margin-bottom: 16px;
+}
+
+.oos-banner__icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.oos-banner__text {
+    font-size: 14px;
+    color: #92400E;
+    font-weight: 500;
+}
+
+/* Add-to-Cart state modifiers */
+.btn-add-cart--unselected {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.btn-add-cart--oos {
+    background: #9CA3AF !important;
+    cursor: not-allowed;
+}
+
+.btn-add-cart--loading {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+
 /* Low Stock Warning - EXACT SPECS */
 .stock-indicator {
     display: inline-flex;

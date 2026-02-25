@@ -4,20 +4,20 @@ const inventoryMasterSchema = new mongoose.Schema({
     // Link to Catalog
     variantId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Variant',
+        ref: 'VariantMaster',  // ✅ FIXED: was 'Variant' — model is registered as 'VariantMaster'
         required: true,
         unique: true, // One stock record per variant
         index: true
     },
     productId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Product',
-        required: true,
+        ref: 'ProductGroupSnapshot',  // ✅ FIXED: closest to the ProductGroup concept in this system
+        required: false,  // ✅ Made optional — variants seeded via repair may not have productId
         index: true
     },
     sku: {
         type: String,
-        required: true,
+        required: false,  // ✅ Optional — repair records may not carry a SKU
         uppercase: true,
         index: true
     },
@@ -122,6 +122,36 @@ inventoryMasterSchema.pre('save', async function () {
     this.lastUpdated = new Date();
 });
 
+// ✅ Register model BEFORE attaching static methods
 const InventoryMaster = mongoose.model('InventoryMaster', inventoryMasterSchema);
+
+/**
+ * Static helper — enforces 1:1 invariant between VariantMaster and InventoryMaster.
+ * Uses updateOne/upsert so it is SAFE to call multiple times (idempotent).
+ *
+ * @param {Object}  variant   - Lean or Mongoose VariantMaster document
+ * @returns {Object}          - { created: boolean, id: ObjectId|null }
+ */
+InventoryMaster.ensureForVariant = async function (variant) {
+    const result = await InventoryMaster.updateOne(
+        { variantId: variant._id },
+        {
+            $setOnInsert: {
+                variantId: variant._id,
+                productId: variant.productGroupId ?? variant.productId ?? null,
+                sku: variant.sku ?? null,
+                totalStock: 0,
+                reservedStock: 0,
+                availableStock: 0,
+                lowStockThreshold: 5,
+                status: 'OUT_OF_STOCK',
+                isDeleted: false,
+                locations: [],
+            }
+        },
+        { upsert: true, setDefaultsOnInsert: true }
+    );
+    return { created: result.upsertedCount > 0, id: result.upsertedId };
+};
 
 export default InventoryMaster;

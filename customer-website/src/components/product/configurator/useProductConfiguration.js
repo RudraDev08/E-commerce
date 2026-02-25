@@ -1,191 +1,262 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 
-// Uses the browser's built-in Web Crypto API — no import needed
-const subtle = globalThis.crypto?.subtle;
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 2 — DETERMINISTIC IDENTITY KEY (replaces SHA-256 hash)
+//
+// Format: COLOR:<id>|SIZE:<category>:<id>|ATTR:<attributeId>:<valueId>
+// Segments are sorted alphabetically before joining → stable regardless
+// of insertion order. Uses Map<string, Variant> for O(1) lookup.
+//
+// WHY: SHA-256 required async, had browser API availability risk, and
+// any key-construction mismatch produced a silent miss (null variant).
+// A plain sorted-string key is synchronous, debuggable, and deterministic.
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * generateConfigHashClient
- * Replicates Backend/utils/configHash.util.js logic in the browser.
- * Uses the Web Crypto API (SubtleCrypto) via TextEncoder + SHA-256.
+ * Build a deterministic identity key for a persisted variant document.
+ * Reads structured fields that the backend guarantees to set.
  *
- * Returns a HEX string identical to the server-generated hash.
+ * @param {Object} v - Variant document (lean or hydrated)
+ * @returns {string}
  */
-async function generateConfigHashClient({ productGroupId, sizeId, colorId, attributeValueIds = [] }) {
-    if (!productGroupId) return null;
-    if (!subtle) return null; // Web Crypto not available (SSR / very old browser)
+export function buildIdentityKey(v) {
+    const parts = [];
 
-    const resolvedSizeIds = sizeId ? [String(sizeId)] : []; // fallback single size
+    // COLOR segment
+    const colorId = typeof v.colorId === 'object' ? v.colorId?._id : v.colorId;
+    if (colorId) parts.push(`COLOR:${String(colorId)}`);
 
-    const sortedAttrs = [...attributeValueIds]
-        .map(id => String(id))
-        .filter(Boolean)
-        .sort();
+    // SIZE segments (supports multi-size enterprise schema)
+    if (Array.isArray(v.sizes) && v.sizes.length > 0) {
+        v.sizes.forEach(s => {
+            const sid = typeof s.sizeId === 'object' ? s.sizeId?._id : s.sizeId;
+            if (sid) parts.push(`SIZE:${s.category || 'DIMENSION'}:${String(sid)}`);
+        });
+    }
 
-    const raw = [
-        String(productGroupId),
-        resolvedSizeIds.join(','),        // '' if no sizes
-        colorId ? String(colorId) : '',   // '' if no color
-        sortedAttrs.join('|'),            // '' if no attributes
-    ].join('::');
+    // ATTR segments — from structured attributeDimensions (preferred) or attributeValueIds
+    if (Array.isArray(v.attributeDimensions) && v.attributeDimensions.length > 0) {
+        v.attributeDimensions.forEach(dim => {
+            if (!dim?.valueId) return;
+            const attrId = dim.attributeId ? String(dim.attributeId) : (dim.attributeName || 'UNKNOWN');
+            const valueId = typeof dim.valueId === 'object' ? String(dim.valueId) : dim.valueId;
+            parts.push(`ATTR:${attrId}:${valueId}`);
+        });
+    }
 
-    const encoded = new TextEncoder().encode(raw);
-    const hashBuffer = await subtle.digest('SHA-256', encoded);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    parts.sort(); // Alphabetic sort → stable regardless of server insertion order
+    return parts.join('|');
 }
 
-// ─── LEGACY HELPERS (for backward-compat with old variant shape) ──────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY HELPERS (backward-compat for old variant shape from legacy API)
+// ─────────────────────────────────────────────────────────────────────────────
 
 function getVariantAttributeValueFn(variant, attributeSlug) {
-    // New API shape: variant.size / variant.color / variant.attributes [{type, value}]
-    if (attributeSlug === 'size' && variant.size && typeof variant.size === 'object') {
-        return variant.size.displayName || variant.size.value || variant.size.name;
+    // New enterprise shape: variant.size / variant.color
+    if (attributeSlug === 'size') {
+        const s = variant.size;
+        if (s && typeof s === 'object') return s.displayName || s.value || s.name || String(s._id);
+        if (typeof s === 'string') return s;
+        // Try first entry in sizes[]
+        const firstSize = variant.sizes?.[0]?.sizeId;
+        if (firstSize && typeof firstSize === 'object')
+            return firstSize.displayName || firstSize.value || firstSize.name || String(firstSize._id);
     }
-    if (attributeSlug === 'color' && variant.color && typeof variant.color === 'object') {
-        return variant.color.name || variant.color.displayName;
+    if (attributeSlug === 'color') {
+        const c = variant.color;
+        if (c && typeof c === 'object') return c.name || c.displayName || String(c._id);
+        if (typeof c === 'string') return c;
+        const colorId = variant.colorId;
+        if (colorId && typeof colorId === 'object') return colorId.name || colorId.displayName || String(colorId._id);
     }
 
-    // Legacy: variant.attributes = { color: 'red', size: 'xl' }
+    // ── STORAGE / CUSTOM ATTRIBUTE RESOLUTION ───────────────────────────────
+    // Priority 1: populated attributeValueIds (enterprise shape from getVariantsByProductGroup)
+    // Each entry is { _id, name, displayName, code, attributeType: { slug, name, ... } }
+    // This resolves custom dimensions like Storage (256GB/512GB/1TB) when
+    // attributeDimensions is empty (legacy import path).
+    if (Array.isArray(variant.attributeValueIds) && variant.attributeValueIds.length > 0) {
+        const matchAttr = variant.attributeValueIds.find(attr => {
+            if (!attr || typeof attr !== 'object' || !attr._id) return false;
+            const atType = attr.attributeType;
+            if (!atType) return false;
+            const slug = atType.slug || '';
+            const name = (atType.name || atType.displayName || '').toLowerCase();
+            const querySlug = attributeSlug.toLowerCase();
+            return slug === querySlug
+                || name === querySlug
+                || name.replace(/\s+/g, '_') === querySlug
+                || name.replace(/\s+/g, '-') === querySlug;
+        });
+        if (matchAttr) {
+            return matchAttr.displayName || matchAttr.name || matchAttr.code || null;
+        }
+    }
+
+    // Priority 2: flat attributes array (flattenVariant() output)
+    // Format: [{ type: attrType.name, value: av.name, code, role }]
+    if (Array.isArray(variant.attributes) && variant.attributes.length > 0) {
+        const attr = variant.attributes.find(a => {
+            if (!a) return false;
+            // Match by type name (lowercased, space-normalised) or typeSlug
+            const typeName = (a.type || '').toLowerCase();
+            const querySlug = attributeSlug.toLowerCase();
+            return typeName === querySlug
+                || typeName.replace(/\s+/g, '_') === querySlug
+                || typeName.replace(/\s+/g, '-') === querySlug;
+        });
+        if (attr) return attr.value || null;
+    }
+
+    // Priority 3: legacy flat object: { color: 'red', size: 'xl' }
     if (variant.attributes && typeof variant.attributes === 'object' && !Array.isArray(variant.attributes)) {
         if (variant.attributes[attributeSlug]) return variant.attributes[attributeSlug];
     }
 
-    // Legacy: variant.attributes = [{ attributeType: { slug }, attributeValue: { slug } }]
-    if (Array.isArray(variant.attributes)) {
-        const attr = variant.attributes.find(a =>
-            a && (a.attributeType?.slug === attributeSlug || a.attributeType === attributeSlug)
-        );
-        if (attr) return attr.attributeValue?.slug || attr.attributeValue;
-    }
-
-    // Flat properties fallback
-    if (attributeSlug === 'size' && typeof variant.size === 'string') return variant.size;
-    if (attributeSlug === 'color' && typeof variant.color === 'string') return variant.color;
-
     return null;
 }
 
-// ─── HOOK ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// HOOK — useProductConfiguration
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * useProductConfiguration
- *
- * Enhanced with:
- *  - O(1) configHash map for instant deterministic variant resolution
- *  - Backward-compat loop-based resolver as fallback
- *  - Full availability matrix (zero extra API calls)
+ * @param {Array}  variants        - Pre-filtered ACTIVE in-stock variants
+ * @param {Array}  attributeTypes  - Relevant attribute type configs
+ * @param {Object} initialSelections
  */
 export const useProductConfiguration = (variants = [], attributeTypes = [], initialSelections = {}) => {
     const [selectedAttributes, setSelectedAttributes] = useState(initialSelections);
 
-    // ── 1. Build O(1) configHash map ──────────────────────────────────────────
-    const variantHashMap = useMemo(() => {
-        const map = {};
+    // ── 1. Build O(1) identity key → variant map ──────────────────────────────
+    const variantIdentityMap = useMemo(() => {
+        const map = new Map();
         variants.forEach(v => {
-            if (v.configHash) map[v.configHash] = v;
+            const key = buildIdentityKey(v);
+            if (key) map.set(key, v);
         });
         return map;
     }, [variants]);
 
-    // ── 2. Deterministic variant resolution via client hash ────────────────────
-    //    Falls back to loop-based matching (legacy shapes without configHash)
-    const [resolvedVariant, setResolvedVariant] = useState(null);
+    // ── 2. Resolved variant: synchronous deterministic lookup ────────────────
+    //    Tries identity-key map first; falls back to loop-based attribute match.
+    const resolvedVariant = useMemo(() => {
+        if (variants.length === 0) return null;
 
-    useEffect(() => {
-        const resolve = async () => {
-            if (variants.length === 0) { setResolvedVariant(null); return; }
+        // Extract IDs from current selections to build an identity key
+        // We need the _id of each selected dimension, not just its display label.
+        const parts = [];
 
-            // Extract relevant IDs from selection
-            // The new API exposes selectors.sizes / selectors.colors / selectors.attributes.
-            // selectedAttributes keys are attribute slugs or 'size'/'color'.
-            const selectedSize = selectedAttributes['size'];
-            const selectedColor = selectedAttributes['color'];
+        // COLOR
+        const selectedColor = selectedAttributes['color'];
+        if (selectedColor) {
+            // Find a variant whose color display label matches to get the _id
+            for (const v of variants) {
+                const val = getVariantAttributeValueFn(v, 'color');
+                if (val && String(val) === String(selectedColor)) {
+                    const cId = typeof v.colorId === 'object' ? v.colorId?._id : v.colorId;
+                    if (cId) { parts.push(`COLOR:${String(cId)}`); break; }
+                }
+            }
+        }
 
-            // ── Extract IDs for any selected dimensions ───────────────────────
-            const pgId = variants[0]?.productGroupId;
-            let sizeId = null;
-            let colorId = null;
-            const attrValueIds = [];
-
-            // Helper to find the _id of a selected value across all variants
-            const findValueId = (slugOrValue, isSize, isColor, attrName) => {
-                for (let v of variants) {
-                    if (isSize && (v.size?.displayName === slugOrValue || v.size?.value === slugOrValue || v.size?.name === slugOrValue)) return v.size?._id;
-                    if (isColor && (v.color?.name === slugOrValue || v.color?.displayName === slugOrValue)) return v.color?._id;
-                    if (attrName) {
-                        const match = (v.attributes || []).find(a => (a.type || a.attributeType?.name) === attrName && a.value === slugOrValue);
-                        if (match) return match._id;
+        // SIZE
+        const selectedSize = selectedAttributes['size'];
+        if (selectedSize) {
+            for (const v of variants) {
+                const val = getVariantAttributeValueFn(v, 'size');
+                if (val && String(val) === String(selectedSize)) {
+                    const firstSizeEntry = v.sizes?.[0];
+                    if (firstSizeEntry) {
+                        const sid = typeof firstSizeEntry.sizeId === 'object' ? firstSizeEntry.sizeId?._id : firstSizeEntry.sizeId;
+                        if (sid) { parts.push(`SIZE:${firstSizeEntry.category || 'DIMENSION'}:${String(sid)}`); break; }
                     }
                 }
-                return null;
-            };
-
-            // Map size and color if they're part of the configuration
-            if (selectedAttributes['size']) {
-                sizeId = findValueId(selectedAttributes['size'], true, false, null);
             }
-            if (selectedAttributes['color']) {
-                colorId = findValueId(selectedAttributes['color'], false, true, null);
-            }
+        }
 
-            // Map custom attributes
-            attributeTypes.forEach(t => {
-                if (t.slug !== 'size' && t.slug !== 'color' && selectedAttributes[t.slug]) {
-                    const id = findValueId(selectedAttributes[t.slug], false, false, t.name);
-                    if (id) attrValueIds.push(id);
-                }
-            });
+        // CUSTOM ATTRIBUTES (processor, storage, material, etc.)
+        attributeTypes.forEach(t => {
+            if (t.slug === 'size' || t.slug === 'color') return;
+            const selectedVal = selectedAttributes[t.slug];
+            if (!selectedVal) return;
 
-            // If we have a product group ID, attempt O(1) hash lookup
-            if (pgId) {
-                try {
-                    const hash = await generateConfigHashClient({
-                        productGroupId: pgId,
-                        sizeId,
-                        colorId,
-                        attributeValueIds: attrValueIds,
-                    });
-                    if (hash && variantHashMap[hash]) {
-                        setResolvedVariant(variantHashMap[hash]);
-                        return;
+            // Find matching variant + dim to get the structured IDs
+            for (const v of variants) {
+                const dimMatch = (v.attributeDimensions || []).find(dim => {
+                    const dimAttrId = dim.attributeId ? String(dim.attributeId) : null;
+                    const typeIdMatch = dimAttrId && String(t._id) === dimAttrId;
+                    const typeNameMatch = dim.attributeName?.toLowerCase() === t.name?.toLowerCase()
+                        || dim.attributeName?.toLowerCase() === t.slug;
+                    return typeIdMatch || typeNameMatch;
+                });
+                if (dimMatch) {
+                    const attrId = dimMatch.attributeId ? String(dimMatch.attributeId) : (dimMatch.attributeName || 'UNKNOWN');
+                    const valueId = typeof dimMatch.valueId === 'object' ? String(dimMatch.valueId) : dimMatch.valueId;
+                    // Check if this dim's value matches user's selection
+                    const attrVal = getVariantAttributeValueFn(v, t.slug);
+                    if (attrVal && String(attrVal) === String(selectedVal)) {
+                        parts.push(`ATTR:${attrId}:${valueId}`);
+                        break;
                     }
-                } catch (_) {
-                    // Fall through to loop-based
                 }
             }
+        });
 
-            // ── Fallback: loop-based match (old shape / missing IDs) ────────
-            const exactMatch = variants.find(variant =>
-                attributeTypes.every(type => {
-                    const selected = selectedAttributes[type.slug];
-                    if (!selected) return true;
-                    const variantVal = getVariantAttributeValueFn(variant, type.slug);
-                    return String(variantVal) === String(selected);
-                })
-            );
-            setResolvedVariant(exactMatch || null);
-        };
+        parts.sort();
+        const identityKey = parts.join('|');
 
-        resolve();
-    }, [selectedAttributes, variants, attributeTypes, variantHashMap]);
+        // Fast O(1) lookup
+        if (identityKey && variantIdentityMap.has(identityKey)) {
+            return variantIdentityMap.get(identityKey);
+        }
 
-    // ── 3. Availability matrix ────────────────────────────────────────────────
+        // Fallback: loop-based match on display labels (covers legacy API shapes)
+        const relevantSlugs = attributeTypes.map(t => t.slug);
+        const anySelected = Object.keys(selectedAttributes).some(k => relevantSlugs.includes(k) && selectedAttributes[k]);
+        if (!anySelected) return null;
+
+        const match = variants.find(variant =>
+            attributeTypes.every(type => {
+                const selected = selectedAttributes[type.slug];
+                if (!selected) return true; // Not selected yet → don't disqualify
+                const variantVal = getVariantAttributeValueFn(variant, type.slug);
+                return variantVal !== null && String(variantVal) === String(selected);
+            })
+        );
+        return match || null;
+    }, [selectedAttributes, variants, attributeTypes, variantIdentityMap]);
+
+    // ── 3. Availability matrix ─────────────────────────────────────────────────
+    // An option is available if at least one ACTIVE variant WITH STOCK > 0
+    // matches ALL currently-selected attributes PLUS this new attribute.
+    // OOS variants (stock === 0) are deliberately excluded so the button renders
+    // as disabled with reduced opacity + cursor-not-allowed (Phase 6 spec).
+    // Variants with stock === null (no inventory record) are treated as available
+    // because stock is unknown — the server-side gate will catch them at purchase.
     const isOptionAvailable = useCallback((attributeSlug, valueSlug) => {
         return variants.some(variant => {
-            const matchesOthers = attributeTypes.every(type => {
-                if (type.slug === attributeSlug) return true;
+            // ── Phase 6 fix: skip explicitly OOS variants from availability check ──
+            // stock === 0  → explicitly out of stock → treat as unavailable
+            // stock === null → unknown → treat as available (server will gate)
+            // stock  >  0  → in stock → available
+            const hasStock = variant.stock === null || (variant.stock ?? 0) > 0;
+            if (!hasStock) return false;
+
+            // Check all OTHER selected attributes still match
+            const othersMatch = attributeTypes.every(type => {
+                if (type.slug === attributeSlug) return true; // Skip the one we're testing
                 const selected = selectedAttributes[type.slug];
                 if (!selected) return true;
                 const variantVal = getVariantAttributeValueFn(variant, type.slug);
-                return String(variantVal) === String(selected);
+                return variantVal !== null && String(variantVal) === String(selected);
             });
-            if (!matchesOthers) return false;
+            if (!othersMatch) return false;
 
+            // Check the target attribute matches
             const variantVal = getVariantAttributeValueFn(variant, attributeSlug);
-            const matchesTarget = String(variantVal) === String(valueSlug);
-            const hasStock = variant.stock !== undefined ? variant.stock > 0 : true;
-
-            return matchesTarget && hasStock;
+            return variantVal !== null && String(variantVal) === String(valueSlug);
         });
     }, [variants, attributeTypes, selectedAttributes]);
 

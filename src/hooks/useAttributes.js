@@ -27,8 +27,9 @@ const useAttributes = () => {
         setLoading(true);
         try {
             const response = await attributeTypeAPI.getById(id);
-            setSelectedAttribute(response.data);
-            return response.data;
+            const data = response.data.data || response.data;
+            setSelectedAttribute(data);
+            return data;
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to fetch attribute details');
             return null;

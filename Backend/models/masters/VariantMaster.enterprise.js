@@ -35,7 +35,10 @@ const VALID_TRANSITIONS = {
     ACTIVE: ['OUT_OF_STOCK', 'ARCHIVED', 'LOCKED'],
     OUT_OF_STOCK: ['ACTIVE', 'ARCHIVED'],
     LOCKED: ['ACTIVE', 'ARCHIVED'],
-    ARCHIVED: []  // Terminal state
+    // ARCHIVED is semi-terminal: can be restored to DRAFT for re-review.
+    // DRAFT → ACTIVE requires a second explicit step, giving a safety checkpoint
+    // before the variant surfaces again on the customer site.
+    ARCHIVED: ['DRAFT'],
 };
 
 const variantMasterSchema = new mongoose.Schema(

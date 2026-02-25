@@ -58,7 +58,7 @@ inventorySchema.virtual('needsReorder').get(function () {
 // Static method: Get total stock for a variant across all warehouses
 inventorySchema.statics.getTotalStock = async function (variantId) {
     const result = await this.aggregate([
-        { $match: { variant: mongoose.Types.ObjectId(variantId) } },
+        { $match: { variant: new mongoose.Types.ObjectId(variantId) } },
         {
             $group: {
                 _id: null,

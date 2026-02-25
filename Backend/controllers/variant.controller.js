@@ -4,6 +4,7 @@ const VariantInventory = require('../models/VariantInventory');
 const ColorMaster = require('../models/masters/ColorMaster.enterprise.js').default || require('../models/masters/ColorMaster.enterprise.js');
 const SizeMaster = require('../models/masters/SizeMaster.enterprise.js').default;
 const WarehouseMaster = require('../models/WarehouseMaster');
+const InventoryMaster = require('../models/inventory/InventoryMaster.model.js').default || require('../models/inventory/InventoryMaster.model.js');
 
 /**
  * Get all variants for a product group (for PDP)
@@ -169,7 +170,7 @@ exports.getById = async (req, res) => {
         const { variantId } = req.params;
 
         const variant = await VariantMaster.findById(variantId)
-            .populate('color')
+            .populate('colorId')
             .populate('sizes.sizeId');
 
         if (!variant) {
@@ -179,8 +180,13 @@ exports.getById = async (req, res) => {
             });
         }
 
-        // Get stock information
-        const stock = await VariantInventory.getTotalStock(variantId);
+        // Get stock information from the enterprise Inventory Master
+        const inventoryRecord = await InventoryMaster.findOne({ variantId: variantId });
+        const stock = {
+            total: inventoryRecord?.totalStock || 0,
+            available: inventoryRecord?.availableStock || 0,
+            reserved: inventoryRecord?.reservedStock || 0
+        };
 
         res.json({
             success: true,
@@ -207,22 +213,27 @@ exports.getStock = async (req, res) => {
     try {
         const { variantId } = req.params;
 
-        const stock = await VariantInventory.getTotalStock(variantId);
+        const inventory = await InventoryMaster.findOne({ variantId });
 
-        // Get warehouse-wise breakdown
-        const warehouseStock = await VariantInventory.find({ variant: variantId })
-            .populate('warehouse', 'name code')
-            .lean();
+        if (!inventory) {
+            return res.json({
+                success: true,
+                data: {
+                    total: 0,
+                    warehouses: []
+                }
+            });
+        }
 
         res.json({
             success: true,
             data: {
-                total: stock,
-                warehouses: warehouseStock.map(inv => ({
-                    warehouse: inv.warehouse,
-                    quantity: inv.quantity,
-                    reserved: inv.reservedQuantity,
-                    available: inv.quantity - inv.reservedQuantity
+                total: inventory.totalStock,
+                warehouses: inventory.locations.map(loc => ({
+                    warehouseId: loc.warehouseId,
+                    quantity: loc.stock,
+                    available: loc.stock, // Simplified logic: per-warehouse reservation not in schema?
+                    lastUpdated: loc.lastUpdated
                 }))
             }
         });

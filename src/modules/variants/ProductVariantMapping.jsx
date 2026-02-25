@@ -76,9 +76,7 @@ const ProductVariantMapping = () => {
     // Stats
     const stats = useMemo(() => {
         const total = products.length;
-        // Use variantCount if available, otherwise fallback to check if hasVariants is true (which is less accurate for "configured" status)
-        // Ideally variantCount should be populated from backend
-        const configured = products.filter(p => (p.variantCount || 0) > 0).length;
+        const configured = products.filter(p => p.configured).length;
         return {
             total,
             configured,
@@ -107,13 +105,23 @@ const ProductVariantMapping = () => {
     const StatusBadge = ({ configured }) => {
         if (configured) {
             return (
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{
+                        backgroundColor: '#DCFCE7',
+                        color: '#166534',
+                        border: '1px solid #86EFAC'
+                    }}>
                     Configured
                 </span>
             );
         }
         return (
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium bg-[#F3F4F6] text-[#6B7280] border border-[#E5E7EB]">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
+                style={{
+                    backgroundColor: '#FEE2E2',
+                    color: '#991B1B',
+                    border: '1px solid #FCA5A5'
+                }}>
                 Not Configured
             </span>
         );
@@ -209,11 +217,11 @@ const ProductVariantMapping = () => {
                         {/* Empty State Banner */}
                         {!loading && filteredProducts.length > 0 && stats.configured === 0 && !searchTerm && (
                             <div className="p-8 border-b border-[#E5E7EB] bg-[#F9FAFB] flex flex-col items-center justify-center text-center">
-                                <div className="h-12 w-12 bg-white rounded-xl border border-[#E5E7EB] flex items-center justify-center mb-4 shadow-sm">
-                                    <Square3Stack3DIcon className="h-6 w-6 text-[#9CA3AF]" />
+                                <div className="h-12 w-12 bg-white rounded-xl border border-[#E5E7EB] flex items-center justify-center mb-4 shadow-sm" style={{ color: '#CBD5E1' }}>
+                                    <Square3Stack3DIcon className="h-6 w-6" />
                                 </div>
-                                <h3 className="text-base font-semibold text-[#111827]">No variants configured yet</h3>
-                                <p className="mt-2 text-sm text-[#6B7280] max-w-md">
+                                <h3 className="text-base font-semibold" style={{ color: '#0F172A' }}>No variants configured yet</h3>
+                                <p className="mt-2 text-sm max-w-md" style={{ color: '#64748B' }}>
                                     Your products are ready, but they don't have variants (Size/Color) configured yet.
                                     Configure variants to enable inventory management and selling.
                                 </p>
@@ -281,15 +289,16 @@ const ProductVariantMapping = () => {
                                                     ₹{product.basePrice || product.price || 0}
                                                 </td>
                                                 <td className="px-4 py-4 whitespace-nowrap">
-                                                    <StatusBadge configured={(product.variantCount || 0) > 0} />
+                                                    <StatusBadge configured={product.configured} />
                                                 </td>
                                                 <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                     <button
                                                         onClick={() => handleConfigure(product)}
-                                                        className="inline-flex items-center gap-1.5 h-[36px] px-4 bg-[#4F46E5] text-white text-sm font-medium rounded-lg hover:bg-[#4338CA] focus:outline-none focus:ring-[3px] focus:ring-[rgba(79,70,229,0.25)] shadow-[0_2px_6px_rgba(79,70,229,0.2)] transition-all duration-200"
+                                                        className="inline-flex items-center gap-1.5 h-[36px] px-4 bg-[#4F46E5] text-white text-sm font-medium rounded-lg hover:bg-[#4338CA] focus:outline-none transition-all duration-200"
+                                                        style={{ boxShadow: '0 4px 14px rgba(79,70,229,0.25)' }}
                                                     >
-                                                        {(product.variantCount || 0) > 0 ? 'Edit Variants' : 'Configure'}
-                                                        {(!product.variantCount || product.variantCount === 0) && <ArrowRightIcon className="h-3.5 w-3.5" />}
+                                                        {product.configured ? 'Edit Variants' : 'Configure'}
+                                                        {!product.configured && <ArrowRightIcon className="h-3.5 w-3.5" />}
                                                     </button>
                                                 </td>
                                             </tr>

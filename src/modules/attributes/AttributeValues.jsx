@@ -73,21 +73,63 @@ const AttributeValues = () => {
 
     const handleAdd = async (e) => {
         e.preventDefault();
+
+        if (!selectedAttribute) {
+            toast.error('Attribute data still loading. Please wait.');
+            return;
+        }
+
         try {
-            await createAttributeValue({
-                ...newValue,
+            const payload = {
+                attributeType: id,
+                name: newValue.name.trim(),
+                displayName: newValue.name.trim(),
+                value: newValue.value || newValue.name,
                 pricingModifiers: {
                     modifierType: newValue.modifierType,
                     value: newValue.modifierType === 'none' ? 0 : parseFloat(newValue.modifierValue || 0)
                 },
-                attributeType: id,
-                code: newValue.code || newValue.name.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10),
+                code: newValue.code?.trim() || undefined,
                 slug: newValue.name.toLowerCase().replace(/[^a-z0-9]/g, '-')
-            });
+            };
+
+            // Mapping based on Category to satisfy Backend Validators
+            const category = selectedAttribute.category;
+
+            if (category === 'visual') {
+                payload.visualData = {
+                    hexCode: newValue.value || '#000000',
+                    swatchType: selectedAttribute.inputType === 'swatch' ? 'color' : 'none',
+                    swatchValue: newValue.value || '#000000'
+                };
+            } else if (category === 'physical') {
+                payload.measurements = {
+                    sizeGroup: 'Standard',
+                    weight: 0
+                };
+            } else if (category === 'technical') {
+                payload.technicalData = {
+                    numericValue: 0
+                };
+            } else if (category === 'material') {
+                payload.materialData = {
+                    primaryMaterial: 'Generic'
+                };
+            } else if (category === 'style') {
+                payload.styleData = {
+                    styleCategory: 'classic',
+                    fitType: 'regular'
+                };
+            }
+
+            await createAttributeValue(payload);
             setNewValue({ name: '', value: '', code: '', modifierType: 'none', modifierValue: '' });
             fetchAttributeValues(id);
         } catch (error) {
-            console.error(error);
+            console.error('Add attribute value failed:', error);
+            // Surface the specific validation error message from the backend
+            const msg = error.response?.data?.message || error.message || 'Operation failed';
+            toast.error(msg, { duration: 5000 });
         }
     };
 

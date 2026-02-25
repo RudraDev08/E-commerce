@@ -4,6 +4,7 @@ import Brand from '../../models/Brands/BrandsSchema.js';
 import Variant from '../../models/variant/variantSchema.js';
 import InventoryMaster from '../../models/inventory/InventoryMaster.model.js';
 import slugify from 'slugify';
+import VariantMaster from '../../models/masters/VariantMaster.enterprise.js';
 
 // --------------------------------------------------------------------------
 // MESSAGES
@@ -147,10 +148,29 @@ export const getProducts = async (req, res) => {
       status,
       stockStatus,
       sort,
-      isDeleted = 'false'
+      isDeleted = 'false',
+      configured
     } = req.query;
 
     const query = {};
+
+    // For configured logic, fetch productGroupIds that have at least one valid ACTIVE variant
+    const activeVariants = await VariantMaster.find({
+      status: 'ACTIVE',
+      isDeleted: { $ne: true },
+      // Price is required at schema level, so we just check for status ACTIVE
+    }).select('productGroupId price status').lean();
+
+    // Map and deduplicate product group IDs
+    const activeProductIdsStr = activeVariants
+      .filter(v => v.price && parseFloat(v.price.toString()) > 0) // Variant has valid price
+      .map(v => v.productGroupId.toString());
+
+    const uniqueActiveProductIds = [...new Set(activeProductIdsStr)];
+
+    if (configured === 'true') {
+      query._id = { $in: uniqueActiveProductIds };
+    }
 
     // Soft Delete
     if (isDeleted === 'true') {
@@ -194,9 +214,15 @@ export const getProducts = async (req, res) => {
 
     const total = await Product.countDocuments(query);
 
+    const productsWithConfiguredFlag = products.map(p => {
+      const pObj = p.toObject ? p.toObject() : p;
+      pObj.configured = uniqueActiveProductIds.includes(p._id.toString());
+      return pObj;
+    });
+
     res.json({
       success: true,
-      data: products,
+      data: productsWithConfiguredFlag,
       pagination: {
         total,
         page: parseInt(page),

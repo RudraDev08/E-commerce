@@ -14,30 +14,34 @@ export const getVariants = async (params = {}) => {
 };
 
 // ── Get variants by product ID (customer PDP) ──────────────────────────────
+// Uses /variants/product/:id which maps to getVariantsByProductGroup with
+// ?raw=true suppressed — returns fully-populated enterprise documents.
 export const getVariantsByProduct = async (productId) => {
     if (!productId) {
         throw new Error('getVariantsByProduct: productId is required');
     }
 
-    // Normalize: extract _id string if an object was accidentally passed
     const normalizedId =
         typeof productId === 'object'
             ? String(productId._id ?? productId)
             : String(productId);
 
-    // Guard: must be a valid 24-char MongoDB ObjectId before hitting the wire
     if (!OBJECTID_REGEX.test(normalizedId)) {
         throw new Error(`getVariantsByProduct: invalid ObjectId "${normalizedId}"`);
     }
 
-    return await api.get('/variants', {
-        params: { productId: normalizedId }
-    });
+    // /variants/product/:productGroupId → getVariantsByProductGroup (enterprise)
+    return await api.get(`/variants/product/${normalizedId}`);
 };
 
 // ── Get single variant by ID ───────────────────────────────────────────────
 export const getVariantById = async (id) => {
     return await api.get(`/variants/${id}`);
+};
+
+// ── Validate variant before add-to-cart (Phase 6 freshness check) ──────────
+export const validateVariantForCart = async ({ variantId, quantity, clientPrice }) => {
+    return await api.post('/variants/validate', { variantId, quantity, clientPrice });
 };
 
 // ── Get sizes (active, non-deleted) ───────────────────────────────────────
@@ -58,6 +62,8 @@ export default {
     getVariants,
     getVariantsByProduct,
     getVariantById,
+    validateVariantForCart,
     getSizes,
     getColors
 };
+

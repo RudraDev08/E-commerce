@@ -31,6 +31,13 @@ const attributeTypeSchema = new mongoose.Schema({
     },
 
     // ==================== CATEGORY CLASSIFICATION ====================
+    attributeRole: {
+        type: String,
+        enum: ['VARIANT', 'SPECIFICATION'],
+        default: 'VARIANT',
+        description: 'VARIANT attributes create UI selectors and affect SLA/SKU. SPECIFICATION attributes display as static tables.'
+    },
+
     category: {
         type: String,
         required: true,

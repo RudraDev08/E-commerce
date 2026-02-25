@@ -48,16 +48,17 @@ export const createAttributeValue = async (req, res) => {
             });
         }
 
-        const slug = slugify(name, { lower: true, strict: true });
-        // Ensure code is unique per type
-        const code = `${attrType.code}-${name.toUpperCase().replace(/\s+/g, '-')}-${Date.now().toString().slice(-4)}`;
+        const slug = req.body.slug || slugify(name, { lower: true, strict: true });
+
+        // Use provided code or generate a unique one
+        const code = req.body.code || `${attrType.code}-${name.toUpperCase().replace(/\s+/g, '-')}-${Date.now().toString().slice(-4)}`;
 
         const attributeValue = await AttributeValue.create({
             attributeType,
             name: name.toUpperCase(),
             slug,
             code,
-            displayName,
+            displayName: displayName || name,
             value,
             description,
             displayOrder: displayOrder || 0,

@@ -10,6 +10,7 @@ export const getProducts = async (params = {}) => {
     const queryParams = {
         status: 'active',
         isDeleted: false,
+        configured: true,
         ...params
     };
     return await api.get('/products', { params: queryParams });

@@ -893,7 +893,12 @@ const VariantBuilder = () => {
                     await Promise.all(selectedVariantIds.map(id => {
                         const v = variants.find(item => item._id === id);
                         if (v.isNew) return Promise.resolve(); // Skip new variants for API update
-                        return variantAPI.update(id, { status: newStatus, governance: { version: v.governance?.version } });
+                        return variantAPI.update(id, {
+                            status: newStatus,
+                            // Send version top-level so backend finds it as directVersion
+                            version: v.governance?.version,
+                            governance: { version: v.governance?.version }
+                        });
                     }));
 
                     toast.success('Bulk status update successful', { id: toastId });
@@ -911,8 +916,10 @@ const VariantBuilder = () => {
         DRAFT: ['ACTIVE', 'ARCHIVED', 'OUT_OF_STOCK'],
         ACTIVE: ['OUT_OF_STOCK', 'ARCHIVED', 'LOCKED'],
         OUT_OF_STOCK: ['ACTIVE', 'ARCHIVED'],
-        ARCHIVED: [],
-        LOCKED: [],
+        // ARCHIVED → DRAFT: restores the variant for re-review before re-activation
+        // Mirrors backend VariantMaster.enterprise.js VALID_TRANSITIONS
+        ARCHIVED: ['DRAFT'],
+        LOCKED: ['ACTIVE', 'ARCHIVED'],
     };
 
     const getAllowedStatuses = (status) => [status, ...(VALID_TRANSITIONS[status] || [])];
@@ -984,6 +991,9 @@ const VariantBuilder = () => {
                     sku: v.sku,
                     status: v.status,
                     imageGallery: v.imageGallery || [],
+                    // Send version at the top level (backend's primary extraction path)
+                    // AND as governance.version for backward compatibility.
+                    version: v.governance.version,
                     governance: { version: v.governance.version }
                 }));
 

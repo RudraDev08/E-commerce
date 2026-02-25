@@ -1,0 +1,784 @@
+{
+  "masters": [
+    {
+      "_id": "698c17186d627036d3cb5739",
+      "variantId": "698c17186d627036d3cb5732",
+      "productId": "698c16f46d627036d3cb56f7",
+      "sku": "PROD-2026-6805-1TB-SIL",
+      "totalStock": 3,
+      "reservedStock": 0,
+      "lowStockThreshold": 5,
+      "warehouseLocation": "Default",
+      "status": "LOW_STOCK",
+      "isDeleted": false,
+      "deletedAt": null,
+      "locations": [
+        {
+          "warehouseId": "6980859cb2cfcbc394d9a2af",
+          "stock": 3,
+          "lastUpdated": "2026-02-11T05:44:36.060Z",
+          "_id": "698c17446d627036d3cb57c3"
+        }
+      ],
+      "lastUpdated": "2026-02-11T05:44:36.060Z",
+      "createdAt": "2026-02-11T05:43:52.296Z",
+      "updatedAt": "2026-02-11T05:44:36.060Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c1916d0562bc921b2af5e",
+      "variantId": "698c1916d0562bc921b2af57",
+      "productId": "698c16f46d627036d3cb56f7",
+      "sku": "PROD-2026-6805-2TB-PIN",
+      "totalStock": 10,
+      "reservedStock": 0,
+      "lowStockThreshold": 5,
+      "warehouseLocation": "Default",
+      "status": "IN_STOCK",
+      "isDeleted": false,
+      "deletedAt": null,
+      "locations": [
+        {
+          "warehouseId": "6980859cb2cfcbc394d9a2af",
+          "stock": 10,
+          "lastUpdated": "2026-02-11T05:52:52.227Z",
+          "_id": "698c1934d0562bc921b2afb1"
+        }
+      ],
+      "lastUpdated": "2026-02-11T05:52:52.227Z",
+      "createdAt": "2026-02-11T05:52:22.772Z",
+      "updatedAt": "2026-02-11T05:52:52.228Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c54460e032963a2a191e0",
+      "variantId": "698c54460e032963a2a191bf",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-1TB-COS",
+      "totalStock": 50,
+      "reservedStock": 0,
+      "lowStockThreshold": 5,
+      "warehouseLocation": "Default",
+      "status": "IN_STOCK",
+      "isDeleted": false,
+      "deletedAt": null,
+      "locations": [
+        {
+          "warehouseId": "6980859cb2cfcbc394d9a2af",
+          "stock": 50,
+          "lastUpdated": "2026-02-11T10:05:32.289Z",
+          "_id": "698c546c0e032963a2a1928b"
+        }
+      ],
+      "lastUpdated": "2026-02-11T10:05:32.289Z",
+      "createdAt": "2026-02-11T10:04:54.224Z",
+      "updatedAt": "2026-02-11T10:05:32.290Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c54460e032963a2a191e2",
+      "variantId": "698c54460e032963a2a191c4",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-2TB-DEE",
+      "totalStock": 50,
+      "reservedStock": 0,
+      "lowStockThreshold": 5,
+      "warehouseLocation": "Default",
+      "status": "IN_STOCK",
+      "isDeleted": false,
+      "deletedAt": null,
+      "locations": [
+        {
+          "warehouseId": "6980859cb2cfcbc394d9a2af",
+          "stock": 50,
+          "lastUpdated": "2026-02-11T10:05:39.297Z",
+          "_id": "698c54730e032963a2a192a6"
+        }
+      ],
+      "lastUpdated": "2026-02-11T10:05:39.297Z",
+      "createdAt": "2026-02-11T10:04:54.235Z",
+      "updatedAt": "2026-02-11T10:05:39.298Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c54460e032963a2a191e4",
+      "variantId": "698c54460e032963a2a191c5",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-2TB-COS",
+      "totalStock": 50,
+      "reservedStock": 0,
+      "lowStockThreshold": 5,
+      "warehouseLocation": "Default",
+      "status": "IN_STOCK",
+      "isDeleted": false,
+      "deletedAt": null,
+      "locations": [
+        {
+          "warehouseId": "6980859cb2cfcbc394d9a2af",
+          "stock": 50,
+          "lastUpdated": "2026-02-11T10:05:46.204Z",
+          "_id": "698c547a0e032963a2a192c2"
+        }
+      ],
+      "lastUpdated": "2026-02-11T10:05:46.204Z",
+      "createdAt": "2026-02-11T10:04:54.250Z",
+      "updatedAt": "2026-02-11T10:05:46.205Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c54460e032963a2a191e6",
+      "variantId": "698c54460e032963a2a191c6",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-512GB-COS",
+      "totalStock": 50,
+      "reservedStock": 0,
+      "lowStockThreshold": 5,
+      "warehouseLocation": "Default",
+      "status": "IN_STOCK",
+      "isDeleted": false,
+      "deletedAt": null,
+      "locations": [
+        {
+          "warehouseId": "6980859cb2cfcbc394d9a2af",
+          "stock": 50,
+          "lastUpdated": "2026-02-11T10:05:52.800Z",
+          "_id": "698c54800e032963a2a192df"
+        }
+      ],
+      "lastUpdated": "2026-02-11T10:05:52.800Z",
+      "createdAt": "2026-02-11T10:04:54.258Z",
+      "updatedAt": "2026-02-11T10:05:52.801Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c54460e032963a2a191e8",
+      "variantId": "698c54460e032963a2a191c8",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-1TB-DEE",
+      "totalStock": 50,
+      "reservedStock": 0,
+      "lowStockThreshold": 5,
+      "warehouseLocation": "Default",
+      "status": "IN_STOCK",
+      "isDeleted": false,
+      "deletedAt": null,
+      "locations": [
+        {
+          "warehouseId": "6980859cb2cfcbc394d9a2af",
+          "stock": 50,
+          "lastUpdated": "2026-02-11T10:05:59.022Z",
+          "_id": "698c54870e032963a2a192fd"
+        }
+      ],
+      "lastUpdated": "2026-02-11T10:05:59.022Z",
+      "createdAt": "2026-02-11T10:04:54.267Z",
+      "updatedAt": "2026-02-11T10:05:59.023Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c54460e032963a2a191ea",
+      "variantId": "698c54460e032963a2a191c7",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-256GB-COS",
+      "totalStock": 50,
+      "reservedStock": 0,
+      "lowStockThreshold": 5,
+      "warehouseLocation": "Default",
+      "status": "IN_STOCK",
+      "isDeleted": false,
+      "deletedAt": null,
+      "locations": [
+        {
+          "warehouseId": "6980859cb2cfcbc394d9a2af",
+          "stock": 50,
+          "lastUpdated": "2026-02-11T10:06:04.369Z",
+          "_id": "698c548c0e032963a2a1931c"
+        }
+      ],
+      "lastUpdated": "2026-02-11T10:06:04.369Z",
+      "createdAt": "2026-02-11T10:04:54.275Z",
+      "updatedAt": "2026-02-11T10:06:04.369Z",
+      "__v": 0
+    }
+  ],
+  "ledgers": [
+    {
+      "_id": "69859672f226ed9ba7eacc7f",
+      "variantId": "698584d221d0eb9d95cb925e",
+      "productId": "69843444a60ded6993228cc6",
+      "sku": "PROD-2026-6627-1TB-PIN",
+      "transactionType": "STOCK_IN",
+      "quantity": 10,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 10,
+        "reserved": 0,
+        "available": 10
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 10 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-06T07:21:22.344Z",
+      "createdAt": "2026-02-06T07:21:22.354Z",
+      "updatedAt": "2026-02-06T07:21:22.354Z",
+      "__v": 0
+    },
+    {
+      "_id": "69859678f226ed9ba7eacc9a",
+      "variantId": "698585f4cd628d4bd5828f44",
+      "productId": "69843444a60ded6993228cc6",
+      "sku": "PROD-2026-6627-2TB-SIL",
+      "transactionType": "STOCK_IN",
+      "quantity": 10,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 10,
+        "reserved": 0,
+        "available": 10
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 10 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-06T07:21:28.251Z",
+      "createdAt": "2026-02-06T07:21:28.258Z",
+      "updatedAt": "2026-02-06T07:21:28.258Z",
+      "__v": 0
+    },
+    {
+      "_id": "6985967df226ed9ba7eaccb6",
+      "variantId": "69859139f226ed9ba7eac7a9",
+      "productId": "6979c4ea2f222cf021fd4bde",
+      "sku": "PROD-2026-6553-2TB-COS",
+      "transactionType": "STOCK_IN",
+      "quantity": 10,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 10,
+        "reserved": 0,
+        "available": 10
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 10 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-06T07:21:33.571Z",
+      "createdAt": "2026-02-06T07:21:33.574Z",
+      "updatedAt": "2026-02-06T07:21:33.574Z",
+      "__v": 0
+    },
+    {
+      "_id": "69859682f226ed9ba7eaccea",
+      "variantId": "69859139f226ed9ba7eac7ac",
+      "productId": "6979c4ea2f222cf021fd4bde",
+      "sku": "PROD-2026-6553-1TB-COS",
+      "transactionType": "STOCK_IN",
+      "quantity": 10,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 10,
+        "reserved": 0,
+        "available": 10
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 10 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-06T07:21:38.108Z",
+      "createdAt": "2026-02-06T07:21:38.117Z",
+      "updatedAt": "2026-02-06T07:21:38.117Z",
+      "__v": 0
+    },
+    {
+      "_id": "6985ad6ca4ef7f28f5807dec",
+      "variantId": "698585f4cd628d4bd5828f44",
+      "productId": "69843444a60ded6993228cc6",
+      "sku": "PROD-2026-6627-2TB-SIL",
+      "transactionType": "STOCK_OUT",
+      "quantity": -5,
+      "stockBefore": {
+        "total": 10,
+        "reserved": 0,
+        "available": 10
+      },
+      "stockAfter": {
+        "total": 5,
+        "reserved": 0,
+        "available": 5
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: deduct 5 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-06T08:59:24.519Z",
+      "createdAt": "2026-02-06T08:59:24.549Z",
+      "updatedAt": "2026-02-06T08:59:24.549Z",
+      "__v": 0
+    },
+    {
+      "_id": "6985b2165f94f95b97387027",
+      "variantId": "6985b0d2aea05793b52d8fb7",
+      "productId": "69843444a60ded6993228cc6",
+      "sku": "PROD-2026-6627-1TB-SIL",
+      "transactionType": "STOCK_IN",
+      "quantity": 10,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 10,
+        "reserved": 0,
+        "available": 10
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 10 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-06T09:19:18.364Z",
+      "createdAt": "2026-02-06T09:19:18.375Z",
+      "updatedAt": "2026-02-06T09:19:18.375Z",
+      "__v": 0
+    },
+    {
+      "_id": "6985b29aaf0d6fc207417724",
+      "variantId": "6985b28faf0d6fc2074176c0",
+      "productId": "69843444a60ded6993228cc6",
+      "sku": "PROD-2026-6627-2TB-PIN",
+      "transactionType": "STOCK_IN",
+      "quantity": 5,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 5,
+        "reserved": 0,
+        "available": 5
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 5 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-06T09:21:30.018Z",
+      "createdAt": "2026-02-06T09:21:30.022Z",
+      "updatedAt": "2026-02-06T09:21:30.022Z",
+      "__v": 0
+    },
+    {
+      "_id": "6985bb9e9ce427747cea859e",
+      "variantId": "6985b28faf0d6fc2074176c0",
+      "productId": "69843444a60ded6993228cc6",
+      "sku": "PROD-2026-6627-2TB-PIN",
+      "transactionType": "STOCK_IN",
+      "quantity": 10,
+      "stockBefore": {
+        "total": 5,
+        "reserved": 0,
+        "available": 5
+      },
+      "stockAfter": {
+        "total": 15,
+        "reserved": 0,
+        "available": 15
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 10 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-06T09:59:58.123Z",
+      "createdAt": "2026-02-06T09:59:58.136Z",
+      "updatedAt": "2026-02-06T09:59:58.136Z",
+      "__v": 0
+    },
+    {
+      "_id": "698765d83b68ae7345e43963",
+      "variantId": "69859139f226ed9ba7eac7ac",
+      "productId": "6979c4ea2f222cf021fd4bde",
+      "sku": "PROD-2026-6553-1TB-COS",
+      "transactionType": "STOCK_OUT",
+      "quantity": -1,
+      "stockBefore": {
+        "total": 10,
+        "reserved": 0,
+        "available": 10
+      },
+      "stockAfter": {
+        "total": 9,
+        "reserved": 0,
+        "available": 9
+      },
+      "reason": "ORDER_SALE",
+      "notes": "Order ORD-20260207-0001",
+      "referenceType": "ORDER",
+      "referenceId": "ORD-20260207-0001",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "WH-DEFAULT",
+      "performedBy": "SYSTEM",
+      "performedByRole": "SYSTEM",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-07T16:18:32.926Z",
+      "createdAt": "2026-02-07T16:18:32.930Z",
+      "updatedAt": "2026-02-07T16:18:32.930Z",
+      "__v": 0
+    },
+    {
+      "_id": "698899614a8e716d7941e5f9",
+      "variantId": "69859139f226ed9ba7eac7ac",
+      "productId": "6979c4ea2f222cf021fd4bde",
+      "sku": "PROD-2026-6553-1TB-COS",
+      "transactionType": "STOCK_OUT",
+      "quantity": -10,
+      "stockBefore": {
+        "total": 9,
+        "reserved": 0,
+        "available": 9
+      },
+      "stockAfter": {
+        "total": -1,
+        "reserved": 0,
+        "available": -1
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: deduct 10 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-08T14:10:41.706Z",
+      "createdAt": "2026-02-08T14:10:41.741Z",
+      "updatedAt": "2026-02-08T14:10:41.741Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c17446d627036d3cb57c8",
+      "variantId": "698c17186d627036d3cb5732",
+      "productId": "698c16f46d627036d3cb56f7",
+      "sku": "PROD-2026-6805-1TB-SIL",
+      "transactionType": "STOCK_IN",
+      "quantity": 3,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 3,
+        "reserved": 0,
+        "available": 3
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 3 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-11T05:44:36.072Z",
+      "createdAt": "2026-02-11T05:44:36.074Z",
+      "updatedAt": "2026-02-11T05:44:36.074Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c1934d0562bc921b2afb6",
+      "variantId": "698c1916d0562bc921b2af57",
+      "productId": "698c16f46d627036d3cb56f7",
+      "sku": "PROD-2026-6805-2TB-PIN",
+      "transactionType": "STOCK_IN",
+      "quantity": 10,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 10,
+        "reserved": 0,
+        "available": 10
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 10 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-11T05:52:52.245Z",
+      "createdAt": "2026-02-11T05:52:52.254Z",
+      "updatedAt": "2026-02-11T05:52:52.254Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c546c0e032963a2a19290",
+      "variantId": "698c54460e032963a2a191bf",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-1TB-COS",
+      "transactionType": "STOCK_IN",
+      "quantity": 50,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 50,
+        "reserved": 0,
+        "available": 50
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 50 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-11T10:05:32.315Z",
+      "createdAt": "2026-02-11T10:05:32.322Z",
+      "updatedAt": "2026-02-11T10:05:32.322Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c54730e032963a2a192ab",
+      "variantId": "698c54460e032963a2a191c4",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-2TB-DEE",
+      "transactionType": "STOCK_IN",
+      "quantity": 50,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 50,
+        "reserved": 0,
+        "available": 50
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 50 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-11T10:05:39.310Z",
+      "createdAt": "2026-02-11T10:05:39.318Z",
+      "updatedAt": "2026-02-11T10:05:39.318Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c547a0e032963a2a192c7",
+      "variantId": "698c54460e032963a2a191c5",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-2TB-COS",
+      "transactionType": "STOCK_IN",
+      "quantity": 50,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 50,
+        "reserved": 0,
+        "available": 50
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 50 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-11T10:05:46.208Z",
+      "createdAt": "2026-02-11T10:05:46.210Z",
+      "updatedAt": "2026-02-11T10:05:46.210Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c54800e032963a2a192e4",
+      "variantId": "698c54460e032963a2a191c6",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-512GB-COS",
+      "transactionType": "STOCK_IN",
+      "quantity": 50,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 50,
+        "reserved": 0,
+        "available": 50
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 50 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-11T10:05:52.812Z",
+      "createdAt": "2026-02-11T10:05:52.818Z",
+      "updatedAt": "2026-02-11T10:05:52.818Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c54870e032963a2a19302",
+      "variantId": "698c54460e032963a2a191c8",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-1TB-DEE",
+      "transactionType": "STOCK_IN",
+      "quantity": 50,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 50,
+        "reserved": 0,
+        "available": 50
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 50 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-11T10:05:59.031Z",
+      "createdAt": "2026-02-11T10:05:59.038Z",
+      "updatedAt": "2026-02-11T10:05:59.038Z",
+      "__v": 0
+    },
+    {
+      "_id": "698c548c0e032963a2a19321",
+      "variantId": "698c54460e032963a2a191c7",
+      "productId": "698c53ba0e032963a2a1917c",
+      "sku": "PROD-2026-2931-256GB-COS",
+      "transactionType": "STOCK_IN",
+      "quantity": 50,
+      "stockBefore": {
+        "total": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "stockAfter": {
+        "total": 50,
+        "reserved": 0,
+        "available": 50
+      },
+      "reason": "MANUAL_CORRECTION",
+      "notes": "Location Update: add 50 at WH 6980859cb2cfcbc394d9a2af",
+      "referenceType": "MANUAL",
+      "unitCost": 0,
+      "totalValue": 0,
+      "warehouseId": "6980859cb2cfcbc394d9a2af",
+      "performedBy": "ADMIN",
+      "performedByRole": "ADMIN",
+      "requiresApproval": false,
+      "approvalStatus": "NA",
+      "transactionDate": "2026-02-11T10:06:04.377Z",
+      "createdAt": "2026-02-11T10:06:04.382Z",
+      "updatedAt": "2026-02-11T10:06:04.382Z",
+      "__v": 0
+    }
+  ],
+  "timestamp": "2026-02-25T09:47:54.371Z"
+}

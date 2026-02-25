@@ -10,6 +10,7 @@ import {
   getMatrixPreview,
   repairVariant,
   repairProductGroupVariants,
+  validateVariant,
 } from '../../controllers/variant/variantController.js';
 import {
   createVariant as createVariantLegacy,
@@ -79,6 +80,12 @@ router.get('/product/:productGroupId', getVariantsByProductGroup);
 
 // Read all variants (with optional ?productId query): GET /api/variants
 router.get('/', getVariantsLegacy);
+
+// POST /api/variants/validate — PDP freshness check before add-to-cart
+router.post('/validate', validateVariant);
+
+// GET /api/variants/:id
+router.get('/:id', getVariantById);
 
 // Create (bulk + single): POST /api/variants
 router.post('/', upload.array('images', 10), createVariantLegacy);

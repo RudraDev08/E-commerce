@@ -1,187 +1,221 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useProductConfiguration } from './useProductConfiguration';
 import { AttributeGroup } from './AttributeGroup';
 import { getAttributeTypes } from '../../../api/attributeApi';
 
 /**
- * ProductConfigurator
- * 
- * @param {Object} product - Product Data
- * @param {Array} variants - List of Variants
- * @param {Function} onVariantChange - Callback (variant) => void
+ * ProductConfigurator — Hardened variant engine.
+ *
+ * PHASE 3: Attribute display logic
+ *   - Reads populated attributeValueIds objects (preferred: attr.attributeType.displayName + attr.displayName)
+ *   - Falls back to attributeDimensions for dimension metadata
+ *   - Falls back to global attribute master lookup as last resort
+ *   - Groups attributes by Attribute Type, sorted by priority
+ *
+ * Receives only ACTIVE in-stock variants from the parent (Phase 1 filter applied upstream).
+ *
+ * @param {Object} product             - Product data
+ * @param {Array}  variants            - Pre-filtered ACTIVE + in-stock variants
+ * @param {Function} onVariantChange   - Callback (variant | null) => void
+ * @param {Object}  controlledVariant  - Externally selected variant (alternatives badge)
  */
 export const ProductConfigurator = ({ product, variants, onVariantChange, controlledVariant }) => {
-    // 1. Fetch Attribute Configurations (Input Types, Labels)
     const [attributeTypesConfig, setAttributeTypesConfig] = useState([]);
     const [loadingConfig, setLoadingConfig] = useState(true);
 
+    // Fetch global attribute type configs (for inputType / priority / displayName)
     useEffect(() => {
+        let cancelled = false;
         const fetchConfig = async () => {
             try {
                 const res = await getAttributeTypes();
-                setAttributeTypesConfig(res.data?.data || res.data || []);
+                if (!cancelled) {
+                    setAttributeTypesConfig(res?.data?.data ?? res?.data ?? []);
+                }
             } catch (err) {
-                console.error("Failed to fetch attribute types", err);
+                if (!cancelled) console.error('[ProductConfigurator] Failed to fetch attribute types', err);
             } finally {
-                setLoadingConfig(false);
+                if (!cancelled) setLoadingConfig(false);
             }
         };
         fetchConfig();
+        return () => { cancelled = true; };
     }, []);
 
-    // 2. Identify Relevant Attributes for THIS Product
+    // ─── PHASE 3: Build relevantAttributes + attributeValuesMap ─────────────────
+    // Logic:
+    //   1. For each variant, extract dimensions (color, size, custom attrs)
+    //   2. If attributeValueIds are populated objects → use attr.attributeType.displayName + attr.displayName
+    //   3. If attributeDimensions exist → use dim.attributeName as type, resolve value from populated obj
+    //   4. Always backfill color + size from top-level variant fields
+    //   5. De-duplicate values per type using a Map keyed by display label
     const { relevantAttributes, attributeValuesMap } = useMemo(() => {
-        if (!variants || variants.length === 0) return { relevantAttributes: [], attributeValuesMap: {} };
+        if (!variants || variants.length === 0) {
+            return { relevantAttributes: [], attributeValuesMap: {} };
+        }
 
-        // Ensure "size" and "color" are in the allowed types if seen in data
+        // Build a lookup map from the global attribute type config
+        const typeConfigBySlug = {};
+        const typeConfigById = {};
         const workingConfig = [...attributeTypesConfig];
-        // Force "Colour" spelling for color attribute
-        const colorAttr = workingConfig.find(c => c.slug === 'color');
-        if (colorAttr) {
-            colorAttr.name = 'Colour';
-            colorAttr.priority = 1; // Ensure priority
-            colorAttr.inputType = 'color_swatch'; // Ensure swatch
-        } else {
-            workingConfig.push({ slug: 'color', name: 'Colour', inputType: 'color_swatch', priority: 1 });
-        }
 
+        // Ensure color and size have sensible defaults if not returned from API
+        if (!workingConfig.find(c => c.slug === 'color')) {
+            workingConfig.push({ _id: 'color', slug: 'color', name: 'Colour', inputType: 'color_swatch', priority: 1 });
+        }
         if (!workingConfig.find(c => c.slug === 'size')) {
-            workingConfig.push({ slug: 'size', name: 'Size', inputType: 'button_group', priority: 2 });
+            workingConfig.push({ _id: 'size', slug: 'size', name: 'Size', inputType: 'button_group', priority: 2 });
         }
 
-        const usedAttributeSlugs = new Set();
-        const valuesMap = {}; // slug -> Map(valSlug -> valObj)
+        workingConfig.forEach(t => {
+            if (t.slug) typeConfigBySlug[t.slug] = t;
+            if (t._id) typeConfigById[String(t._id)] = t;
+        });
+
+        // usedTypes: slug → { config object } — collects which types actually appear in data
+        const usedTypes = {};
+        // valuesMap: typeSlug → Map<displayLabel, valueObj>
+        const valuesMap = {};
+
+        const ensureType = (slug, fallbackName, fallbackInputType = 'button_group', fallbackPriority = 99) => {
+            if (!usedTypes[slug]) {
+                usedTypes[slug] = typeConfigBySlug[slug] || {
+                    _id: slug,
+                    slug,
+                    name: fallbackName || slug,
+                    inputType: fallbackInputType,
+                    priority: fallbackPriority
+                };
+            }
+            if (!valuesMap[slug]) valuesMap[slug] = new Map();
+        };
+
+        const addValue = (typeSlug, valueObj) => {
+            // valueObj must have: { id, slug, value, ... optional hexCode, previewImage }
+            if (!valueObj?.value && !valueObj?.slug) return;
+            const key = valueObj.slug || valueObj.value;
+            if (!valuesMap[typeSlug].has(key)) {
+                valuesMap[typeSlug].set(key, valueObj);
+            } else {
+                // Enrich existing entry if we get new data (e.g. hexCode from a later variant)
+                const existing = valuesMap[typeSlug].get(key);
+                if (valueObj.hexCode && !existing.hexCode) existing.hexCode = valueObj.hexCode;
+                if (valueObj.previewImage && !existing.previewImage) existing.previewImage = valueObj.previewImage;
+            }
+        };
 
         variants.forEach(v => {
-            let validAttrs = [];
 
-            // 1. Existing attributes logic
-            if (v.attributes) {
-                validAttrs = Array.isArray(v.attributes)
-                    ? v.attributes
-                    : Object.entries(v.attributes).map(([key, val]) => ({ attributeType: key, attributeValue: val }));
-            }
+            // ── A: Color from top-level colorId (populated object preferred) ──────
+            const colorData = (v.colorId && typeof v.colorId === 'object' && v.colorId._id)
+                ? v.colorId
+                : (v.color && typeof v.color === 'object' ? v.color : null);
 
-            // 2. BACKFILL: Map structured Size/Color to attributes if not redundant
-            const sizeData = v.size || v.sizeId || (v.sizes && v.sizes[0] ? v.sizes[0].sizeId : null);
-            if (sizeData && typeof sizeData === 'object') {
-                // Remove existing 'size' if present to avoid duplication (trust populated field more)
-                validAttrs = validAttrs.filter(a => (a.attributeType?.slug || a.attributeType) !== 'size');
-                validAttrs.push({
-                    attributeType: 'size',
-                    attributeValue: {
-                        slug: sizeData.name || sizeData.value || sizeData.displayName || sizeData._id,
-                        value: sizeData.name || sizeData.value || sizeData.displayName || sizeData._id,
-                        id: sizeData._id
-                    }
+            if (colorData) {
+                const typeConfig = typeConfigBySlug['color'];
+                ensureType('color', 'Colour', 'color_swatch', 1);
+                addValue('color', {
+                    id: String(colorData._id),
+                    slug: colorData.name || colorData.displayName || String(colorData._id),
+                    value: colorData.displayName || colorData.name || 'Unknown',
+                    hexCode: colorData.hexCode || null,
+                    previewImage: v.imageGallery?.[0]?.url || null,
                 });
             }
 
-            const colorData = v.color || v.colorId;
-            if (colorData && typeof colorData === 'object') {
-                validAttrs = validAttrs.filter(a => (a.attributeType?.slug || a.attributeType) !== 'color');
-                validAttrs.push({
-                    attributeType: 'color',
-                    attributeValue: {
-                        slug: colorData.name || colorData.displayName || colorData._id,
-                        value: colorData.name || colorData.displayName || colorData._id,
-                        id: colorData._id,
-                        hexCode: colorData.hexCode
-                    }
+            // ── B: Size from sizes[] array (enterprise schema) ───────────────────
+            if (Array.isArray(v.sizes) && v.sizes.length > 0) {
+                v.sizes.forEach(sizeEntry => {
+                    const sizeData = (sizeEntry.sizeId && typeof sizeEntry.sizeId === 'object')
+                        ? sizeEntry.sizeId
+                        : null;
+                    if (!sizeData) return;
+                    ensureType('size', 'Size', 'button_group', 2);
+                    addValue('size', {
+                        id: String(sizeData._id),
+                        slug: sizeData.displayName || sizeData.value || sizeData.name || String(sizeData._id),
+                        value: sizeData.displayName || sizeData.value || sizeData.name || '—',
+                    });
                 });
             }
 
+            // ── C: Custom attribute dimensions ───────────────────────────────────
+            // Priority 1: populated attributeValueIds objects
+            //   → attr.attributeType.displayName (type label)
+            //   → attr.displayName || attr.name (value label)
+            if (Array.isArray(v.attributeValueIds) && v.attributeValueIds.length > 0) {
+                v.attributeValueIds.forEach(attr => {
+                    if (!attr || typeof attr !== 'object' || !attr._id) return; // skip unpopulated IDs
+                    const attrType = attr.attributeType; // populated AttributeType sub-doc
+                    if (!attrType) return;
 
-            validAttrs.forEach(attr => {
-                if (!attr) return;
+                    if (attr.role === 'SPECIFICATION') return;
 
-                // Determine Slug
-                const typeSlug = (attr.attributeType && typeof attr.attributeType === 'object')
-                    ? attr.attributeType.slug
-                    : attr.attributeType;
+                    const typeSlug = attrType.slug || attrType.name?.toLowerCase().replace(/\s+/g, '_') || String(attrType._id);
+                    const typeName = attrType.displayName || attrType.name || typeSlug;
+                    const typeInputType = typeConfigById[String(attrType._id)]?.inputType || 'button_group';
+                    const typePriority = typeConfigById[String(attrType._id)]?.priority || 10;
 
-                if (!typeSlug) return;
+                    ensureType(typeSlug, typeName, typeInputType, typePriority);
+                    // Overwrite name/inputType if we have richer data now
+                    if (usedTypes[typeSlug].name === typeSlug) usedTypes[typeSlug].name = typeName;
 
-                const valSlug = (attr.attributeValue && typeof attr.attributeValue === 'object')
-                    ? attr.attributeValue.slug
-                    : attr.attributeValue;
+                    addValue(typeSlug, {
+                        id: String(attr._id),
+                        slug: attr.displayName || attr.name || attr.code || String(attr._id),
+                        value: attr.displayName || attr.name || attr.code || '—',
+                        code: attr.code,
+                    });
+                });
+            }
 
-                if (!valSlug) return;
+            // Priority 2: attributeDimensions (structured metadata fallback)
+            //   Used when attributeValueIds are plain ObjectIds (unpopulated)
+            else if (Array.isArray(v.attributeDimensions) && v.attributeDimensions.length > 0) {
+                v.attributeDimensions.forEach(dim => {
+                    if (!dim?.valueId) return;
+                    const typeSlug = dim.attributeName?.toLowerCase().replace(/\s+/g, '_') || 'attr_unknown';
+                    const typeName = dim.attributeName || typeSlug;
+                    ensureType(typeSlug, typeName, 'button_group', 10);
 
-                // Basic value object
-                const valObj = (typeof attr.attributeValue === 'object') ? attr.attributeValue : { value: valSlug, slug: valSlug, id: valSlug };
-
-                if (typeSlug && valSlug) {
-                    usedAttributeSlugs.add(typeSlug);
-                    if (!valuesMap[typeSlug]) valuesMap[typeSlug] = new Map();
-
-                    // ENRICH_DATA: Attach preview image and price from the variant (v)
-                    // We prioritize variants that have images to ensure the preview is good.
-                    const existing = valuesMap[typeSlug].get(valSlug);
-                    const currentHasImage = v.images && v.images.length > 0;
-                    const existingHasImage = existing?.previewImage;
-
-                    // If we have a hexCode in the variant color object, ensure it's on the value
-                    if (valObj.hexCode && !existing?.hexCode) {
-                        // pass
-                    }
-
-                    if (!existing || (!existingHasImage && currentHasImage)) {
-                        const previewImage = currentHasImage
-                            ? (typeof v.images[0] === 'string' ? v.images[0] : v.images[0].url)
-                            : null;
-
-                        const enrichedValObj = {
-                            ...valObj,
-                            previewImage: previewImage,
-                            previewPrice: v.price,
-                            compareAtPrice: v.compareAtPrice,
-                            currency: v.currency, // Optional
-                            hexCode: valObj.hexCode || existing?.hexCode // Preserve Hex
-                        };
-                        valuesMap[typeSlug].set(valSlug, enrichedValObj);
-                    } else if (valObj.hexCode && !existing.hexCode) {
-                        // Late update if we found hexCode elsewhere? Unlikely if structured.
-                        existing.hexCode = valObj.hexCode;
-                        valuesMap[typeSlug].set(valSlug, existing);
-                    }
-                }
-            });
+                    const valueId = typeof dim.valueId === 'object' ? String(dim.valueId) : dim.valueId;
+                    addValue(typeSlug, {
+                        id: valueId,
+                        slug: valueId, // No display label available — show raw id as fallback
+                        value: valueId,
+                    });
+                });
+            }
         });
 
-        // Filter config to only relevant ones and sort
-        const relevant = workingConfig
-            .filter(t => usedAttributeSlugs.has(t.slug))
-            .sort((a, b) => (a.priority || 0) - (b.priority || 0));
-
-        // Convert Map to Array for values
+        // Convert Maps to sorted Arrays
         const finalValuesMap = {};
-        Object.keys(valuesMap).forEach(key => {
-            finalValuesMap[key] = Array.from(valuesMap[key].values());
+        Object.keys(valuesMap).forEach(slug => {
+            finalValuesMap[slug] = Array.from(valuesMap[slug].values());
         });
+
+        // Build sorted relevant attribute type list
+        const relevant = Object.values(usedTypes)
+            .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
 
         return { relevantAttributes: relevant, attributeValuesMap: finalValuesMap };
-
     }, [variants, attributeTypesConfig]);
 
-    // 3. Setup Configuration Hook
+    // ── Setup Configuration Hook ──────────────────────────────────────────────
     const {
         selectedAttributes,
         setSelectedAttributes,
         selectAttribute,
         resolvedVariant,
         isOptionAvailable,
-        getVariantAttributeValue
+        getVariantAttributeValue,
     } = useProductConfiguration(variants, relevantAttributes);
 
-    // Track the last synced variant to prevent infinite loops
-    const lastSyncedVariantId = useRef(null);
-
-    // Sync externally selected variant (e.g. from Alternatives Badge)
+    // Sync externally controlled variant (e.g. from Alternatives badge)
+    const lastSyncedId = React.useRef(null);
     useEffect(() => {
-        if (controlledVariant && controlledVariant._id !== lastSyncedVariantId.current) {
-            lastSyncedVariantId.current = controlledVariant._id;
-
+        if (controlledVariant && controlledVariant._id !== lastSyncedId.current) {
+            lastSyncedId.current = controlledVariant._id;
             const newAttrs = {};
             relevantAttributes.forEach(attr => {
                 const val = getVariantAttributeValue(controlledVariant, attr.slug);
@@ -189,37 +223,39 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
             });
             setSelectedAttributes(newAttrs);
         }
-    }, [controlledVariant, relevantAttributes, getVariantAttributeValue]);
+    }, [controlledVariant, relevantAttributes, getVariantAttributeValue, setSelectedAttributes]);
 
-    // 4. Notify Parent
+    // Notify parent when resolved variant changes
     useEffect(() => {
-        onVariantChange && onVariantChange(resolvedVariant);
+        onVariantChange?.(resolvedVariant);
     }, [resolvedVariant, onVariantChange]);
 
-    if (loadingConfig) return <div className="animate-pulse h-20 bg-gray-100 rounded"></div>;
+    if (loadingConfig) {
+        return <div className="animate-pulse h-20 bg-gray-100 rounded" aria-label="Loading options…" />;
+    }
+
+    if (relevantAttributes.length === 0) {
+        return (
+            <div className="text-sm text-slate-400 italic py-4">
+                No configurable options for this product.
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
-            {relevantAttributes.map(attr => {
-                let isDisabled = false;
-                let helperText = '';
-
-                // Let the robust isOptionAvailable matrix handle UI disabling inherently
-                // instead of arbitrary hardcoded hierarchy.
-
-                return (
-                    <AttributeGroup
-                        key={attr._id || attr.slug}
-                        attribute={attr}
-                        values={attributeValuesMap[attr.slug] || []}
-                        selectedValue={selectedAttributes[attr.slug]}
-                        onSelect={(val) => selectAttribute(attr.slug, val)}
-                        checkAvailability={(val) => isOptionAvailable(attr.slug, val)}
-                        isDisabled={isDisabled}
-                        helperText={helperText}
-                    />
-                );
-            })}
+            {relevantAttributes.map(attr => (
+                <AttributeGroup
+                    key={attr._id || attr.slug}
+                    attribute={attr}
+                    values={attributeValuesMap[attr.slug] || []}
+                    selectedValue={selectedAttributes[attr.slug]}
+                    onSelect={(val) => selectAttribute(attr.slug, val)}
+                    checkAvailability={(val) => isOptionAvailable(attr.slug, val)}
+                    isDisabled={false}
+                    helperText=""
+                />
+            ))}
         </div>
     );
 };

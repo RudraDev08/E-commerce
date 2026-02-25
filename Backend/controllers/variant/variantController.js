@@ -14,6 +14,7 @@ import SizeMaster from '../../models/masters/SizeMaster.enterprise.js';
 import ColorMaster from '../../models/masters/ColorMaster.enterprise.js';
 import AttributeValue from '../../models/AttributeValue.model.js';
 import ProductGroupSnapshot from '../../models/Product/ProductGroupSnapshot.js';
+import InventoryMaster from '../../models/inventory/InventoryMaster.model.js';
 import { SnapshotService } from '../../services/snapshot.service.js';
 import { VariantIntegrityService } from '../../services/variantIntegrity.service.js';
 import { generateConfigHash } from '../../utils/configHash.util.js';
@@ -131,17 +132,43 @@ export async function getMatrixPreview(req, res) {
 
 /**
  * Flatten a raw VariantMaster lean document into a clean customer-facing shape.
- * Called inside the controller — never inside a Mongoose virtual to stay lean().
+ * inventoryData: optional InventoryMaster lean doc for this variant.
  */
-function flattenVariant(v) {
+function flattenVariant(v, inventoryData) {
   const sizeObj = v.sizeId || (v.sizes && v.sizes[0] ? v.sizes[0].sizeId : null);
+
+  // Stock: prefer InventoryMaster (authoritative) → fall back to embedded inventory sub-doc
+  // CONTRACT: stock is NEVER undefined. null = no record, 0 = OOS, N = sellable
+  const totalStock = inventoryData?.availableStock ?? inventoryData?.totalStock ?? v.inventory?.quantityOnHand ?? null;
+  // inventoryStatus: NEVER undefined. 'UNKNOWN' signals no record was found
+  const inventoryStatus = inventoryData?.status ?? 'UNKNOWN';
+
   return {
     _id: v._id,
+    sku: v.sku ?? null,
+    productGroupId: v.productGroupId,
     status: v.status,
+    configHash: v.configHash ?? null,
+
+    // Prices — always parse Decimal128 to plain number
     price: v.price ? parseFloat(v.price.toString()) : null,
     compareAtPrice: v.compareAtPrice ? parseFloat(v.compareAtPrice.toString()) : null,
+    resolvedPrice: v.resolvedPrice ? parseFloat(v.resolvedPrice.toString()) : null,
+
+    // Stock — null = no inventory record (not zero); 0 = explicitly OOS; N = sellable
+    stock: totalStock,
+    // Phase 5 contract: NEVER undefined
+    inventoryStatus,
+
     imageGallery: v.imageGallery ?? [],
 
+    // Sizes array (enterprise — may be multi-size)
+    sizes: (v.sizes ?? []).map(s => ({
+      sizeId: s.sizeId,
+      category: s.category,
+    })),
+
+    // Legacy single-size alias for backwards compat with configurator
     size: sizeObj
       ? {
         _id: sizeObj._id,
@@ -149,31 +176,41 @@ function flattenVariant(v) {
         value: sizeObj.value,
         category: sizeObj.category,
         gender: sizeObj.gender,
-        // Expose common measurement fields without duplicating the master
         measurements: sizeObj.measurements ?? null,
       }
       : null,
 
+    // Color — full populated object so configurator can read hexCode etc.
+    colorId: v.colorId ?? null,
     color: v.colorId
       ? {
         _id: v.colorId._id,
         name: v.colorId.name,
         displayName: v.colorId.displayName ?? v.colorId.name,
-        hex: v.colorId.hexCode,          // ColorMaster field
+        hexCode: v.colorId.hexCode,
+        hex: v.colorId.hexCode,
         rgb: v.colorId.rgbCode ?? null,
         colorFamily: v.colorId.colorFamily ?? null,
-        visualCategory: v.colorId.visualCategory ?? null,
       }
       : null,
 
-    // Flatten attribute values: [{type, value}]
+    // Attributes — populated objects (Phase 3 display logic reads these)
+    attributeValueIds: v.attributeValueIds ?? [],
+
+    // Flat legacy attributes for backward compat
     attributes: (v.attributeValueIds ?? []).map((av) => ({
       _id: av._id,
       type: av.attributeType?.name ?? av.attributeType?.displayName ?? null,
       typeId: av.attributeType?._id ?? null,
       value: av.name ?? av.displayName,
       code: av.code,
+      role: av.attributeType?.attributeRole ?? 'VARIANT', // <--- Expose role to PDP
     })),
+
+    // Structured dimension metadata (Phase 2 identity key)
+    attributeDimensions: v.attributeDimensions ?? [],
+
+    governance: v.governance ?? null,
   };
 }
 
@@ -236,19 +273,56 @@ export async function createVariant(req, res) {
     // ── 3. Generate deterministic configHash ─────────────────────────────
     const configHash = generateConfigHash({ productGroupId, sizeId: actualSizeId, colorId, attributeValueIds });
 
-    // ── 4. Persist ───────────────────────────────────────────────────────
-    const variant = await VariantMaster.create({
-      productGroupId,
-      sizes: sizes || [{ sizeId: actualSizeId, category: size.category || 'DIMENSION' }],
-      colorId,
-      attributeValueIds,
-      price,
-      compareAtPrice: compareAtPrice ?? undefined,
-      imageGallery,
-      status,
-      configHash,
-      governance: { createdBy: req.user?._id },
-    });
+    // ── 4. Persist in atomic transaction ────────────────────────────────────
+    // PHASE 3 — 1:1 invariant enforcement.
+    // We MUST create InventoryMaster in the same transaction so that:
+    //  a) No variant ever exists without an inventory record
+    //  b) Any failure rolls back both writes atomically
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    let variant;
+    try {
+      [variant] = await VariantMaster.create([{
+        productGroupId,
+        sizes: sizes || [{ sizeId: actualSizeId, category: size.category || 'DIMENSION' }],
+        colorId,
+        attributeValueIds,
+        price,
+        compareAtPrice: compareAtPrice ?? undefined,
+        imageGallery,
+        status,
+        configHash,
+        governance: { createdBy: req.user?._id },
+      }], { session });
+
+      // Enforce 1:1 invariant: create zero-stock inventory record immediately.
+      // Uses upsert so it is idempotent — safe if somehow called twice.
+      await InventoryMaster.updateOne(
+        { variantId: variant._id },
+        {
+          $setOnInsert: {
+            variantId: variant._id,
+            productId: productGroupId,
+            sku: variant.sku ?? null,
+            totalStock: 0,
+            reservedStock: 0,
+            availableStock: 0,
+            lowStockThreshold: 5,
+            status: 'OUT_OF_STOCK',
+            isDeleted: false,
+            locations: [],
+          }
+        },
+        { upsert: true, session }
+      );
+
+      await session.commitTransaction();
+    } catch (txErr) {
+      await session.abortTransaction();
+      throw txErr; // re-thrown → caught by outer catch, returns proper error response
+    } finally {
+      session.endSession();
+    }
 
     // ✅ Recompute Snapshot (Debounced)
     SnapshotService.triggerRecompute(productGroupId);
@@ -299,21 +373,20 @@ export async function getVariantsByProductGroup(req, res) {
       .populate({
         path: 'attributeValueIds',
         select: 'name displayName code attributeType',
-        // Nested populate: pull attributeType.name so we can show "Processor: A18 Pro"
         populate: {
           path: 'attributeType',
-          select: 'name displayName code',
+          select: 'name displayName code slug attributeRole',
           model: 'AttributeType',
         },
       })
-      .lean({ virtuals: false }); // virtuals=false for lean perf; we flatten manually
+      .lean({ virtuals: false });
 
     if (!variants.length) {
       return res.status(200).json({
         success: true,
         count: 0,
         data: [],
-        message: 'No active variants found for this product group.',
+        message: 'No variants found for this product group.',
       });
     }
 
@@ -326,11 +399,25 @@ export async function getVariantsByProductGroup(req, res) {
       });
     }
 
-    // ── Flatten into clean frontend-optimised payload ────────────────────
-    const data = variants.map(flattenVariant);
+    // ── JOIN INVENTORY ───────────────────────────────────────────
+    // Fetch all InventoryMaster records for these variants in ONE query.
+    // This avoids N+1 and gives us authoritative stock numbers.
+    const variantIds = variants.map(v => v._id);
+    const inventoryDocs = await InventoryMaster.find({
+      variantId: { $in: variantIds },
+      isDeleted: false,
+    }).select('variantId totalStock reservedStock availableStock status').lean();
 
-    // ── Build selector maps (extract unique sizes / colors / attributes) ─
-    // The frontend can use these to render pickers without further API calls.
+    // Build O(1) lookup: variantId string → inventory doc
+    const inventoryMap = {};
+    inventoryDocs.forEach(inv => {
+      inventoryMap[inv.variantId.toString()] = inv;
+    });
+
+    // ── Flatten into clean frontend-optimised payload ────────────────────
+    const data = variants.map(v => flattenVariant(v, inventoryMap[v._id.toString()] ?? null));
+
+    // ── Build selector maps ──────────────────────────────────────────────
     const sizes = dedupeById(data.map(v => v.size).filter(Boolean));
     const colors = dedupeById(data.map(v => v.color).filter(Boolean));
     const attrMap = {};
@@ -348,7 +435,6 @@ export async function getVariantsByProductGroup(req, res) {
     return res.status(200).json({
       success: true,
       count: data.length,
-      // Selector maps for instant client-side UI rendering
       selectors: {
         sizes,
         colors,
@@ -501,12 +587,66 @@ export async function updateVariant(req, res) {
       });
     }
 
+    // ── INLINE STATUS TRANSITION VALIDATION ────────────────────────────────
+    // Validate before .save() so we can return a descriptive 400 instead of
+    // letting the pre-save hook throw a generic Error that maps to a cryptic response.
+    const VALID_TRANSITIONS = {
+      DRAFT: ['ACTIVE', 'ARCHIVED', 'OUT_OF_STOCK'],
+      ACTIVE: ['OUT_OF_STOCK', 'ARCHIVED', 'LOCKED'],
+      OUT_OF_STOCK: ['ACTIVE', 'ARCHIVED'],
+      LOCKED: ['ACTIVE', 'ARCHIVED'],
+      // ARCHIVED → DRAFT allows restore; a second step (DRAFT → ACTIVE) is
+      // required before the variant re-appears on the customer site.
+      ARCHIVED: ['DRAFT'],
+    };
+    if (safeUpdates.status !== undefined && safeUpdates.status !== variantDoc.status) {
+      const allowed = VALID_TRANSITIONS[variantDoc.status] || [];
+      if (!allowed.includes(safeUpdates.status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid status transition: ${variantDoc.status} → ${safeUpdates.status}. Allowed transitions from ${variantDoc.status}: [${allowed.join(', ') || 'none'}].`,
+          error: 'INVALID_TRANSITION',
+          code: 'INVALID_TRANSITION',
+        });
+      }
+    }
+
+    // ── COMPAREATPRICE GUARD (pre-validate before .save()) ──────────────────
+    // If the caller is updating price but NOT supplying a new compareAtPrice,
+    // the existing compareAtPrice may now be <= the new price, tripping the
+    // pre-save hook. Clear compareAtPrice if it would become invalid.
+    const newPrice = safeUpdates.price !== undefined
+      ? parseFloat(String(safeUpdates.price))
+      : parseFloat(variantDoc.price?.toString() ?? '0');
+    const existingCompareAt = variantDoc.compareAtPrice
+      ? parseFloat(variantDoc.compareAtPrice.toString())
+      : null;
+    // If caller explicitly sends compareAtPrice, use it; otherwise check existing
+    if (safeUpdates.compareAtPrice !== undefined) {
+      const newCompareAt = parseFloat(String(safeUpdates.compareAtPrice));
+      if (!isNaN(newCompareAt) && newCompareAt > newPrice) {
+        variantDoc.set('compareAtPrice', safeUpdates.compareAtPrice);
+      } else if (!isNaN(newCompareAt)) {
+        // compareAtPrice sent but invalid — reject cleanly
+        return res.status(400).json({
+          success: false,
+          message: `compareAtPrice (${newCompareAt}) must be strictly greater than price (${newPrice}).`,
+          error: 'VALIDATION_ERROR',
+          code: 'VALIDATION_ERROR',
+        });
+      }
+    } else if (existingCompareAt !== null && existingCompareAt <= newPrice) {
+      // Existing compareAtPrice would become invalid after price update — auto-clear it
+      variantDoc.set('compareAtPrice', undefined);
+      console.info(`[updateVariant] Auto-cleared compareAtPrice (${existingCompareAt}) because new price (${newPrice}) >= compareAtPrice.`);
+    }
+
     // ✅ Apply safe business field updates using .set() for better Mongoose tracking
     if (safeUpdates.price !== undefined) variantDoc.set('price', safeUpdates.price);
     if (safeUpdates.sku !== undefined) variantDoc.set('sku', safeUpdates.sku);
     if (safeUpdates.status !== undefined) variantDoc.set('status', safeUpdates.status);
     if (safeUpdates.imageGallery !== undefined) variantDoc.set('imageGallery', safeUpdates.imageGallery);
-    if (safeUpdates.compareAtPrice !== undefined) variantDoc.set('compareAtPrice', safeUpdates.compareAtPrice);
+    // compareAtPrice is handled above — do NOT set again here
 
     // Accept array repairs
     if (sizes !== undefined) variantDoc.set('sizes', sizes);
@@ -801,5 +941,73 @@ export async function repairProductGroupVariants(req, res) {
   } catch (err) {
     console.error('[repairProductGroupVariants]', err);
     return res.status(500).json({ success: false, message: 'Bulk repair failed', error: err.message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VALIDATE VARIANT (PDP Freshness Check — called just before Add to Cart)
+// POST /api/variants/validate
+// Body: { variantId, quantity, clientPrice }
+// ─────────────────────────────────────────────────────────────────────────────
+export async function validateVariant(req, res) {
+  try {
+    const { variantId, quantity = 1, clientPrice } = req.body;
+
+    if (!variantId || !mongoose.Types.ObjectId.isValid(variantId)) {
+      return res.status(400).json({ success: false, code: 'INVALID_ID', message: 'variantId is required and must be a valid ObjectId.' });
+    }
+
+    const variant = await VariantMaster.findById(variantId).lean();
+    if (!variant) {
+      return res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Variant not found.' });
+    }
+
+    // Gate 1: status must be ACTIVE
+    if (variant.status !== 'ACTIVE') {
+      return res.status(422).json({
+        success: false,
+        code: 'VARIANT_INACTIVE',
+        message: `Variant is no longer available (status: ${variant.status}).`,
+      });
+    }
+
+    // Gate 2: availableStock
+    const inventory = await InventoryMaster.findOne({ variantId, isDeleted: false }).lean();
+    const availableStock = inventory?.availableStock ?? variant.inventory?.quantityOnHand ?? 0;
+
+    if (availableStock < quantity) {
+      return res.status(422).json({
+        success: false,
+        code: 'INSUFFICIENT_STOCK',
+        message: `Only ${availableStock} unit(s) available, but ${quantity} requested.`,
+        availableStock,
+      });
+    }
+
+    // Gate 3: price integrity (±1 rupee tolerance for float noise)
+    const serverPrice = variant.resolvedPrice
+      ? parseFloat(variant.resolvedPrice.toString())
+      : parseFloat(variant.price?.toString() ?? '0');
+
+    if (clientPrice !== undefined && clientPrice !== null) {
+      const clientPriceNum = parseFloat(String(clientPrice));
+      if (Math.abs(clientPriceNum - serverPrice) > 1) {
+        return res.status(422).json({
+          success: false,
+          code: 'PRICE_MISMATCH',
+          message: 'Price has changed since you loaded the page. Please refresh.',
+          serverPrice: serverPrice.toFixed(2),
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Variant is valid and available.',
+      data: { variantId, status: variant.status, availableStock, serverPrice: serverPrice.toFixed(2) },
+    });
+  } catch (err) {
+    console.error('[validateVariant]', err);
+    return res.status(500).json({ success: false, message: 'Validation failed.', error: err.message });
   }
 }

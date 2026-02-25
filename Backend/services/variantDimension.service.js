@@ -29,6 +29,7 @@
 
 import mongoose from 'mongoose';
 import VariantMaster from '../models/masters/VariantMaster.enterprise.js';
+import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
 import ColorMaster from '../models/masters/ColorMaster.enterprise.js';
 import SizeMaster from '../models/masters/SizeMaster.enterprise.js';
 import AttributeValue from '../models/AttributeValue.model.js';
@@ -501,28 +502,28 @@ async function _executeWrite({ parsedInput, candidates, brand, pgSlug, enrichedD
         }
     }
 
-    // 5. Auto-init inventory snapshot (if warehouse exists)
-    if (defaultWarehouse && created > 0) {
+    // 5. PHASE 3 — Enforce 1:1 VariantMaster ↔ InventoryMaster invariant
+    // After bulk insert: fetch the newly created variants by batchId and
+    // upsert a zero-stock InventoryMaster record for each one.
+    // ensureForVariant() uses $setOnInsert + upsert — safe for re-runs.
+    if (created > 0) {
         try {
-            const VariantInventory = mongoose.model('VariantInventory');
-            // Cannot easily get inserted _ids from bulkWrite without the full result;
-            // query back the just-inserted batch by batchId for inventory init.
             const newDocs = parsedInput._batchId
-                ? await VariantMaster.find({ generationBatchId: parsedInput._batchId }).select('_id').lean()
+                ? await VariantMaster.find({ generationBatchId: parsedInput._batchId })
+                    .select('_id productGroupId sku')
+                    .lean()
                 : [];
-            if (newDocs.length > 0) {
-                const inventoryDocs = newDocs.map((v) => ({
-                    variant: v._id,
-                    warehouse: defaultWarehouse._id,
-                    quantity: 0,
-                    reservedQuantity: 0,
-                }));
-                await VariantInventory.insertMany(inventoryDocs);
-            }
-        } catch {
-            logger.warn('[variantDimension] VariantInventory init skipped (model may not be registered)');
-        }
 
+            if (newDocs.length > 0) {
+                // Fire all upserts concurrently — updateOne/upsert are safe in parallel
+                await Promise.all(newDocs.map(v => InventoryMaster.ensureForVariant(v)));
+                logger.info(`[variantDimension] Created/confirmed ${newDocs.length} InventoryMaster records.`);
+            }
+        } catch (invErr) {
+            // Log but do NOT fail the variant creation — repairInventory.js handles
+            // any orphans created during transient failures.
+            logger.error('[variantDimension] InventoryMaster init error (non-fatal):', invErr.message);
+        }
     }
 
     // 6. Trigger Snapshot Recompute (Debounced)
