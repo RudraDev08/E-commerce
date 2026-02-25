@@ -114,7 +114,6 @@ export default function AddAttributeDropdown({
                     v.attributeMasterId;
 
                 if (!typeRef) {
-                    console.warn("AttributeValue missing type reference:", v);
                     return;
                 }
 
@@ -133,7 +132,6 @@ export default function AddAttributeDropdown({
             setIsFallback(fallbackFlag);
         } catch (err) {
             setError('Failed to load attributes. Check API.');
-            console.error('[AddAttributeDropdown] fetch error', err);
         } finally {
             setLoading(false);
         }

@@ -56,6 +56,7 @@ const VariantCombinationBuilder = () => {
     // Preview State
     const [preview, setPreview] = useState(null);
     const [showPreview, setShowPreview] = useState(false);
+    const [genericConfirm, setGenericConfirm] = useState(null); // { title, message, onConfirm, confirmText, type }
 
     useEffect(() => {
         fetchData();
@@ -75,7 +76,6 @@ const VariantCombinationBuilder = () => {
             setAllColors(colorRes.data.data || []);
         } catch (error) {
             toast.error('Failed to load data');
-            console.error(error);
         } finally {
             setLoading(false);
         }
@@ -119,7 +119,6 @@ const VariantCombinationBuilder = () => {
             setShowPreview(true);
         } catch (error) {
             toast.error('Failed to preview combinations');
-            console.error(error);
         }
     };
 
@@ -135,52 +134,56 @@ const VariantCombinationBuilder = () => {
             return;
         }
 
-        if (!window.confirm(`Generate ${totalCombinations} variant combinations?`)) {
-            return;
-        }
+        const _doGenerate = async () => {
+            setGenerating(true);
+            try {
+                const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+                const response = await axios.post(`${API_URL}/variants/generate-combinations`, {
+                    productGroup: product.sku || product.name,
+                    productName: product.name,
+                    brand: product.brand?.name || 'Unknown',
+                    category: product.category?._id || product.category,
+                    storageIds: selectedStorages,
+                    ramIds: selectedRAMs,
+                    colorIds: selectedColors,
+                    basePrice: product.basePrice || product.price || 0,
+                    description: product.description || '',
+                    specifications: product.specifications || {},
+                    images: product.images || []
+                });
 
-        setGenerating(true);
-        try {
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-            const response = await axios.post(`${API_URL}/variants/generate-combinations`, {
-                productGroup: product.sku || product.name,
-                productName: product.name,
-                brand: product.brand?.name || 'Unknown',
-                category: product.category?._id || product.category,
-                storageIds: selectedStorages,
-                ramIds: selectedRAMs,
-                colorIds: selectedColors,
-                basePrice: product.basePrice || product.price || 0,
-                description: product.description || '',
-                specifications: product.specifications || {},
-                images: product.images || []
-            });
+                const result = response.data.data;
 
-            const result = response.data.data;
+                toast.success(
+                    `Successfully generated ${result.totalGenerated} variants!` +
+                    (result.skipped > 0 ? ` (${result.skipped} duplicates skipped)` : '')
+                );
 
-            toast.success(
-                `Successfully generated ${result.totalGenerated} variants!` +
-                (result.skipped > 0 ? ` (${result.skipped} duplicates skipped)` : '')
-            );
+                // Clear selections
+                setSelectedStorages([]);
+                setSelectedRAMs([]);
+                setSelectedColors([]);
+                setShowPreview(false);
+                setPreview(null);
 
-            // Clear selections
-            setSelectedStorages([]);
-            setSelectedRAMs([]);
-            setSelectedColors([]);
-            setShowPreview(false);
-            setPreview(null);
+                // Navigate to variant list
+                setTimeout(() => {
+                    navigate('/variant-mapping');
+                }, 1500);
 
-            // Navigate to variant list
-            setTimeout(() => {
-                navigate('/variant-mapping');
-            }, 1500);
+            } catch (error) {
+                toast.error(error.response?.data?.message || 'Failed to generate variants');
+            } finally {
+                setGenerating(false);
+            }
+        };
 
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to generate variants');
-            console.error(error);
-        } finally {
-            setGenerating(false);
-        }
+        setGenericConfirm({
+            title: 'Generate Variants?',
+            message: `You are about to create ${totalCombinations} variant combinations. This will populate your inventory with these items. Continue?`,
+            confirmText: 'Generate Now',
+            onConfirm: _doGenerate
+        });
     };
 
     if (loading) {
@@ -456,6 +459,38 @@ const VariantCombinationBuilder = () => {
                                     className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-all"
                                 >
                                     Confirm & Generate
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* GENERIC CONFIRMATION MODAL */}
+                {genericConfirm && (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden p-8 scale-in-center">
+                            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6 bg-indigo-50 text-indigo-600">
+                                <SparklesIcon className="w-8 h-8" />
+                            </div>
+                            <h3 className="text-xl font-black text-slate-900 mb-2">{genericConfirm.title || 'Generate Variants?'}</h3>
+                            <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                                {genericConfirm.message}
+                            </p>
+                            <div className="flex gap-3 justify-end font-bold">
+                                <button
+                                    onClick={() => setGenericConfirm(null)}
+                                    className="px-6 py-2.5 text-sm text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        genericConfirm.onConfirm();
+                                        setGenericConfirm(null);
+                                    }}
+                                    className="px-6 py-2.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-200 active:scale-95 transition-all"
+                                >
+                                    {genericConfirm.confirmText || 'Confirm'}
                                 </button>
                             </div>
                         </div>

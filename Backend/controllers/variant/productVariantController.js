@@ -183,6 +183,8 @@ export const getVariants = async (req, res) => {
       })
       .lean();
 
+    console.log("STEP 6 - DB Variants (Sample):", variants.length > 0 ? variants[0] : 'None');
+
     // ── 4. Expose flattened sizeId + normalize attributeValueIds + build
     //       structured attributeDimensions for stable frontend identity keys ──
     const mappedData = variants.map(v => {
@@ -243,7 +245,7 @@ export const getVariants = async (req, res) => {
       return {
         ...v,
         sizeId,
-        attributeValueIds: normalizedAttrValueIds,
+        attributeValueIds: rawAttrIds,
         attributeDimensions,     // ← NEW: stable structured identity metadata
       };
     });

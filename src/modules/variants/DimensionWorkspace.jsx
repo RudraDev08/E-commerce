@@ -37,6 +37,7 @@ import {
     CheckIcon, MagnifyingGlassIcon, ArrowPathIcon,
     TrashIcon, BoltIcon,
 } from '@heroicons/react/24/outline';
+import toast from 'react-hot-toast';
 
 import {
     useCartesianEngine,
@@ -566,7 +567,7 @@ export default function DimensionWorkspace({
     useEffect(() => {
         attributePanels.forEach(panel => {
             // Register all available values pool with the engine
-            registerDimension(panel.attributeMasterId, {
+            registerDimension(`attr:${panel.attributeMasterId}`, {
                 type: 'ATTRIBUTE',
                 attributeId: panel.attributeMasterId,
                 attributeName: panel.attributeName,
@@ -593,7 +594,7 @@ export default function DimensionWorkspace({
     // ── Remove an attribute panel ─────────────────────────────────────────────
     const handleRemovePanel = useCallback((attributeMasterId) => {
         setAttributePanels(prev => prev.filter(p => p.attributeMasterId !== attributeMasterId));
-        removeDimension(attributeMasterId);
+        removeDimension(`attr:${attributeMasterId}`);
         // Purge deleted rows that referenced this dimension
         setDeletedKeys(new Set());
     }, [removeDimension]);
@@ -608,6 +609,15 @@ export default function DimensionWorkspace({
 
     // ── Generate/Confirm ─────────────────────────────────────────────────────
     const handleGenerateClick = useCallback(() => {
+
+        if (
+            (selectedIds.get('color')?.size ?? 0) === 0 &&
+            (selectedIds.get('size')?.size ?? 0) === 0 &&
+            [...selectedIds.keys()].filter(k => k.startsWith('attr:')).length === 0
+        ) {
+            return toast.error("Select at least one dimension.");
+        }
+
         if (previewCount === 0) return;
         if (willExplode || willWarn) {
             setShowExplosionModal(true);
@@ -615,7 +625,7 @@ export default function DimensionWorkspace({
         }
         _doGenerate();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [previewCount, willExplode, willWarn]);
+    }, [previewCount, willExplode, willWarn, selectedIds]);
 
     const _doGenerate = useCallback(async () => {
         setShowExplosionModal(false);
@@ -623,7 +633,6 @@ export default function DimensionWorkspace({
         const apiPayload = buildApiPayload(productGroupId, brand, basePrice);
 
         // Step 6: Debug payload confirm
-        console.log("Generate payload:", apiPayload);
 
         await onGenerate(apiPayload, visibleRows);
     }, [buildApiPayload, onGenerate, productGroupId, brand, basePrice, visibleRows]);
@@ -761,7 +770,7 @@ export default function DimensionWorkspace({
                                         toggleValue={toggleValue}
                                         selectAll={selectAll}
                                         deselectAll={deselectAll}
-                                        selectedCount={selectedCountFor(panel.attributeMasterId)}
+                                        selectedCount={selectedCountFor(`attr:${panel.attributeMasterId}`)}
                                         onRemove={() => handleRemovePanel(panel.attributeMasterId)}
                                         accent={getAttrAccent(i)}
                                     />
@@ -774,6 +783,7 @@ export default function DimensionWorkspace({
                         EQUATION BAR + EXPLOSION GUARD + GENERATE BUTTON
                     ══════════════════════════════════════════════════════════ */}
                     <div className="space-y-2">
+
                         {/* Explosion guard banner */}
                         <ExplosionBanner
                             count={previewCount}

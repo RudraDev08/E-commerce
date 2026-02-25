@@ -21,7 +21,7 @@ const ProductSelectDropdown = ({ value, onChange, label = "Select Product", disa
                 });
                 setProducts(res.data.data || []);
             } catch (err) {
-                console.error("Failed to load products", err);
+                toast.error("Failed to load products");
             } finally {
                 setLoading(false);
             }
@@ -44,8 +44,7 @@ const ProductSelectDropdown = ({ value, onChange, label = "Select Product", disa
             } else {
                 // Fetch single product by ID
                 axios.get(`http://localhost:5000/api/products/${value}`)
-                    .then(res => setSelectedProduct(res.data.data))
-                    .catch(err => console.error(err));
+                    .then(res => setProducts(res.data.data || res.data || []));
             }
         } else if (!value) {
             setSelectedProduct(null);

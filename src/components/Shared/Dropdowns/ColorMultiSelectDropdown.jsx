@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { ChevronDownIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import toast from 'react-hot-toast';
 
 const ColorMultiSelectDropdown = ({ value = [], onChange, label = "Select Colors" }) => {
     const [colors, setColors] = useState([]);
@@ -19,7 +20,7 @@ const ColorMultiSelectDropdown = ({ value = [], onChange, label = "Select Colors
                 });
                 setColors(res.data.data || []);
             } catch (err) {
-                console.error("Failed to load colors", err);
+                toast.error("Failed to load color master data");
             } finally {
                 setLoading(false);
             }

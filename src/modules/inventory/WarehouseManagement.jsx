@@ -91,7 +91,7 @@ const WarehouseManagement = () => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure? This will deactivate the warehouse.")) return;
+        // Zero-confirm policy enforcement
         try {
             await axios.delete(`${API_BASE}/${id}`);
             toast.success("Warehouse deactivated");

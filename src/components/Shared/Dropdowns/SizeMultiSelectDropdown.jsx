@@ -38,7 +38,6 @@ const SizeMultiSelectDropdown = ({ value = [], onChange, label = "Select Sizes" 
                 setSizes(mappedSizes);
             } catch (err) {
                 if (controller.signal.aborted) return;
-                console.error("Failed to load sizes", err);
                 toast.error("Failed to retrieve sizes");
             } finally {
                 if (!controller.signal.aborted) setLoading(false);
@@ -84,8 +83,8 @@ const SizeMultiSelectDropdown = ({ value = [], onChange, label = "Select Sizes" 
             <div
                 onClick={() => !loading && setIsOpen(!isOpen)}
                 className={`min-h-[50px] w-full bg-white border cursor-pointer transition-all duration-200 rounded-xl px-4 py-3 flex flex-wrap gap-2 items-center justify-between ${isOpen
-                        ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-sm'
-                        : 'border-slate-200 hover:border-slate-300'
+                    ? 'border-indigo-500 ring-4 ring-indigo-500/10 shadow-sm'
+                    : 'border-slate-200 hover:border-slate-300'
                     } ${loading ? 'opacity-70 cursor-wait' : ''}`}
             >
                 <div className="flex flex-wrap gap-2 flex-1">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getProductType, createVariants, getAllProductTypes } from "../../Api/catalogApi";
+import toast from "react-hot-toast";
 
 const VariantForm = ({ products, onVariantCreated }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -19,7 +20,7 @@ const VariantForm = ({ products, onVariantCreated }) => {
   useEffect(() => {
     getAllProductTypes().then(res => {
       setAllProductTypes(res.data.data || res.data);
-    }).catch(err => console.error("Could not load types", err));
+    }).catch(err => { });
   }, []);
 
   // 2. Handle Product Selection
@@ -82,8 +83,9 @@ const VariantForm = ({ products, onVariantCreated }) => {
       setPrice("");
       setStock("");
       setSku("");
+      toast.success("Variant created successfully");
     } catch (error) {
-      alert(error.response?.data?.message || "Creation failed");
+      toast.error(error.response?.data?.message || "Creation failed");
     }
   };
 

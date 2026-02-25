@@ -1,0 +1,57 @@
+[
+  {
+    "_id": "699e96613e229218a4ccebb1",
+    "tenantId": "GLOBAL",
+    "productGroupId": "699c753fd89355724449726b",
+    "filterTokens": [
+      "attr:6984d6b237975efce7ce9339",
+      "color:69772f8a97b9a60be9d74c42",
+      "size:CLOTHING:6996ae0211f32c61f82271e3"
+    ],
+    "sizes": [
+      {
+        "sizeId": "6996ae0211f32c61f82271e3",
+        "category": "CLOTHING",
+        "_id": "699e96613e229218a4ccebb2"
+      }
+    ],
+    "colorId": "69772f8a97b9a60be9d74c42",
+    "colorwayName": null,
+    "attributeValueIds": [
+      "6984d6b237975efce7ce9339"
+    ],
+    "attributeDimensions": [
+      {
+        "attributeId": "6984d6b237975efce7ce9324",
+        "attributeName": "Choose Color",
+        "valueId": "6984d6b237975efce7ce9339",
+        "_id": "699e96613e229218a4ccebb3"
+      }
+    ],
+    "generationBatchId": "ed9581d0-8be3-4be9-9bb2-dc72ea3fb981",
+    "price": {
+      "$numberDecimal": "100"
+    },
+    "status": "DRAFT",
+    "inventory": {
+      "quantityOnHand": 0,
+      "quantityReserved": 0,
+      "lowStockThreshold": 5,
+      "autoStatusSync": true
+    },
+    "sku": "TES-TESTPR-B797E49E",
+    "skuStrategy": "AUTO",
+    "configHash": "b797e49ec9fe801b54e3c4e425ce67039f67623c07e477b863ac1cb4be60fc8a",
+    "identityVersion": 1,
+    "governance": {
+      "createdBy": null,
+      "isLocked": false,
+      "createdAt": "2026-02-25T06:27:45.886Z",
+      "version": 1
+    },
+    "priceResolutionLog": [],
+    "imageGallery": [],
+    "createdAt": "2026-02-25T06:27:45.887Z",
+    "updatedAt": "2026-02-25T06:27:45.887Z"
+  }
+]

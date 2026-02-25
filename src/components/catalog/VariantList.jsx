@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getVariants, deleteVariant, updateVariant } from "../../Api/catalogApi";
+import toast from "react-hot-toast";
 
 const formatCurrency = (amount, currency = 'INR') => {
   return new Intl.NumberFormat('en-IN', {
@@ -31,7 +32,6 @@ const VariantList = ({ productId }) => {
       const res = await getVariants(productId);
       setVariants(res.data.data || res.data || []);
     } catch (error) {
-      console.error("Load failed", error);
     } finally {
       setLoading(false);
     }
@@ -45,11 +45,11 @@ const VariantList = ({ productId }) => {
   const handleDelete = async (variant) => {
     const isLocked = ["LOCKED", "ARCHIVED"].includes(variant.status);
     if (isLocked) {
-      alert("This variant is locked or archived and cannot be deleted.");
+      toast.error("This variant is locked or archived and cannot be deleted.");
       return;
     }
 
-    if (!window.confirm("Are you sure? This cannot be undone.")) return;
+    // Zero-confirm policy enforcement
 
     setIsUpdating(true);
     try {
@@ -61,12 +61,12 @@ const VariantList = ({ productId }) => {
       await fetchVariants();
     } catch (error) {
       if (error.response?.status === 409) {
-        alert("Conflict: Variant was updated by another admin. Refreshing list...");
+        toast.error("Conflict: Variant was updated by another admin. Refreshing list...");
         fetchVariants();
       } else if (error.response?.status === 403) {
-        alert("Critical Error: Variant is locked at the database level.");
+        toast.error("Critical Error: Variant is locked at the database level.");
       } else {
-        alert(error.response?.data?.message || "Delete failed");
+        toast.error(error.response?.data?.message || "Delete failed");
       }
     } finally {
       setIsUpdating(false);
@@ -90,14 +90,14 @@ const VariantList = ({ productId }) => {
     } catch (error) {
       // ✅ Improved Error Handling per status codes
       if (error.response?.status === 409) {
-        alert("Conflict: Variant was updated by another admin. Refreshing...");
+        toast.error("Conflict: Variant was updated by another admin. Refreshing...");
         fetchVariants();
       } else if (error.response?.status === 422) {
-        alert("Invalid Operation: This lifecycle transition is not allowed.");
+        toast.error("Invalid Operation: This lifecycle transition is not allowed.");
       } else if (error.response?.status === 403) {
-        alert("Access Denied: Variant is locked and cannot be modified.");
+        toast.error("Access Denied: Variant is locked and cannot be modified.");
       } else {
-        alert(error.response?.data?.message || "Status update failed");
+        toast.error(error.response?.data?.message || "Status update failed");
       }
     } finally {
       setIsUpdating(false);

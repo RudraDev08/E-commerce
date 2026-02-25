@@ -58,7 +58,7 @@ const AttributePanelCard = memo(function AttributePanelCard({
     } = panelState;
 
     // Alias: use attributeMasterId as dimensionKey for the engine
-    const dimKey = attributeMasterId;
+    const dimKey = `attr:${attributeMasterId}`;
 
     const a = ACCENT_MAP[accent] ?? ACCENT_MAP.cyan;
 

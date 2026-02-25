@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { deleteVariant, updateVariant } from "../../Api/catalogApi";
+import toast from "react-hot-toast";
 
 const formatCurrency = (amount, currency = 'INR') => {
   return new Intl.NumberFormat('en-IN', {
@@ -33,14 +34,14 @@ const VariantTable = ({ variants, reload }) => {
       await reload();
     } catch (error) {
       if (error.response?.status === 409) {
-        alert("Conflict Error: Variant has been updated by another administrator. Refreshing list...");
+        toast.error("Conflict Error: Variant has been updated by another administrator. Refreshing list...");
         reload();
       } else if (error.response?.status === 422) {
-        alert("Business Logic Error: The selected lifecycle transition is not valid.");
+        toast.error("Business Logic Error: The selected lifecycle transition is not valid.");
       } else if (error.response?.status === 403) {
-        alert("Governance Guard: This variant is locked and cannot be modified.");
+        toast.error("Governance Guard: This variant is locked and cannot be modified.");
       } else {
-        alert(error.response?.data?.message || "Status update failed.");
+        toast.error(error.response?.data?.message || "Status update failed.");
       }
     } finally {
       setIsUpdating(false);
@@ -52,11 +53,11 @@ const VariantTable = ({ variants, reload }) => {
     // Blocks terminal states
     const isTerminal = ["LOCKED", "ARCHIVED"].includes(variant.status);
     if (isTerminal) {
-      alert("Terminal states (LOCKED/ARCHIVED) cannot be deleted directly.");
+      toast.error("Terminal states (LOCKED/ARCHIVED) cannot be deleted directly.");
       return;
     }
 
-    if (!window.confirm("Are you sure? This operation is irreversible.")) return;
+    // Zero-confirm policy enforcement: Removing window.confirm
 
     setIsUpdating(true);
     try {
@@ -67,12 +68,12 @@ const VariantTable = ({ variants, reload }) => {
       await reload();
     } catch (error) {
       if (error.response?.status === 409) {
-        alert("Conflict Detected: Refreshing current dataset before retrying.");
+        toast.error("Conflict Detected: Refreshing current dataset before retrying.");
         reload();
       } else if (error.response?.status === 403) {
-        alert("Delete Blocked: Variant is locked at the identity level.");
+        toast.error("Delete Blocked: Variant is locked at the identity level.");
       } else {
-        alert("Delete operation failed.");
+        toast.error("Delete operation failed.");
       }
     } finally {
       setIsUpdating(false);

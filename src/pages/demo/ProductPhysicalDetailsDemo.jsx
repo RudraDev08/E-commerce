@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ProductPhysicalDetailsForm from '../../components/products/ProductPhysicalDetailsForm';
+import toast from 'react-hot-toast';
 
 /**
  * Demo Page for ProductPhysicalDetailsForm
@@ -38,8 +39,7 @@ const ProductPhysicalDetailsDemo = () => {
     };
 
     const handleSave = () => {
-        console.log('Form Data:', formData);
-        alert('Check console for form data');
+        toast.success('Form data captured (Check debug panel below)');
     };
 
     return (

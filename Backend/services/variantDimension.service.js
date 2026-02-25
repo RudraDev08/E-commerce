@@ -446,6 +446,15 @@ async function _executeWrite({ parsedInput, candidates, brand, pgSlug, enrichedD
         return doc;
     });
 
+    if (variantDocs.length > 0) {
+        console.log("STEP 4 - Variant Pre-Save (Sample):", {
+            sizes: variantDocs[0].sizes,
+            attributeValueIds: variantDocs[0].attributeValueIds,
+            attributeDimensions: variantDocs[0].attributeDimensions,
+            filterTokens: variantDocs[0].filterTokens
+        });
+    }
+
     // 4. SECTION 2: bulkWrite ordered:false — concurrency-safe duplicate handling
     let created = 0;
     let raceDuplicates = 0;

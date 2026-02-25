@@ -38,7 +38,6 @@ const ProductVariantMapping = () => {
                 }
             } catch (error) {
                 if (isMounted) toast.error('Failed to load data');
-                console.error(error);
             } finally {
                 if (isMounted) setLoading(false);
             }

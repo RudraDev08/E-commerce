@@ -47,7 +47,55 @@ const safeFix = (val, decimals = 2) => {
 };
 
 // ============================================================================
-// COMPONENT: Image Modal (Offloads DOM nodes from the main grid)
+// CONSTANTS — Column contract (single source of truth)
+// ============================================================================
+const VARIANT_COLUMNS = [
+    { key: 'select', label: '', width: 52 },
+    { key: 'color', label: 'Color', width: 160 },
+    { key: 'size', label: 'Size', width: 130 },
+    { key: 'attributes', label: 'Attributes', width: 220 },
+    { key: 'sku', label: 'SKU Ref', width: 160 },
+    { key: 'price', label: 'Price', width: 120 },
+    { key: 'resolved', label: 'Resolved', width: 140 },
+    { key: 'media', label: 'Media', width: 110 },
+    { key: 'status', label: 'Status', width: 150 },
+    { key: 'actions', label: '', width: 80 },
+];
+
+// ============================================================================
+// HELPERS — Badge rendering
+// ============================================================================
+const MAX_VISIBLE_BADGES = 4;
+
+function BadgeList({ items, colorClass = 'bg-blue-50 border-blue-200 text-blue-700' }) {
+    if (!items || items.length === 0) return <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">—</span>;
+    const visible = items.slice(0, MAX_VISIBLE_BADGES);
+    const overflow = items.length - MAX_VISIBLE_BADGES;
+    return (
+        <div className="flex flex-wrap gap-1 max-w-[200px]">
+            {visible.map((label, i) => (
+                <span key={i} className={`px-2 py-0.5 border rounded text-[10px] font-bold truncate max-w-[110px] ${colorClass}`} title={label}>
+                    {label}
+                </span>
+            ))}
+            {overflow > 0 && (
+                <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[10px] font-bold">+{overflow} more</span>
+            )}
+        </div>
+    );
+}
+
+// ============================================================================
+// HELPERS — Price normalization
+// ============================================================================
+function normalizePrice(raw) {
+    const n = parseFloat(raw);
+    if (isNaN(n) || n < 0) return '';
+    return n.toFixed(2);
+}
+
+// ============================================================================
+// COMPONENT — Image Modal (Offloads DOM nodes from the main grid)
 // ============================================================================
 const ImageManagerModal = ({ variant, onClose, onUpload, onSetPrimary, onRemove, getImageUrl }) => {
     if (!variant) return null;
@@ -102,6 +150,197 @@ const ImageManagerModal = ({ variant, onClose, onUpload, onSetPrimary, onRemove,
 };
 
 // ============================================================================
+// COMPONENT — VariantRow (memoized for 300+ variant performance)
+// ============================================================================
+const VariantRow = React.memo(function VariantRow({
+    v,
+    selected,
+    onToggleSelect,
+    onUpdateVariant,
+    onCloneVariant,
+    onDeleteVariant,
+    onOpenMediaModal,
+    getAllowedStatuses,
+    safeFix,
+}) {
+    const isLocked = v.status === 'LOCKED' || v.governance?.isLocked;
+    const isArchived = v.status === 'ARCHIVED';
+    const isActive = v.status === 'ACTIVE';
+    const skuReadonly = isLocked || isArchived || isActive;
+    const priceReadonly = isLocked || isActive;
+
+    // ── Size badges
+    const sizeLabels = Array.isArray(v.sizes) && v.sizes.length > 0
+        ? v.sizes.map(s => s.sizeId?.displayName || s.sizeId?.value || s.sizeId?.name).filter(Boolean)
+        : (v.sizeCode && v.sizeCode !== 'Fixed' ? [v.sizeCode] : []);
+
+    // ── Attribute badges (prefer populated objects, fallback to variantLabel)
+    const attrLabels = (() => {
+        const attrObjs = Array.isArray(v.attributeValueIds)
+            ? v.attributeValueIds.filter(a => a && typeof a === 'object' && a._id)
+            : [];
+        if (attrObjs.length > 0) return attrObjs.map(a => a.displayName || a.name || a.code);
+        if (v.variantLabel) return v.variantLabel.split(' / ');
+        return [];
+    })();
+
+    const rowBg = v.isNew
+        ? 'bg-indigo-50/20'
+        : selected
+            ? 'bg-indigo-50/40'
+            : 'even:bg-slate-50/40 hover:bg-white';
+
+    return (
+        <tr className={`transition-colors border-b border-slate-100/80 ${rowBg}`}>
+            {/* SELECT */}
+            <td className="px-4 py-4 w-[52px]">
+                <input type="checkbox" checked={selected} onChange={onToggleSelect}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+            </td>
+
+            {/* COLOR */}
+            <td className="px-3 py-4 w-[160px]">
+                <div className="flex items-center gap-2 min-w-0">
+                    <div
+                        className="w-7 h-7 rounded-md border border-slate-200 shadow-sm shrink-0"
+                        style={{ background: v.displayHex || v.rawColorId?.hexCode || (v.isColorway ? 'linear-gradient(135deg,#f00,#00f)' : '#e2e8f0') }}
+                        title={v.displayColorName}
+                    />
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-slate-700 truncate max-w-[100px]">
+                            {v.displayColorName || v.rawColorId?.displayName || v.rawColorId?.name
+                                || (v.isColorway ? v.colorwayName : null)
+                                || <span className="text-slate-400 italic">No Color</span>}
+                        </p>
+                        {(v.rawColorId?.hexCode || v.displayHex) && (
+                            <p className="text-[10px] font-mono text-slate-400">{v.rawColorId?.hexCode || v.displayHex}</p>
+                        )}
+                    </div>
+                    {!v.isNew && <LockClosedIcon className="w-3 h-3 text-slate-300 shrink-0" />}
+                </div>
+            </td>
+
+            {/* SIZE */}
+            <td className="px-3 py-4 w-[130px]">
+                {sizeLabels.length > 0
+                    ? <BadgeList items={sizeLabels} colorClass="bg-blue-50 border-blue-200 text-blue-700" />
+                    : <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Fixed</span>}
+            </td>
+
+            {/* ATTRIBUTES */}
+            <td className="px-3 py-4 w-[220px]">
+                {attrLabels.length > 0
+                    ? <BadgeList items={attrLabels} colorClass="bg-indigo-50 border-indigo-200 text-indigo-700" />
+                    : <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">—</span>}
+            </td>
+
+            {/* SKU */}
+            <td className="px-4 py-4 w-[160px]">
+                <input type="text" value={v.sku || ''} readOnly={skuReadonly}
+                    onChange={e => onUpdateVariant(v._id, 'sku', e.target.value)}
+                    title={skuReadonly ? `SKU locked (${v.status})` : 'Edit SKU'}
+                    className="w-full font-mono text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 focus:bg-white focus:border-indigo-500 outline-none read-only:bg-slate-100 read-only:text-slate-400 read-only:cursor-not-allowed"
+                />
+            </td>
+
+            {/* PRICE */}
+            <td className="px-4 py-4 w-[120px]">
+                <div className="relative">
+                    <span className="absolute left-2 top-[7px] text-xs font-bold text-slate-400">₹</span>
+                    <input type="number" step="0.01" min="0"
+                        value={v.price || ''}
+                        readOnly={priceReadonly}
+                        onChange={e => onUpdateVariant(v._id, 'price', e.target.value)}
+                        onBlur={e => {
+                            const norm = normalizePrice(e.target.value);
+                            if (norm !== '' && norm !== v.price?.toString()) onUpdateVariant(v._id, 'price', norm);
+                        }}
+                        className={`w-full font-semibold text-sm pl-6 pr-2 py-1.5 border rounded outline-none ${priceReadonly ? 'bg-slate-100 border-transparent text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200 focus:border-indigo-500'}`}
+                    />
+                </div>
+            </td>
+
+            {/* RESOLVED PRICE */}
+            <td className="px-4 py-4 w-[140px] relative group">
+                {v.resolvedPrice && !v.isNew ? (
+                    <div className="font-semibold text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5 inline-flex items-center gap-1 cursor-default">
+                        <span>₹{safeFix(v.resolvedPrice)}</span>
+                        {v.priceResolutionLog?.length > 0 && (
+                            <div className="w-4 h-4 rounded-full bg-emerald-200 text-emerald-700 flex items-center justify-center text-[10px] cursor-help">i</div>
+                        )}
+                    </div>
+                ) : (
+                    <span className="text-[10px] uppercase font-bold text-slate-400">Preview</span>
+                )}
+                {v.priceResolutionLog?.length > 0 && !v.isNew && (
+                    <div className="absolute top-1/2 left-full -translate-y-1/2 ml-2 w-64 bg-slate-800 text-white p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                        <div className="font-bold text-xs mb-2 text-slate-300 border-b border-slate-600 pb-1">Price Resolution Log</div>
+                        <div className="space-y-1.5 text-xs">
+                            {v.priceResolutionLog.map((log, i) => (
+                                <div key={i} className="flex justify-between items-center">
+                                    <span className="text-slate-400 truncate w-32" title={log.source}>
+                                        {log.source === 'BASE' ? 'Base Price' : log.modifierType || 'Modifier'}
+                                    </span>
+                                    <span className="text-emerald-400 font-mono">+₹{safeFix(log.appliedAmount)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </td>
+
+            {/* MEDIA */}
+            <td className="px-4 py-4 w-[110px]">
+                <button onClick={() => onOpenMediaModal(v)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 text-[11px] font-bold uppercase tracking-wider rounded-lg shadow-sm transition-colors hover:bg-slate-50">
+                    <PhotoIcon className="w-4 h-4 text-indigo-500" />
+                    {v.imageGallery?.length || 0}
+                </button>
+            </td>
+
+            {/* STATUS */}
+            <td className="px-4 py-4 w-[150px]">
+                {isLocked || isArchived ? (
+                    <div className="flex items-center gap-1.5">
+                        <span className={`px-2.5 py-1 font-bold text-[10px] uppercase tracking-wider rounded-full inline-block ${isActive ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                            : v.status === 'DRAFT' ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                : v.status === 'OUT_OF_STOCK' ? 'bg-orange-100 text-orange-700 border border-orange-200'
+                                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                            }`}>{v.status?.replace('_', ' ')}</span>
+                        {v.governance?.isLocked && <LockClosedIcon className="w-3 h-3 text-slate-400" title="Governance Locked" />}
+                    </div>
+                ) : (
+                    <select
+                        value={v.status || 'DRAFT'}
+                        onChange={e => onUpdateVariant(v._id, 'status', e.target.value)}
+                        disabled={isLocked}
+                        className="w-full text-[11px] font-bold uppercase tracking-wide py-1.5 px-2.5 border border-slate-200 rounded-lg bg-white text-slate-700 cursor-pointer focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:border-slate-300 transition-colors"
+                    >
+                        {getAllowedStatuses(v.status || 'DRAFT').map(s => (
+                            <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                        ))}
+                    </select>
+                )}
+            </td>
+
+            {/* ACTIONS */}
+            <td className="px-4 py-4 w-[80px] text-right">
+                <div className="flex items-center justify-end gap-1">
+                    {!v.isNew && (
+                        <button onClick={() => onCloneVariant(v._id)} className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Clone to Draft">
+                            <Square3Stack3DIcon className="w-5 h-5" />
+                        </button>
+                    )}
+                    <button onClick={() => onDeleteVariant(v._id, v.isNew)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Delete">
+                        <TrashIcon className="w-5 h-5" />
+                    </button>
+                </div>
+            </td>
+        </tr>
+    );
+});
+
+// ============================================================================
 // MAIN COMPONENT: VariantBuilder
 // ============================================================================
 const VariantBuilder = () => {
@@ -133,6 +372,7 @@ const VariantBuilder = () => {
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [statusConfirmModal, setStatusConfirmModal] = useState(null); // { id, newStatus, currentStock }
     const [selectedVariantIds, setSelectedVariantIds] = useState([]); // For Bulk Actions
+    const [genericConfirm, setGenericConfirm] = useState(null); // { title, message, onConfirm, confirmText, type }
 
     const PAGE_SIZE = 50;
 
@@ -173,8 +413,6 @@ const VariantBuilder = () => {
             }));
             setAllAttributes(groupedAttributes);
 
-            // 🔎 Phase 4 — Verify API response shape
-            console.log('[VariantBuilder] Raw API variants:', varRes.data);
 
             const existingArgs = (varRes.data.data || []).map(v => {
                 const isColorway = !!v.colorwayName || (v.colorParts && v.colorParts.length > 0);
@@ -205,7 +443,19 @@ const VariantBuilder = () => {
                 let sizeId = null;
 
                 // Support Enterprise schema (v.sizes array) or legacy (v.sizeId / v.size)
-                const enterpriseSize = v.sizes && v.sizes[0] ? v.sizes[0].sizeId : null;
+                let enterpriseSize = null;
+
+                if (Array.isArray(v.sizes) && v.sizes.length > 0) {
+                    const firstSize = v.sizes[0];
+
+                    if (firstSize.sizeId) {
+                        enterpriseSize = firstSize.sizeId;
+                    } else if (typeof firstSize === 'string') {
+                        enterpriseSize = firstSize;
+                    } else if (firstSize._id) {
+                        enterpriseSize = firstSize._id;
+                    }
+                }
                 const sizeObj = enterpriseSize || v.sizeId || v.size;
 
                 if (sizeObj && typeof sizeObj === 'object') {
@@ -220,7 +470,12 @@ const VariantBuilder = () => {
 
                 // ── Preserve & normalize attributeValueIds ──────────────────────
                 // Normalize each entry: could be ObjectId string OR populated object
-                const rawAttrIds = Array.isArray(v.attributeValueIds) ? v.attributeValueIds : [];
+                const rawAttrIds =
+                    Array.isArray(v.attributeValueIds)
+                        ? v.attributeValueIds
+                        : Array.isArray(v.attributeValues)
+                            ? v.attributeValues
+                            : [];
                 const normalizedAttrValueIds = rawAttrIds.map(entry => {
                     if (!entry) return null;
                     // Populated object: { _id, name, ... }
@@ -301,7 +556,6 @@ const VariantBuilder = () => {
             setVariants(existingArgs);
         } catch (error) {
             toast.error('Failed to load product data');
-            console.error(error);
         } finally {
             setLoading(false);
         }
@@ -535,26 +789,43 @@ const VariantBuilder = () => {
 
     // --- GRID INTERACTIONS ---
     // Debounced UI update for performance
-    const updateVariant = useCallback((id, field, value) => {
+    const _doUpdateVariant = useCallback(async (id, field, value) => {
+        setVariants(prev => prev.map(v => v._id === id ? { ...v, [field]: value, isEdited: true } : v));
+    }, []);
+
+    const updateVariant = useCallback(async (id, field, value) => {
         const variant = variants.find(v => v._id === id);
+        if (!variant) return;
 
-        // Safety Guard: STATUS CHANGE Confirmation
-        if (field === 'status' && !variant.isNew) {
-            const isDeactivating = ['ARCHIVED', 'OUT_OF_STOCK'].includes(value);
+        // --- Production Guard: Archiving check ---
+        if (value === 'ARCHIVED') {
+            setGenericConfirm({
+                title: 'Archive Variant?',
+                message: 'Archiving a variant will remove it from the customer website immediately. You can restore it later from the archive filter.',
+                confirmText: 'Archive Now',
+                type: 'danger',
+                onConfirm: () => _doUpdateVariant(id, field, value)
+            });
+            return;
+        }
+
+        // Validation: Stock check for deactivation
+        if (field === 'status' && (value === 'ARCHIVED' || value === 'LOCKED' || value === 'OUT_OF_STOCK')) {
             const hasStock = (variant.inventory?.quantityOnHand || variant.stock || 0) > 0;
-
-            if (isDeactivating && hasStock) {
-                setStatusConfirmModal({ id, newStatus: value, currentStock: variant.inventory?.quantityOnHand || variant.stock });
-                return;
-            }
-
-            if (value === 'ARCHIVED' && !window.confirm("Archiving a variant will remove it from the customer website. Continue?")) {
+            if (hasStock) {
+                setGenericConfirm({
+                    title: 'Confirm Deactivation',
+                    message: `This variant currently has ${hasStock} units in stock. Deactivating it will make it unavailable on the website. Are you sure?`,
+                    confirmText: 'Deactivate',
+                    type: 'danger',
+                    onConfirm: () => _doUpdateVariant(id, field, value)
+                });
                 return;
             }
         }
 
-        setVariants(prev => prev.map(v => v._id === id ? { ...v, [field]: value, isEdited: true } : v));
-    }, [variants]);
+        await _doUpdateVariant(id, field, value);
+    }, [variants, _doUpdateVariant]);
 
     const confirmStatusChange = () => {
         if (!statusConfirmModal) return;
@@ -563,24 +834,31 @@ const VariantBuilder = () => {
         setStatusConfirmModal(null);
     };
 
-    const deleteVariant = useCallback((id, isNew) => {
+    const deleteVariant = async (id, isNew) => {
         if (isNew) {
             setVariants(prev => prev.filter(v => v._id !== id));
             setSelectedVariantIds(prev => prev.filter(vid => vid !== id));
             toast.success('Removed');
-        } else {
-            if (!window.confirm('Delete variant? This is permanent.')) return;
-            const previous = [...variants];
-            setVariants(prev => prev.filter(v => v._id !== id));
-            setSelectedVariantIds(prev => prev.filter(vid => vid !== id));
-            variantAPI.delete(id)
-                .then(() => toast.success('Deleted'))
-                .catch(err => {
-                    toast.error('Failed to delete');
-                    setVariants(previous);
-                });
+            return;
         }
-    }, [variants]);
+
+        setGenericConfirm({
+            title: 'Delete Variant?',
+            message: 'This action is permanent and cannot be undone. All history and data for this variant will be lost.',
+            confirmText: 'Delete Permanently',
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    await variantAPI.delete(id);
+                    toast.success('Variant deleted');
+                    setSelectedVariantIds(prev => prev.filter(vid => vid !== id));
+                    fetchAllData();
+                } catch (error) {
+                    toast.error('Failed to delete variant');
+                }
+            }
+        });
+    };
 
     const cloneVariant = useCallback(async (id) => {
         const tid = toast.loading('Cloning variant...');
@@ -593,30 +871,44 @@ const VariantBuilder = () => {
         }
     }, [fetchAllData]);
 
-    const handleBulkStatusUpdate = useCallback(async (newStatus) => {
-        if (selectedVariantIds.length === 0) return;
-        if (!window.confirm(`Update ${selectedVariantIds.length} variants to ${newStatus}?`)) return;
+    const handleBulkStatusUpdate = async (newStatus) => {
+        if (!newStatus || selectedVariantIds.length === 0) return;
 
-        const tid = toast.loading(`Updating ${selectedVariantIds.length} variants...`);
-        try {
-            // Sequential updates for simplicity + OCC support
-            // Alternatively, backend could support a bulk update endpoint
-            await Promise.all(selectedVariantIds.map(id => {
-                const v = variants.find(item => item._id === id);
-                if (v.isNew) return Promise.resolve();
-                return variantAPI.update(id, { status: newStatus, governance: { version: v.governance?.version } });
-            }));
-            toast.success('Bulk update complete', { id: tid });
-            setSelectedVariantIds([]);
-            await fetchAllData();
-        } catch (err) {
-            toast.error('One or more updates failed. Check for version conflicts.', { id: tid });
-            await fetchAllData();
-        }
-    }, [selectedVariantIds, variants, fetchAllData]);
+        setGenericConfirm({
+            title: `Bulk Update ${selectedVariantIds.length} Variants`,
+            message: `Are you sure you want to change the status of ${selectedVariantIds.length} selected variants to ${newStatus}?`,
+            confirmText: `Update to ${newStatus}`,
+            type: newStatus === 'ARCHIVED' ? 'danger' : 'primary',
+            onConfirm: async () => {
+                const toastId = toast.loading(`Updating ${selectedVariantIds.length} variants...`);
+                try {
+                    const updates = selectedVariantIds.map(id => ({
+                        id,
+                        status: newStatus,
+                        // governance.version is handled by backend or we fetch it if we had it
+                    }));
+
+                    // Assuming a bulk update endpoint exists or creating one
+                    // For now, simulating with Promise.all and individual updates
+                    await Promise.all(selectedVariantIds.map(id => {
+                        const v = variants.find(item => item._id === id);
+                        if (v.isNew) return Promise.resolve(); // Skip new variants for API update
+                        return variantAPI.update(id, { status: newStatus, governance: { version: v.governance?.version } });
+                    }));
+
+                    toast.success('Bulk status update successful', { id: toastId });
+                    setSelectedVariantIds([]);
+                    await fetchAllData();
+                } catch (error) {
+                    toast.error(error?.response?.data?.message || 'Bulk update failed. Some variants may have conflicts.', { id: toastId });
+                    await fetchAllData();
+                }
+            }
+        });
+    };
 
     const VALID_TRANSITIONS = {
-        DRAFT: ['ACTIVE', 'ARCHIVED'],
+        DRAFT: ['ACTIVE', 'ARCHIVED', 'OUT_OF_STOCK'],
         ACTIVE: ['OUT_OF_STOCK', 'ARCHIVED', 'LOCKED'],
         OUT_OF_STOCK: ['ACTIVE', 'ARCHIVED'],
         ARCHIVED: [],
@@ -695,6 +987,7 @@ const VariantBuilder = () => {
                     governance: { version: v.governance.version }
                 }));
 
+
                 let hasConflicts = false;
                 const validationErrors = [];
 
@@ -704,18 +997,47 @@ const VariantBuilder = () => {
                         const code = e?.response?.data?.code;
                         if (status === 409 || code === 'OCC_CONFLICT') {
                             hasConflicts = true;
-                        } else if (code === 'VALIDATION_ERROR') {
+                        } else if (code === 'VALIDATION_ERROR' || code === 'API_ERROR' || status === 400) {
+                            // Surface validation/business-rule errors to the user instead of re-throwing
                             validationErrors.push(e?.response?.data?.message || 'Validation failed.');
                         } else {
-                            throw e; // Re-throw unexpected errors to outer catch
+                            throw e; // Re-throw only truly unexpected errors (5xx without known code)
                         }
                     })
                 ));
 
                 if (hasConflicts) {
-                    // Section 6 — 409 handler: toast + auto-refetch
-                    toast.error('Data changed by another session. Refreshing...', { duration: 4000 });
-                    await fetchAllData(); // replaces state entirely, clears isEdited flags
+                    // 409 OCC handler: snapshot in-flight edits, refetch fresh data,
+                    // then re-apply the edits so users don't lose their work.
+                    const pendingEdits = editedItems.map(v => ({ // capture what user changed
+                        _id: v._id,
+                        price: v.price,
+                        sku: v.sku,
+                        status: v.status,
+                        imageGallery: v.imageGallery,
+                    }));
+
+                    const tid = toast.loading('Version conflict detected. Refreshing data...', { duration: 3000 });
+                    await fetchAllData(); // loads fresh variants with up-to-date governance.version
+
+                    // Re-apply the user's pending edits on top of the refreshed state
+                    if (pendingEdits.length > 0) {
+                        setVariants(prev => prev.map(v => {
+                            const edit = pendingEdits.find(e => e._id === v._id);
+                            if (!edit) return v;
+                            return {
+                                ...v,
+                                price: edit.price,
+                                sku: edit.sku,
+                                status: edit.status,
+                                imageGallery: edit.imageGallery,
+                                isEdited: true, // mark as needing save again
+                            };
+                        }));
+                        toast.success('Data refreshed. Your edits were preserved — click "Save All Changes" again.', { id: tid, duration: 5000 });
+                    } else {
+                        toast.dismiss(tid);
+                    }
                     setPartialCommitWarning(false);
                     return;
                 }
@@ -732,7 +1054,6 @@ const VariantBuilder = () => {
             await fetchAllData();
 
         } catch (error) {
-            console.error('[saveChanges] Unexpected error:', error);
             toast.error(error?.response?.data?.message || 'Save interrupted. Please retry.');
             await fetchAllData(); // recover from partial commit drift
         } finally {
@@ -784,17 +1105,19 @@ const VariantBuilder = () => {
         const toastId = toast.loading('Uploading...');
         try {
             const res = await uploadAPI.uploadMultiple(files);
+            const merged = [...currentGallery];
             const uploadedImages = res.data.data.map((img, i) => ({
                 url: img.url,
                 altText: img.filename || '',
                 isPrimary: currentGallery.length === 0 && i === 0,
-                sortOrder: currentGallery.length + i,
+                sortOrder: merged.length + i,  // Always unique: based on full merged length
                 type: 'DETAIL',
             }));
-            updateVariant(variantId, 'imageGallery', [...currentGallery, ...uploadedImages]);
+            const newGallery = [...currentGallery, ...uploadedImages];
+            updateVariant(variantId, 'imageGallery', newGallery);
 
             // Sync open modal
-            setActiveImageModalVariant(prev => prev && prev._id === variantId ? { ...prev, imageGallery: [...currentGallery, ...uploadedImages] } : prev);
+            setActiveImageModalVariant(prev => prev && prev._id === variantId ? { ...prev, imageGallery: newGallery } : prev);
             toast.success('Uploaded!', { id: toastId });
         } catch (error) {
             toast.error('Upload failed', { id: toastId });
@@ -943,6 +1266,38 @@ const VariantBuilder = () => {
                 </div>
             )}
 
+            {/* GENERIC CONFIRMATION MODAL */}
+            {genericConfirm && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden p-8 scale-in-center">
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 ${genericConfirm.type === 'danger' ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                            {genericConfirm.type === 'danger' ? <TrashIcon className="w-8 h-8" /> : <ExclamationTriangleIcon className="w-8 h-8" />}
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 mb-2">{genericConfirm.title || 'Are you sure?'}</h3>
+                        <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                            {genericConfirm.message}
+                        </p>
+                        <div className="flex gap-3 justify-end font-bold">
+                            <button
+                                onClick={() => setGenericConfirm(null)}
+                                className="px-6 py-2.5 text-sm text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    genericConfirm.onConfirm();
+                                    setGenericConfirm(null);
+                                }}
+                                className={`px-6 py-2.5 text-sm text-white rounded-xl shadow-lg active:scale-95 transition-all ${genericConfirm.type === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
+                            >
+                                {genericConfirm.confirmText || 'Confirm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {activeImageModalVariant && (
                 <ImageManagerModal
                     variant={activeImageModalVariant}
@@ -1023,7 +1378,7 @@ const VariantBuilder = () => {
                                     <span className="text-xs font-bold text-slate-500">{selectedVariantIds.length} Selected</span>
                                     <select
                                         onChange={(e) => handleBulkStatusUpdate(e.target.value)}
-                                        className="text-[10px] font-bold uppercase py-1.5 pl-3 pr-8 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        className="text-[11px] font-bold uppercase tracking-wide py-1.5 pl-3 pr-8 border border-slate-200 rounded-lg bg-white text-slate-700 cursor-pointer focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none shadow-sm hover:border-slate-300 transition-colors"
                                     >
                                         <option value="">Bulk Action: Update Status</option>
                                         <option value="ACTIVE">Set Active</option>
@@ -1038,227 +1393,87 @@ const VariantBuilder = () => {
                     </div>
 
                     <div className="flex-1 overflow-auto bg-slate-50/30">
-                        <table className="w-full text-left text-sm border-collapse">
-                            <thead className="sticky top-0 bg-slate-100/90 backdrop-blur z-10 shadow-sm">
-                                <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                    <th className="px-6 py-3 w-10">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedVariantIds.length === paginatedVariants.length && paginatedVariants.length > 0}
-                                            onChange={(e) => {
-                                                if (e.target.checked) setSelectedVariantIds(paginatedVariants.map(v => v._id));
-                                                else setSelectedVariantIds([]);
-                                            }}
-                                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                                        />
-                                    </th>
-                                    <th className="px-3 py-3 w-40">Color</th>
-                                    <th className="px-3 py-3 w-28">Size</th>
-                                    <th className="px-3 py-3">Attributes</th>
-                                    <th className="px-4 py-3 w-40">SKU Ref</th>
-                                    <th className="px-4 py-3 w-28">Price</th>
-                                    <th className="px-4 py-3 w-28">Resolved</th>
-                                    <th className="px-4 py-3 w-24">Media</th>
-                                    <th className="px-4 py-3 w-36">Status</th>
-                                    <th className="px-4 py-3 w-12 text-right"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {paginatedVariants.map((v) => (
-                                    <tr key={v._id} className={`hover:bg-white transition-colors ${v.isNew ? 'bg-indigo-50/20' : ''} ${selectedVariantIds.includes(v._id) ? 'bg-indigo-50/40' : ''}`}>
-                                        <td className="px-6 py-4">
+                        {filteredVariants.length === 0 ? (
+                            /* ── EMPTY STATE ─────────────────────────────────── */
+                            <div className="flex flex-col items-center justify-center h-full py-24 gap-4 text-center">
+                                <CubeIcon className="w-12 h-12 text-slate-300" />
+                                <p className="text-lg font-bold text-slate-400">No Variants Generated Yet</p>
+                                <p className="text-sm text-slate-400 max-w-xs">
+                                    Use the Dimension Workspace above to select colors, sizes, and attributes, then click Generate.
+                                </p>
+                                <button
+                                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                                    className="mt-2 px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 shadow-md transition-all active:scale-95"
+                                >
+                                    ↑ Go to Generator
+                                </button>
+                            </div>
+                        ) : (
+                            <table className="w-full text-left text-sm border-collapse min-w-max">
+                                <thead className="sticky top-0 bg-slate-100/95 backdrop-blur z-10 shadow-sm">
+                                    <tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                        {/* Select-all */}
+                                        <th className="px-4 py-3 w-[52px]">
                                             <input
                                                 type="checkbox"
-                                                checked={selectedVariantIds.includes(v._id)}
-                                                onChange={() => {
-                                                    setSelectedVariantIds(prev =>
-                                                        prev.includes(v._id) ? prev.filter(id => id !== v._id) : [...prev, v._id]
-                                                    );
+                                                checked={selectedVariantIds.length === paginatedVariants.length && paginatedVariants.length > 0}
+                                                onChange={e => {
+                                                    if (e.target.checked) setSelectedVariantIds(paginatedVariants.map(v => v._id));
+                                                    else setSelectedVariantIds([]);
                                                 }}
                                                 className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                             />
-                                        </td>
-                                        {/* ── COLOR COLUMN ─────────────────────────────── */}
-                                        <td className="px-3 py-4">
-                                            <div className="flex items-center gap-2">
-                                                {/* Color swatch */}
-                                                <div
-                                                    className="w-7 h-7 rounded-md border border-slate-200 shadow-sm shrink-0"
-                                                    style={{ background: v.displayHex || v.rawColorId?.hexCode || (v.isColorway ? 'linear-gradient(135deg,#f00,#00f)' : '#e2e8f0') }}
-                                                    title={v.displayColorName}
-                                                />
-                                                <div className="min-w-0">
-                                                    <p className="text-xs font-bold text-slate-700 truncate max-w-[100px]">
-                                                        {v.displayColorName ||
-                                                            v.rawColorId?.displayName ||
-                                                            v.rawColorId?.name ||
-                                                            (v.isColorway ? v.colorwayName : null) ||
-                                                            <span className="text-slate-400 italic">No Color</span>}
-                                                    </p>
-                                                    {(v.rawColorId?.hexCode || v.displayHex) && (
-                                                        <p className="text-[10px] font-mono text-slate-400">{v.rawColorId?.hexCode || v.displayHex}</p>
-                                                    )}
-                                                </div>
-                                                {!v.isNew && <LockClosedIcon className="w-3 h-3 text-slate-300 shrink-0" />}
-                                            </div>
-                                        </td>
-
-                                        {/* ── SIZE COLUMN ──────────────────────────────── */}
-                                        <td className="px-3 py-4">
-                                            {(() => {
-                                                // Pull from sizes[] array (enterprise schema) or sizeCode fallback
-                                                const sizeEntries = Array.isArray(v.sizes) && v.sizes.length > 0
-                                                    ? v.sizes
-                                                        .map(s => s.sizeId?.displayName || s.sizeId?.value || s.sizeId?.name)
-                                                        .filter(Boolean)
-                                                    : null;
-
-                                                if (sizeEntries?.length) {
-                                                    return (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {sizeEntries.map((sz, i) => (
-                                                                <span key={i} className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded text-[10px] font-bold">
-                                                                    {sz}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    );
-                                                }
-                                                if (v.sizeCode && v.sizeCode !== 'Fixed') {
-                                                    return (
-                                                        <span className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 rounded text-[10px] font-bold">
-                                                            {v.sizeCode}
-                                                        </span>
-                                                    );
-                                                }
-                                                return <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Fixed</span>;
-                                            })()}
-                                        </td>
-
-                                        {/* ── ATTRIBUTES COLUMN ────────────────────────── */}
-                                        <td className="px-3 py-4">
-                                            {(() => {
-                                                // Prefer populated objects from API response
-                                                const attrObjs = Array.isArray(v.attributeValueIds)
-                                                    ? v.attributeValueIds.filter(a => a && typeof a === 'object' && a._id)
-                                                    : [];
-
-                                                if (attrObjs.length > 0) {
-                                                    return (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {attrObjs.map((attr, i) => (
-                                                                <span
-                                                                    key={attr._id || i}
-                                                                    className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-[10px] font-bold"
-                                                                    title={attr.attributeType?.displayName || attr.attributeType?.name || ''}
-                                                                >
-                                                                    {attr.displayName || attr.name || attr.code}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    );
-                                                }
-                                                // Fallback: use variantLabel built from attributeDimensions
-                                                if (v.variantLabel) {
-                                                    return (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {v.variantLabel.split(' / ').map((lbl, i) => (
-                                                                <span key={i} className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-[10px] font-bold">
-                                                                    {lbl}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    );
-                                                }
-                                                return <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">None</span>;
-                                            })()}
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <input type="text" value={v.sku || ''} readOnly={v.status === 'LOCKED' || v.status?.toLowerCase() === 'active'} onChange={e => updateVariant(v._id, 'sku', e.target.value)} className="w-full font-mono text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 focus:bg-white focus:border-indigo-500 outline-none read-only:bg-slate-100 read-only:text-slate-400" />
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="relative">
-                                                <span className="absolute left-2 top-[7px] text-xs font-bold text-slate-400">₹</span>
-                                                <input type="number" step="0.01" value={v.price || ''} readOnly={v.status === 'LOCKED' || v.status?.toLowerCase() === 'active'} onChange={e => updateVariant(v._id, 'price', e.target.value)} className={`w-full font-semibold text-sm pl-6 pr-2 py-1.5 border rounded outline-none ${v.status === 'LOCKED' || v.status?.toLowerCase() === 'active' ? 'bg-slate-100 border-transparent text-slate-500' : 'bg-white border-slate-200 focus:border-indigo-500'}`} />
-                                            </div>
-                                        </td>
-                                        {/* RESOLVED PRICE */}
-                                        <td className="px-4 py-4 relative group">
-                                            {v.resolvedPrice && !v.isNew ? (
-                                                <div className="font-semibold text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5 inline-flex items-center gap-1 cursor-default">
-                                                    <span>₹{safeFix(v.resolvedPrice)}</span>
-                                                    {v.priceResolutionLog?.length > 0 && (
-                                                        <div className="w-4 h-4 rounded-full bg-emerald-200 text-emerald-700 flex items-center justify-center text-[10px] cursor-help">i</div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <span className="text-[10px] uppercase font-bold text-slate-400">Preview</span>
-                                            )}
-                                            {/* TOOLTIP */}
-                                            {v.priceResolutionLog?.length > 0 && !v.isNew && (
-                                                <div className="absolute top-1/2 left-full -translate-y-1/2 ml-2 w-64 bg-slate-800 text-white p-3 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                                                    <div className="font-bold text-xs mb-2 text-slate-300 border-b border-slate-600 pb-1">Price Resolution Log</div>
-                                                    <div className="space-y-1.5 text-xs">
-                                                        {v.priceResolutionLog.map((log, i) => (
-                                                            <div key={i} className="flex justify-between items-center">
-                                                                <span className="text-slate-400 truncate w-32" title={log.source}>
-                                                                    {log.source === 'BASE' ? 'Base Price' : log.modifierType || 'Modifier'}
-                                                                </span>
-                                                                <span className="text-emerald-400 font-mono">+₹{safeFix(log.appliedAmount)}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <button onClick={() => setActiveImageModalVariant(v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-600 text-[11px] font-bold uppercase tracking-wider rounded-lg shadow-sm">
-                                                <PhotoIcon className="w-4 h-4 text-indigo-500" />
-                                                {v.imageGallery?.length || 0} Sets
-                                            </button>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            {v.status === 'LOCKED' || v.status === 'ARCHIVED' || v.governance?.isLocked ? (
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className={`px-2 py-1 font-bold text-[10px] uppercase tracking-wider rounded inline-block ${v.status === 'ACTIVE'
-                                                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                                                        : v.status === 'DRAFT'
-                                                            ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                                            : 'bg-slate-100 text-slate-500 border border-slate-200'
-                                                        }`}>{v.status}</span>
-                                                    {v.governance?.isLocked && <LockClosedIcon className="w-3 h-3 text-slate-400" title="Locked" />}
-                                                </div>
-                                            ) : (
-                                                <select value={v.status || 'DRAFT'} onChange={e => updateVariant(v._id, 'status', e.target.value)} className="w-full text-xs font-bold uppercase py-1 border-0 bg-transparent text-slate-700 cursor-pointer focus:ring-0 appearance-none">
-                                                    {getAllowedStatuses(v.status || 'DRAFT').map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                                                </select>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-1">
-                                                {!v.isNew && (
-                                                    <button onClick={() => cloneVariant(v._id)} className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Clone to Draft">
-                                                        <Square3Stack3DIcon className="w-5 h-5" />
-                                                    </button>
-                                                )}
-                                                <button onClick={() => deleteVariant(v._id, v.isNew)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="Delete"><TrashIcon className="w-5 h-5" /></button>
-                                            </div>
-                                        </td>
+                                        </th>
+                                        {/* Column headers from contract */}
+                                        {VARIANT_COLUMNS.filter(c => c.key !== 'select').map(col => (
+                                            <th key={col.key} className="px-3 py-3" style={{ minWidth: col.width }}>
+                                                {col.label}
+                                            </th>
+                                        ))}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {paginatedVariants.map(v => (
+                                        <VariantRow
+                                            key={v._id}
+                                            v={v}
+                                            selected={selectedVariantIds.includes(v._id)}
+                                            onToggleSelect={() =>
+                                                setSelectedVariantIds(prev =>
+                                                    prev.includes(v._id) ? prev.filter(id => id !== v._id) : [...prev, v._id]
+                                                )
+                                            }
+                                            onUpdateVariant={updateVariant}
+                                            onCloneVariant={cloneVariant}
+                                            onDeleteVariant={deleteVariant}
+                                            onOpenMediaModal={setActiveImageModalVariant}
+                                            getAllowedStatuses={getAllowedStatuses}
+                                            safeFix={safeFix}
+                                        />
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
 
                     {/* Pagination Footer */}
                     <div className="px-6 py-3 border-t border-slate-200 bg-white flex justify-between items-center text-xs font-bold text-slate-500 flex-shrink-0">
-                        <span>Showing {(currentPage - 1) * PAGE_SIZE + 1} to {Math.min(currentPage * PAGE_SIZE, filteredVariants.length)} of {filteredVariants.length}</span>
+                        {filteredVariants.length > 0 ? (
+                            <span>
+                                Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, filteredVariants.length)}
+                                {' '}to {Math.min(currentPage * PAGE_SIZE, filteredVariants.length)}
+                                {' '}of {filteredVariants.length}
+                            </span>
+                        ) : (
+                            <span>0 variants</span>
+                        )}
                         <div className="flex gap-2">
-                            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-1.5 border border-slate-200 rounded disabled:opacity-50 hover:bg-slate-50"><ChevronLeftIcon className="w-4 h-4" /></button>
+                            <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-1.5 border border-slate-200 rounded disabled:opacity-30 hover:bg-slate-50 transition-colors"><ChevronLeftIcon className="w-4 h-4" /></button>
                             <span className="px-3 py-1.5 bg-slate-100 rounded">Page {currentPage} of {Math.max(1, totalPages)}</span>
-                            <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-1.5 border border-slate-200 rounded disabled:opacity-50 hover:bg-slate-50"><ChevronRightIcon className="w-4 h-4" /></button>
+                            <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="p-1.5 border border-slate-200 rounded disabled:opacity-30 hover:bg-slate-50 transition-colors"><ChevronRightIcon className="w-4 h-4" /></button>
                         </div>
                     </div>
+
                 </section>
             </main>
         </div>
@@ -1266,3 +1481,4 @@ const VariantBuilder = () => {
 };
 
 export default VariantBuilder;
+

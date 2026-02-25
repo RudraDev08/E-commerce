@@ -127,6 +127,7 @@ export const previewDimensions = asyncHandler(async (req, res) => {
  * }
  */
 export const generateDimensions = asyncHandler(async (req, res) => {
+    console.log("STEP 3 - Incoming Payload:", JSON.stringify(req.body, null, 2));
     validateDimensionBody(req.body);
 
     const t0 = Date.now();

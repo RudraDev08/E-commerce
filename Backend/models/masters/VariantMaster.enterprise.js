@@ -31,7 +31,7 @@ async function getCategoryScopeFn() {
  */
 
 const VALID_TRANSITIONS = {
-    DRAFT: ['ACTIVE', 'ARCHIVED'],
+    DRAFT: ['ACTIVE', 'ARCHIVED', 'OUT_OF_STOCK'],
     ACTIVE: ['OUT_OF_STOCK', 'ARCHIVED', 'LOCKED'],
     OUT_OF_STOCK: ['ACTIVE', 'ARCHIVED'],
     LOCKED: ['ACTIVE', 'ARCHIVED'],
@@ -101,8 +101,7 @@ const variantMasterSchema = new mongoose.Schema(
             type: [{
                 type: mongoose.Schema.Types.ObjectId,
                 ref: 'AttributeValue',
-            }],
-            immutable: true,
+            }]
         },
 
         // ── SECTION 6: Persisted structured dimension metadata ──────────────┄
@@ -355,9 +354,19 @@ variantMasterSchema.pre('validate', function () {
 
 /**
  * [STEP 1] Scope Validation Middleware
- * Prevent mapping unrelated attributes to variants
+ * Prevent mapping unrelated attributes to variants.
+ * ONLY runs when attributeValueIds is actually being changed — not on every
+ * price/status/image update. This avoids false failures when an existing
+ * AttributeValue's status changes in the master table after the variant was created.
  */
 variantMasterSchema.pre('save', async function () {
+    // Skip if attributeValueIds hasn't changed (covers price/status/image edits)
+    const shouldCheck = this.isNew
+        ? (this.attributeValueIds && this.attributeValueIds.length > 0)
+        : (this.isModified('attributeValueIds') && this.attributeValueIds && this.attributeValueIds.length > 0);
+
+    if (!shouldCheck) return;
+
     // [STEP 1 — FIXED] Category-Scope Validation
     // The previous implementation was a dead no-op: it checked
     // `v.attributeType.applicableTo` and `this.productGroupType` — neither
@@ -366,13 +375,11 @@ variantMasterSchema.pre('save', async function () {
     // The correct path is:
     //   this.productGroupId → ProductGroup.categoryId → CategoryAttribute → allowedTypeIds
     //   Then verify each attributeValueId's .attributeType is in allowedTypeIds.
-    if (this.attributeValueIds && this.attributeValueIds.length > 0) {
-        const assertScope = await getCategoryScopeFn();
-        await assertScope(
-            this.productGroupId?.toString(),
-            this.attributeValueIds.map(id => id.toString())
-        );
-    }
+    const assertScope = await getCategoryScopeFn();
+    await assertScope(
+        this.productGroupId?.toString(),
+        this.attributeValueIds.map(id => id.toString())
+    );
 });
 
 /**
@@ -481,25 +488,33 @@ variantMasterSchema.pre('save', async function () {
 
 /**
  * [STEP 4] Image Gallery Validations
+ * Auto-normalizes sortOrder to prevent duplicates (instead of throwing).
  */
 variantMasterSchema.pre('save', function () {
     if (!this.imageGallery || !Array.isArray(this.imageGallery)) return;
 
-    // 1. Primary Image Enforcement
-    const primaryImages = this.imageGallery.filter(img => img.isPrimary);
-    if (primaryImages.length > 1) {
-        throw new Error('Only one image can be marked as primary.');
-    }
-    if (this.imageGallery.length > 0 && primaryImages.length === 0) {
+    // 1. Primary Image Enforcement — if multiple are marked primary, keep only the first
+    let foundPrimary = false;
+    this.imageGallery.forEach((img, i) => {
+        if (img.isPrimary) {
+            if (foundPrimary) {
+                // Demote extras
+                this.imageGallery[i].isPrimary = false;
+            } else {
+                foundPrimary = true;
+            }
+        }
+    });
+    // Auto-assign primary to first image if none is marked
+    if (this.imageGallery.length > 0 && !foundPrimary) {
         this.imageGallery[0].isPrimary = true;
     }
 
-    // 2. SortOrder Uniqueness
-    const orders = this.imageGallery.map(img => img.sortOrder).filter(o => o !== undefined);
-    const uniqueOrders = new Set(orders);
-    if (orders.length !== uniqueOrders.size) {
-        throw new Error('Duplicate sortOrder values in imageGallery.');
-    }
+    // 2. Auto-normalize sortOrder to avoid collisions (0, 1, 2, ...)
+    //    This prevents a 500 when the frontend sends images with duplicate/missing sortOrder values
+    this.imageGallery.forEach((img, i) => {
+        img.sortOrder = i;
+    });
 });
 
 /**
@@ -521,13 +536,14 @@ variantMasterSchema.pre('save', async function () {
         }
     }
 
-    // 3. Inventory Auto-Status Sync (Protect LOCKED variants)
+    // 3. Inventory Auto-Status Sync
+    // We only Auto-Upgrade to ACTIVE if stock is added. 
+    // We DO NOT auto-downgrade to OUT_OF_STOCK here anymore because it conflicts with Admin manual overrides.
+    // Downgrades should be handled by the Inventory service when a sale occurs, not during variant saves.
     if (this.inventory && this.inventory.autoStatusSync) {
         const isCurrentlyLocked = this.governance?.isLocked || false;
         if (!isCurrentlyLocked) {
-            if (this.inventory.quantityOnHand <= 0 && this.status === 'ACTIVE') {
-                this.status = 'OUT_OF_STOCK';
-            } else if (this.inventory.quantityOnHand > 0 && this.status === 'OUT_OF_STOCK') {
+            if (this.inventory.quantityOnHand > 0 && this.status === 'OUT_OF_STOCK') {
                 this.status = 'ACTIVE';
             }
         }
@@ -626,8 +642,10 @@ variantMasterSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], async f
     }
 
     if (galleryModified) {
-        if (update.$push?.imageGallery || update.$set?.imageGallery) {
-            const err = new Error('Modifying imageGallery arrays via query updates is blocked for integrity. Use document.save().');
+        // Only block $push mutations — $set full-array replacement is safe and is
+        // the pattern used by the admin panel's save operation.
+        if (update.$push?.imageGallery) {
+            const err = new Error('Modifying imageGallery arrays via $push is blocked for integrity. Use document.save() or $set with the full array.');
             err.status = 400;
             throw err;
         }

@@ -187,6 +187,7 @@ export async function createVariant(req, res) {
     const {
       productGroupId,
       sizeId,
+      sizes, // NEW: Accepts array of sizes to match enterprise format
       colorId,
       attributeValueIds = [],
       price,
@@ -195,17 +196,19 @@ export async function createVariant(req, res) {
       status = 'INACTIVE',
     } = req.body;
 
+    const actualSizeId = sizeId || (sizes && sizes.length > 0 ? sizes[0].sizeId : null);
+
     // ── 1. Required field guard ──────────────────────────────────────────
-    if (!productGroupId || !sizeId || !colorId || price == null) {
+    if (!productGroupId || !actualSizeId || !colorId || price == null) {
       return res.status(400).json({
         success: false,
-        message: 'productGroupId, sizeId, colorId, and price are required.',
+        message: 'productGroupId, sizeId/sizes, colorId, and price are required.',
       });
     }
 
     // ── 2. Validate references exist in parallel ─────────────────────────
     const [size, color, attrValues] = await Promise.all([
-      SizeMaster.findById(sizeId).select('_id displayName lifecycleState').lean(),
+      SizeMaster.findById(actualSizeId).select('_id displayName category lifecycleState').lean(),
       ColorMaster.findById(colorId).select('_id name lifecycleState').lean(),
       attributeValueIds.length
         ? AttributeValue.find({
@@ -218,7 +221,7 @@ export async function createVariant(req, res) {
     ]);
 
     if (!size) {
-      return res.status(400).json({ success: false, message: `Size not found: ${sizeId}` });
+      return res.status(400).json({ success: false, message: `Size not found: ${actualSizeId}` });
     }
     if (!color) {
       return res.status(400).json({ success: false, message: `Color not found: ${colorId}` });
@@ -231,12 +234,12 @@ export async function createVariant(req, res) {
     }
 
     // ── 3. Generate deterministic configHash ─────────────────────────────
-    const configHash = generateConfigHash({ productGroupId, sizeId, colorId, attributeValueIds });
+    const configHash = generateConfigHash({ productGroupId, sizeId: actualSizeId, colorId, attributeValueIds });
 
     // ── 4. Persist ───────────────────────────────────────────────────────
     const variant = await VariantMaster.create({
       productGroupId,
-      sizeId,
+      sizes: sizes || [{ sizeId: actualSizeId, category: size.category || 'DIMENSION' }],
       colorId,
       attributeValueIds,
       price,
@@ -426,11 +429,51 @@ export async function updateVariant(req, res) {
       });
     }
 
-    // Check if any identity modifying fields are passed
-    if (attributeValueIds || attributeDimensions || configHash || productGroup || productGroupId || sizeId || colorId || sizes) {
+    // ✅ Step 3 — Refactored to .save() for hook support (Image Gallery, Validations)
+    const variantDoc = await VariantMaster.findById(id);
+
+    if (!variantDoc) {
+      return res.status(404).json({
+        success: false,
+        message: 'Variant not found.',
+      });
+    }
+
+    // Check if any identity modifying fields are passed and if they differ from current
+    const identityFields = {
+      productGroupId,
+      sizeId,
+      colorId,
+      configHash,
+    };
+
+    const violations = [];
+    Object.entries(identityFields).forEach(([key, val]) => {
+      if (val !== undefined && val !== null) {
+        const currentVal = variantDoc[key]?.toString();
+        const newVal = val?.toString();
+        if (currentVal !== newVal) {
+          console.warn(`[updateVariant] Identity violation on ${key}: current='${currentVal}' new='${newVal}'`);
+          violations.push(key);
+        }
+      }
+    });
+
+    // Deep check for attributeDimensions if provided
+    if (attributeDimensions && Array.isArray(attributeDimensions)) {
+      const currentDims = JSON.stringify(variantDoc.attributeDimensions || []);
+      const newDims = JSON.stringify(attributeDimensions);
+      if (currentDims !== newDims) {
+        console.warn(`[updateVariant] Identity violation on attributeDimensions: current='${currentDims}' new='${newDims}'`);
+        violations.push('attributeDimensions');
+      }
+    }
+
+    if (violations.length > 0) {
+      console.warn(`[updateVariant] Returning 400. Body:`, req.body);
       return res.status(400).json({
         success: false,
-        message: 'Variant identity is immutable. Archive and recreate instead.',
+        message: `Variant identity is immutable. Fields changed: ${violations.join(', ')}. Archive and recreate instead.`,
       });
     }
 
@@ -445,19 +488,6 @@ export async function updateVariant(req, res) {
     // safeUpdates is safe — 'governance' object was stripped during destructure above.
     // We add governance sub-fields as explicit dot-notation keys (never the full object).
     console.log('[updateVariant] safeUpdates:', JSON.stringify(safeUpdates));
-
-    // Build the update: keep governance writes completely separate from field writes.
-    // Mongoose can sometimes re-merge dot-notation keys with object keys. 
-    // Using two explicit $set groups prevents any cross-contamination.
-    // ✅ Step 3 — Refactored to .save() for hook support (Image Gallery, Validations)
-    const variantDoc = await VariantMaster.findById(id);
-
-    if (!variantDoc) {
-      return res.status(404).json({
-        success: false,
-        message: 'Variant not found.',
-      });
-    }
 
     // Check OCC version manually (redundant if optimisticConcurrency is on, but keeps logic explicit)
     // Note: variantDoc.governance.version is the DB value. 'version' is the value from the UI.
@@ -478,9 +508,13 @@ export async function updateVariant(req, res) {
     if (safeUpdates.imageGallery !== undefined) variantDoc.set('imageGallery', safeUpdates.imageGallery);
     if (safeUpdates.compareAtPrice !== undefined) variantDoc.set('compareAtPrice', safeUpdates.compareAtPrice);
 
+    // Accept array repairs
+    if (sizes !== undefined) variantDoc.set('sizes', sizes);
+    if (attributeValueIds !== undefined) variantDoc.set('attributeValueIds', attributeValueIds);
+
     // Apply any other safe non-governance fields
     Object.entries(safeUpdates).forEach(([k, v]) => {
-      const skipped = ['price', 'sku', 'status', 'imageGallery', 'compareAtPrice', 'governance', '_id', '__v'];
+      const skipped = ['id', 'price', 'sku', 'status', 'imageGallery', 'compareAtPrice', 'governance', '_id', '__v'];
       if (!skipped.includes(k) && !k.startsWith('governance')) {
         variantDoc.set(k, v);
       }
@@ -496,15 +530,17 @@ export async function updateVariant(req, res) {
     // Save triggers pre('save') hooks. 
     // Since optimisticConcurrency: true is set in schema, this will throw VersionError if version changed.
     const updated = await variantDoc.save();
+    console.log("STEP 5 - Saved Document:", updated);
 
     // ✅ Recompute Snapshot (Debounced)
     SnapshotService.triggerRecompute(updated.productGroupId);
 
     return res.status(200).json({ success: true, message: 'Variant updated.', data: updated });
   } catch (err) {
-    console.error('[updateVariant] Error details:', err);
+    // ── DIAGNOSTIC LOG: always log name + message so we know the real cause ──
+    console.error('[updateVariant] Error caught — name:', err.name, '| code:', err.code, '| statusCode:', err.statusCode, '| message:', err.message);
 
-    // Explicitly handle Mongoose VersionError (OCC)
+    // 1. Mongoose OCC VersionError or duplicate key (E11000)
     if (err.name === 'VersionError' || err.code === 11000) {
       return res.status(409).json({
         success: false,
@@ -514,15 +550,42 @@ export async function updateVariant(req, res) {
       });
     }
 
-    // Handle Validation Errors
+    // 2. Mongoose built-in ValidationError (schema field validators)
     if (err.name === 'ValidationError') {
       return res.status(400).json({
         success: false,
         message: err.message,
-        error: 'VALIDATION_ERROR'
+        error: 'VALIDATION_ERROR',
+        code: 'VALIDATION_ERROR'
       });
     }
 
+    // 3. Custom ApiError subclasses (ValidationError, NotFoundError, ConflictError, etc.)
+    //    thrown by assertCategoryScope() and other service helpers.
+    //    These have err.name === 'ApiError' and err.statusCode set.
+    if (err.name === 'ApiError' && err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+        error: err.code || 'API_ERROR',
+        code: err.code || 'API_ERROR',
+        ...(err.details ? { details: err.details } : {})
+      });
+    }
+
+    // 4. Generic Error throws from pre-save hooks (e.g., compareAtPrice guard,
+    //    size category duplication check, status transition guard).
+    //    These have err.name === 'Error' — surface as 400 Bad Request.
+    if (err.name === 'Error') {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+        error: 'VALIDATION_ERROR',
+        code: 'VALIDATION_ERROR'
+      });
+    }
+
+    // 5. Fallback — truly unexpected errors
     return res.status(500).json({
       success: false,
       message: 'Internal Server error during variant update.',

@@ -255,11 +255,17 @@ export function useCartesianEngine({ productSlug = 'VAR' } = {}) {
     /** Toggle one value's selection in a dimension */
     const toggleValue = useCallback((dimKey, valueId) => {
         setSelectedIds(prev => {
-            const m = new Map(prev);
-            const ids = new Set(m.get(dimKey) ?? []);
-            ids.has(valueId) ? ids.delete(valueId) : ids.add(valueId);
-            m.set(dimKey, ids);
-            return m;
+            const next = new Map(prev);
+            const set = new Set(next.get(dimKey) || []);
+
+            if (set.has(valueId)) {
+                set.delete(valueId);
+            } else {
+                set.add(valueId);
+            }
+
+            next.set(dimKey, set);
+            return next;
         });
         scheduleRecompute();
     }, [scheduleRecompute]);
@@ -315,31 +321,35 @@ export function useCartesianEngine({ productSlug = 'VAR' } = {}) {
 
     /** Build the API payload for POST /v2/generate-dimensions */
     const buildApiPayload = useCallback((productGroupId, brand, basePrice) => {
-        const color = [...(selectedIds.get('color') ?? [])].filter(Boolean);
-        const size = [...(selectedIds.get('size') ?? [])].filter(Boolean);
-        const attrDimensions = [];
+        const color = [...(selectedIds.get('color') ?? [])];
+        const size = [...(selectedIds.get('size') ?? [])];
+
+        const attributeDimensions = [];
 
         for (const [key, ids] of selectedIds) {
-            if (key === 'color' || key === 'size' || !ids.size) continue;
-            const validIds = [...ids].filter(Boolean);
-            if (validIds.length > 0) {
-                const def = dimensionDefs.get(key);
-                attrDimensions.push({
-                    attributeId: key,
-                    attributeName: def?.label || def?.attributeName || key,
-                    values: validIds
-                });
-            }
+            if (!key.startsWith('attr:')) continue;
+
+            const attributeId = key.split(':')[1];
+
+            const def = dimensionDefs.get(key);
+            attributeDimensions.push({
+                attributeId,
+                attributeName: def?.label || def?.attributeName || attributeId,
+                valueIds: [...ids],
+                values: [...ids]
+            });
         }
 
-        return {
+        const payload = {
             productGroupId,
             brand,
             basePrice: Number(basePrice) || 0,
             baseDimensions: { color, size },
-            attributeDimensions: attrDimensions,
+            attributeDimensions,
         };
-    }, [selectedIds]);
+
+        return payload;
+    }, [selectedIds, dimensionDefs]);
 
     // Cleanup debounce on unmount
     useEffect(() => () => clearTimeout(debounceRef.current), []);
