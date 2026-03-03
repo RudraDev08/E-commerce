@@ -7,44 +7,49 @@ export const createAttributeType = async (req, res) => {
         const {
             name,
             displayName,
-            displayType,
-            valueType,
+            inputType,
+            displayStyle,
             category,
-            isRequired,
-            allowMultiple,
-            affectsPrice,
-            affectsStock,
+            attributeRole,
             showInFilters,
             showInVariants,
-            displayOrder,
-            applicableCategories,
             description,
-            helpText,
-            icon
+            validationRules,
+            measurementConfig,
+            code: providedCode,
+            internalKey: providedInternalKey,
+            canonicalId: providedCanonicalId
         } = req.body;
 
         const slug = slugify(name, { lower: true, strict: true });
-        const code = name.toUpperCase().replace(/\s+/g, '_');
+        const code = providedCode || name.toUpperCase().replace(/\s+/g, '_');
+
+        // Generate required enterprise fields if missing
+        const internalKey = providedInternalKey || `ATTR_${code}`;
+        const canonicalId = providedCanonicalId || code;
 
         const attributeType = await AttributeType.create({
             name,
             slug,
             code,
+            internalKey,
+            canonicalId,
             displayName: displayName || name,
-            displayType,
-            valueType,
-            category,
-            isRequired,
-            allowMultiple,
-            affectsPrice,
-            affectsStock,
-            showInFilters,
-            showInVariants,
-            displayOrder: displayOrder || 0,
-            applicableCategories,
+            inputType: inputType || 'dropdown',
+            displayStyle: displayStyle || 'inline',
+            category: category || 'specification',
+            attributeRole: attributeRole || (category === 'specification' ? 'SPECIFICATION' : 'VARIANT'),
+            showInFilters: showInFilters ?? true,
+            showInVariants: showInVariants ?? true,
             description,
-            helpText,
-            icon
+            validationRules: validationRules || {
+                isRequired: req.body.isRequired || false,
+                allowMultipleSelection: req.body.allowMultiple || false
+            },
+            measurementConfig: measurementConfig || {
+                hasMeasurements: false,
+                unit: 'none'
+            }
         });
 
         res.status(201).json({
@@ -152,7 +157,7 @@ export const updateAttributeType = async (req, res) => {
 
         const updates = { ...req.body };
 
-        // 🟣 Phase 4.3 Dimension Locking
+        // 🟣 Phase 4.3 Dimension Locking (Prevent changing createsVariant without confirmation)
         if (updates.createsVariant !== undefined && updates.createsVariant !== attributeType.createsVariant) {
             if (updates.allowRegeneration !== true) {
                 return res.status(400).json({
@@ -162,18 +167,41 @@ export const updateAttributeType = async (req, res) => {
             }
         }
 
-        if (updates.name) {
+        // Handle slug and code generation if name changed and code not provided
+        if (updates.name && !updates.code) {
             updates.slug = slugify(updates.name, { lower: true, strict: true });
             updates.code = updates.name.toUpperCase().replace(/\s+/g, '_');
+        } else if (updates.code) {
+            updates.code = updates.code.toUpperCase().replace(/\s+/g, '_');
+            if (updates.name) {
+                updates.slug = slugify(updates.name, { lower: true, strict: true });
+            }
         }
 
-        Object.assign(attributeType, updates);
-        await attributeType.save();
+        // Update attribute role based on category if not explicitly provided
+        if (updates.category && !updates.attributeRole) {
+            updates.attributeRole = updates.category === 'specification' ? 'SPECIFICATION' : 'VARIANT';
+        }
+
+        // Strip immutable fields from update payload to avoid accidental overwrites
+        delete updates.internalKey;
+        delete updates.canonicalId;
+        delete updates._id;
+        delete updates.__v;
+        delete updates.allowRegeneration;
+
+        // Use $set + runValidators:false so old records missing enterprise fields
+        // (internalKey, canonicalId) don't fail validation on partial updates
+        const updated = await AttributeType.findOneAndUpdate(
+            { _id: req.params.id, isDeleted: false },
+            { $set: updates },
+            { new: true, runValidators: false }
+        );
 
         res.json({
             success: true,
             message: 'Attribute type updated successfully',
-            data: attributeType
+            data: updated
         });
     } catch (error) {
         console.error('Update attribute type error:', error);
@@ -187,21 +215,21 @@ export const updateAttributeType = async (req, res) => {
 // Delete Attribute Type
 export const deleteAttributeType = async (req, res) => {
     try {
-        const attributeType = await AttributeType.findOne({
-            _id: req.params.id,
-            isDeleted: false
-        });
+        // Use findOneAndUpdate with $set instead of .save() to avoid
+        // triggering full-document validation on old records that pre-date
+        // the internalKey / canonicalId required fields.
+        const result = await AttributeType.findOneAndUpdate(
+            { _id: req.params.id, isDeleted: false },
+            { $set: { isDeleted: true, deletedAt: new Date() } },
+            { new: true, runValidators: false }
+        );
 
-        if (!attributeType) {
+        if (!result) {
             return res.status(404).json({
                 success: false,
                 message: 'Attribute type not found'
             });
         }
-
-        attributeType.isDeleted = true;
-        attributeType.deletedAt = new Date();
-        await attributeType.save();
 
         res.json({
             success: true,

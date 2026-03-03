@@ -157,6 +157,29 @@ export const generateDimensions = asyncHandler(async (req, res) => {
     }
 
     // ── STEP 2: Large batch enqueued to Redis/BullMQ ──────────────────────────
+    if (!variantGenerationQueue) {
+        // Fallback: If Redis is disabled but batch is not too massive, try running sync anyway
+        if (count <= 200) {
+            logger.warn(`[VariantDimension] Redis disabled. Falling back to sync execution for mid-sized batch.`, { count });
+            const result = await generateVariantDimensions({
+                ...req.body,
+                _batchId: batchId,
+                createdBy: req.user?._id ?? null,
+            });
+            return res.status(201).json({
+                success: true,
+                message: `Generated ${result.totalGenerated} variants (Synchronous Fallback - Redis Disabled).`,
+                data: result,
+            });
+        }
+
+        logger.error(`[VariantDimension] Redis disabled and batch too large for sync.`, { count });
+        return res.status(503).json({
+            success: false,
+            message: 'Background processing queue is currently disabled. Please try again later or use smaller batches.',
+        });
+    }
+
     let job;
     try {
         job = await variantGenerationQueue.add('generate', {
@@ -216,6 +239,12 @@ export const generateDimensions = asyncHandler(async (req, res) => {
  * Check the status of a Variant Generation Queue job
  */
 export const getGenerationJobStatus = asyncHandler(async (req, res) => {
+    if (!variantGenerationQueue) {
+        return res.status(503).json({
+            success: false,
+            message: 'Background processing queue is currently disabled.'
+        });
+    }
     const job = await variantGenerationQueue.getJob(req.params.id);
 
     if (!job) {

@@ -19,7 +19,6 @@ import BrandList from "../modules/brands/BrandList";
 
 // Products & Attributes
 import Product from "../modules/products/Products";
-import VariantTable from "../page/VariantBuilder";
 import SizeManagement from "../page/size/SizeManagement";
 import ColorManagement from "../page/color/ColorManagement";
 import ProductVariantMapping from "../modules/variants/ProductVariantMapping";
@@ -33,6 +32,13 @@ import InventoryMaster from "../modules/inventory/InventoryMaster";
 import WarehouseManagement from "../modules/inventory/WarehouseManagement";
 import StockTransferManagement from "../modules/inventory/StockTransferManagement";
 import CycleCountManagement from "../modules/inventory/CycleCountManagement";
+
+// Orders
+import OrderListPage from "../modules/orders/OrderListPage";
+import OrderDetailPage from "../modules/orders/OrderDetailPage";
+
+// System
+import SystemDashboard from "../modules/system/SystemDashboard";
 
 // Other
 import CategorySelectorDemo from "../page/CategorySelectorDemo";
@@ -76,7 +82,6 @@ function App() {
 
           <Route path="variant-mapping" element={<ProductVariantMapping />} />
           <Route path="variant-builder/:productId" element={<VariantBuilder />} />
-          <Route path="variants" element={<VariantTable />} />
 
           {/* Inventory */}
           <Route path="inventory">
@@ -85,6 +90,13 @@ function App() {
             <Route path="transfers" element={<StockTransferManagement />} />
             <Route path="audits" element={<CycleCountManagement />} />
           </Route>
+
+          {/* Orders */}
+          <Route path="orders" element={<OrderListPage />} />
+          <Route path="orders/:orderId" element={<OrderDetailPage />} />
+
+          {/* System / Observability */}
+          <Route path="system" element={<SystemDashboard />} />
 
           {/* Demos */}
           <Route path="category-selector-demo" element={<CategorySelectorDemo />} />

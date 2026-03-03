@@ -145,11 +145,11 @@ productSchema.pre('save', function (next) {
     next();
 });
 
-// Virtual: Variant Count
+// Virtual: Variant Count (populated from VariantMaster using productGroupId)
 productSchema.virtual('variantCount', {
-    ref: 'Variant',
+    ref: 'VariantMaster',    // ✅ FIXED: was 'Variant'
     localField: '_id',
-    foreignField: 'product',
+    foreignField: 'productGroupId', // ✅ FIXED: was 'product'
     count: true
 });
 

@@ -94,6 +94,15 @@ const colorMasterSchema = new mongoose.Schema({
         immutable: true,
     },
 
+    internalKey: {
+        type: String,
+        immutable: true,
+        required: true,
+        unique: true,
+        uppercase: true,
+        trim: true,
+    },
+
     slug: {
         type: String,
         lowercase: true,
@@ -207,6 +216,7 @@ const colorMasterSchema = new mongoose.Schema({
 // All compound indexes are prefixed with tenantId for co-located shard scans.
 
 colorMasterSchema.index({ tenantId: 1, canonicalId: 1 }, { unique: true });
+colorMasterSchema.index({ tenantId: 1, internalKey: 1 }, { unique: true });
 colorMasterSchema.index({ tenantId: 1, hexCode: 1 }, { unique: true });
 colorMasterSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 colorMasterSchema.index(
@@ -269,6 +279,11 @@ colorMasterSchema.pre('validate', async function () {
             async (candidate) => this.constructor.exists({ tenantId: this.tenantId, canonicalId: candidate }),
             prefix
         );
+    }
+
+    // 5.5 internalKey generation
+    if (!this.internalKey && this.canonicalId) {
+        this.internalKey = this.canonicalId;
     }
 
     // 6. Slug auto-generation
@@ -342,6 +357,10 @@ colorMasterSchema.pre('save', async function () {
 
     // LOCKED field mutation guard — runs AFTER state transition logic
     // so that LOCKED → ARCHIVED transition itself is not blocked.
+    if (this.isModified('hexCode') && !this.isNew) {
+        throw new Error('IMMUTABILITY VIOLATION: hexCode cannot be modified on an existing Color.');
+    }
+
     if (current?.isLocked && this.lifecycleState === 'LOCKED') {
         const LOCKED_SAFE_FIELDS = new Set([
             'updatedBy', 'isLocked', 'usageCount', 'lastUsedAt',

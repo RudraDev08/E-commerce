@@ -32,16 +32,23 @@ class InventoryService {
      */
     static async createReservation(userId, items, expiryMinutes = 15) {
         // 1. Rate Limiting Check (Redis-based)
-        const rateLimitKey = `${RESERVATION_RATE_LIMIT_KEY}:${userId}`;
-        const requestCount = await redis.incr(rateLimitKey);
+        if (redis && redis.status === 'ready') {
+            try {
+                const rateLimitKey = `${RESERVATION_RATE_LIMIT_KEY}:${userId}`;
+                const requestCount = await redis.incr(rateLimitKey);
 
-        if (requestCount === 1) {
-            await redis.expire(rateLimitKey, RATE_LIMIT_WINDOW);
+                if (requestCount === 1) {
+                    await redis.expire(rateLimitKey, RATE_LIMIT_WINDOW);
+                }
+
+                if (requestCount > 10) {
+                    throw new Error('RATE_LIMIT_EXCEEDED: Too many reservation attempts');
+                }
+            } catch (err) {
+                logger.warn('Redis Rate Limiting Error (bypassing)', { error: err.message });
+            }
         }
 
-        if (requestCount > 10) {
-            throw new Error('RATE_LIMIT_EXCEEDED: Too many reservation attempts');
-        }
 
         // 2. Check Active Reservation Count (Abuse Protection)
         const activeCount = await InventoryReservation.countDocuments({
@@ -116,14 +123,19 @@ class InventoryService {
                 });
             }
 
-            // Create reservation record
+            // Create reservation record as RESERVED (Phase 2 & 3)
+            // We use the app time for the interval, but the base is current Date.
+            // In hyperscale, we'd use MongoDB's $$NOW or a dedicated TimeService.
             const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
-            const reservation = await InventoryReservation.create([{
+
+            const reservationData = {
                 userId,
                 items: reservationItems,
                 expiresAt,
-                status: 'active'
-            }], { session });
+                status: 'RESERVED'
+            };
+
+            const reservation = await InventoryReservation.create([reservationData], { session });
 
             await session.commitTransaction();
 
@@ -131,7 +143,8 @@ class InventoryService {
                 reservationId: reservation[0]._id,
                 userId,
                 itemCount: reservationItems.length,
-                expiresAt
+                expiresAt,
+                status: 'RESERVED'
             });
 
             return reservation[0];
@@ -153,29 +166,45 @@ class InventoryService {
 
     /**
      * Convert Reservation to Purchase
+     * Phase 2 Hardening: Atomic State Transition (RESERVED -> CONSUMED)
      */
-    static async convertReservationToPurchase(reservationId) {
+    static async convertReservationToPurchase(reservationId, idempotencyKey = null) {
         const session = await mongoose.startSession();
         session.startTransaction();
 
         try {
-            const reservation = await InventoryReservation.findById(reservationId)
-                .session(session)
-                .setOptions({ readPreference: 'primary' });
+            // 1. Check for duplicate consumption (Idempotency)
+            if (idempotencyKey) {
+                const existing = await InventoryReservation.findOne({ idempotencyKey }).session(session);
+                if (existing) {
+                    if (existing._id.toString() !== reservationId.toString()) {
+                        throw new Error('IDEMPOTENCY_CONFLICT: Key belongs to another reservation');
+                    }
+                    return existing; // Already processed
+                }
+            }
+
+            // 2. Atomic transition with status guard
+            const reservation = await InventoryReservation.findOneAndUpdate(
+                {
+                    _id: reservationId,
+                    status: 'RESERVED',
+                    // Optional: expiresAt: { $gt: new Date() } // We allow conversion even if slightly expired if payment hit late
+                },
+                {
+                    $set: { status: 'CONSUMED', idempotencyKey }
+                },
+                { session, new: true, readPreference: 'primary' }
+            );
 
             if (!reservation) {
-                throw new Error(`RESERVATION_NOT_FOUND: ${reservationId}`);
+                // Check if it was already consumed or expired
+                const check = await InventoryReservation.findById(reservationId).session(session);
+                const state = check ? check.status : 'NOT_FOUND';
+                throw new Error(`RESERVATION_TRANSITION_FAILED: Current state is ${state}. Expected RESERVED.`);
             }
 
-            if (reservation.status !== 'active') {
-                throw new Error(`RESERVATION_INVALID: Status is ${reservation.status}`);
-            }
-
-            if (reservation.expiresAt < new Date()) {
-                throw new Error('RESERVATION_EXPIRED');
-            }
-
-            // Decrement totalStock, reservedStock, and availableStock atomically
+            // 3. Decrement totalStock, reservedStock atomically
             for (const item of reservation.items) {
                 const result = await InventoryMaster.findOneAndUpdate(
                     {
@@ -187,7 +216,6 @@ class InventoryService {
                         $inc: {
                             totalStock: -item.qty,
                             reservedStock: -item.qty
-                            // availableStock stays same (already decremented during reservation)
                         }
                     },
                     {
@@ -198,37 +226,23 @@ class InventoryService {
                 );
 
                 if (!result) {
-                    throw new Error(`PURCHASE_FAILED: Variant ${item.variantId}`);
+                    throw new Error(`PURCHASE_FAILED: Stock mismatch for Variant ${item.variantId}`);
                 }
-
-                logger.debug('Purchase Completed', {
-                    variantId: item.variantId,
-                    qty: item.qty,
-                    remainingStock: result.totalStock,
-                    availableStock: result.availableStock
-                });
             }
-
-            reservation.status = 'converted';
-            await reservation.save({ session });
 
             await session.commitTransaction();
 
-            logger.info('Reservation Converted to Purchase', {
+            logger.info('Reservation Converted to Purchase (CONSUMED)', {
                 reservationId,
-                userId: reservation.userId
+                userId: reservation.userId,
+                idempotencyKey
             });
 
             return reservation;
 
         } catch (error) {
             await session.abortTransaction();
-
-            logger.error('Purchase Conversion Failed', {
-                reservationId,
-                error: error.message
-            });
-
+            logger.error('Purchase Conversion Failed', { reservationId, error: error.message });
             throw error;
         } finally {
             session.endSession();
@@ -237,17 +251,17 @@ class InventoryService {
 
     /**
      * Release Expired Reservations (Background Job)
+     * Phase 2 & 3: Clock Skew Protected & Atomic Expire
      */
     static async releaseExpiredReservations() {
         try {
+            // Use $expr with $$NOW to ensure we compare against DB server time (Skew Protection)
             const expired = await InventoryReservation.find({
-                status: 'active',
-                expiresAt: { $lt: new Date() }
-            }).limit(1000);
+                status: 'RESERVED',
+                $expr: { $lt: ["$expiresAt", "$$NOW"] }
+            }).limit(100); // Smaller batches for flash-sale frequency
 
-            if (expired.length === 0) {
-                return { released: 0 };
-            }
+            if (expired.length === 0) return { released: 0 };
 
             let releasedCount = 0;
 
@@ -256,98 +270,100 @@ class InventoryService {
                 session.startTransaction();
 
                 try {
-                    // Release reserved stock
+                    // 1. Atomic Status Transition (State Machine Guard)
+                    // Only release if it's still RESERVED
+                    const doc = await InventoryReservation.findOneAndUpdate(
+                        { _id: reservation._id, status: 'RESERVED' },
+                        { $set: { status: 'EXPIRED' } },
+                        { session, new: true }
+                    );
+
+                    if (!doc) {
+                        // Someone else processed it (e.g. converted or concurrently expired)
+                        await session.abortTransaction();
+                        continue;
+                    }
+
+                    // 2. Release reserved stock with strict guard (Phase 7)
                     for (const item of reservation.items) {
-                        await InventoryMaster.findOneAndUpdate(
-                            { variantId: item.variantId },
+                        const res = await InventoryMaster.findOneAndUpdate(
+                            {
+                                variantId: item.variantId,
+                                reservedStock: { $gte: item.qty }
+                            },
                             {
                                 $inc: {
                                     reservedStock: -item.qty,
-                                    availableStock: item.qty  // Restore availability
+                                    availableStock: item.qty
                                 }
                             },
-                            {
-                                session,
-                                readPreference: 'primary'
-                            }
+                            { session, readPreference: 'primary' }
                         );
-                    }
 
-                    reservation.status = 'expired';
-                    await reservation.save({ session });
+                        if (!res) {
+                            throw new Error(`CRITICAL: Negative reservedStock detected for ${item.variantId}`);
+                        }
+                    }
 
                     await session.commitTransaction();
                     releasedCount++;
 
                 } catch (err) {
                     await session.abortTransaction();
-                    logger.error('Failed to Release Reservation', {
-                        reservationId: reservation._id,
-                        error: err.message
-                    });
+                    logger.error('[RESERVE_CLEANUP] Failed to release:', { id: reservation._id, error: err.message });
                 } finally {
                     session.endSession();
                 }
             }
 
-            logger.info('Expired Reservations Released', { count: releasedCount });
-
+            if (releasedCount > 0) logger.info('Expired Reservations Released', { count: releasedCount });
             return { released: releasedCount };
 
         } catch (error) {
-            logger.error('Release Expired Reservations Failed', {
-                error: error.message
-            });
+            logger.error('Release Expired Reservations Failed', { error: error.message });
             throw error;
         }
     }
 
     /**
-     * Cancel Reservation
+     * Cancel Reservation (Manual)
      */
     static async cancelReservation(reservationId) {
         const session = await mongoose.startSession();
         session.startTransaction();
 
         try {
-            const reservation = await InventoryReservation.findById(reservationId)
-                .session(session)
-                .setOptions({ readPreference: 'primary' });
+            // Atomic State Transition: RESERVED -> CANCELLED
+            const reservation = await InventoryReservation.findOneAndUpdate(
+                { _id: reservationId, status: 'RESERVED' },
+                { $set: { status: 'CANCELLED' } },
+                { session, new: true, readPreference: 'primary' }
+            );
 
-            if (!reservation || reservation.status !== 'active') {
-                throw new Error('RESERVATION_NOT_ACTIVE');
+            if (!reservation) {
+                throw new Error('RESERVATION_NOT_ACTIVE_FOR_CANCEL');
             }
 
             // Release reserved stock
             for (const item of reservation.items) {
                 await InventoryMaster.findOneAndUpdate(
-                    { variantId: item.variantId },
+                    { variantId: item.variantId, reservedStock: { $gte: item.qty } },
                     {
                         $inc: {
                             reservedStock: -item.qty,
                             availableStock: item.qty
                         }
                     },
-                    {
-                        session,
-                        readPreference: 'primary'
-                    }
+                    { session, readPreference: 'primary' }
                 );
             }
 
-            reservation.status = 'cancelled';
-            await reservation.save({ session });
-
             await session.commitTransaction();
-
             logger.info('Reservation Cancelled', { reservationId });
 
         } catch (error) {
             await session.abortTransaction();
-            logger.error('Reservation Cancellation Failed', {
-                reservationId,
-                error: error.message
-            });
+            logger.error('Reservation Cancellation Failed', { reservationId, error: error.message });
             throw error;
         } finally {
             session.endSession();

@@ -144,14 +144,17 @@ export default function AddAttributeDropdown({
         }
     }, [open, attributes.length, loading, fetchAttributes]);
 
-    // ── Filtered list = fetched types minus already-added ones ────────────────
+    // FIX 6 — filter: exclude SPECIFICATION role, exclude already-added, apply search
     const available = attributes.filter(at => {
+        // Hard block: SPECIFICATION attributes are never variant dimensions
+        if (at.attributeRole === 'SPECIFICATION' || at.role === 'SPECIFICATION') return false;
         const id = at._id?.toString() ?? at.id?.toString() ?? '';
         if (alreadyAddedIds.includes(id)) return false;
         if (!search) return true;
         const name = (at.name || at.displayName || '').toLowerCase();
         return name.includes(search.toLowerCase());
     });
+
 
     // ── Handle selection ──────────────────────────────────────────────────────
     const handleSelect = useCallback((attrType) => {

@@ -10,7 +10,7 @@ const reservationSchema = new mongoose.Schema({
         index: true
     },
     items: [{
-        variantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Variant', required: true },
+        variantId: { type: mongoose.Schema.Types.ObjectId, ref: 'VariantMaster', required: true }, // ✅ FIXED: was 'Variant'
         qty: { type: Number, required: true, min: 1 }
     }],
     expiresAt: {
@@ -19,14 +19,24 @@ const reservationSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['active', 'converted', 'expired'],
-        default: 'active'
+        enum: ['PENDING', 'RESERVED', 'CONSUMED', 'EXPIRED', 'CANCELLED'],
+        default: 'PENDING',
+        index: true
+    },
+    // Phase 2: Idempotency for consumption
+    idempotencyKey: {
+        type: String,
+        unique: true,
+        sparse: true,
+        index: true
     }
-}, { timestamps: true });
+}, {
+    timestamps: true,
+    optimisticConcurrency: true
+});
 
-// TTL Index: Auto-expire documents after `expiresAt` passes
-// Note: MongoDB TTL runs ~every 60s.
-reservationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// Compound index for finding expired RESERVED items
+reservationSchema.index({ status: 1, expiresAt: 1 });
 
 // Preventing over-reservation is complex. 
 // Ideally, we decrement 'available' stock in InventoryMaster when reserving, 

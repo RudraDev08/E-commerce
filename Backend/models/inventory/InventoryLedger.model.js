@@ -31,7 +31,7 @@ const inventoryLedgerSchema = new mongoose.Schema({
 
     variantId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Variant',
+        ref: 'VariantMaster',  // ✅ FIXED: was 'Variant'
         required: true,
         index: true
     },

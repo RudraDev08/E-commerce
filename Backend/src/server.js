@@ -11,15 +11,21 @@ config({ path: path.join(__dirname, '../.env') });
 // Dynamic imports ensure env vars are loaded first
 const { default: logger } = await import('../config/logger.js');
 const { default: connectDB } = await import('../config/db.js');
-const { default: app } = await import('./app.js');
+const { default: app, runInventoryInvariantCheck } = await import('./app.js');
 const { startReservationWorker } = await import('../jobs/reservationCleanup.js');
+const { startReconciliationDaemon, runReconciliation } = await import('../services/reconciliation/ReconciliationEngine.js');
 
 // Database Connection
-connectDB();
+connectDB().then(() => {
+    // Run non-blocking startup integrity checks after DB connects
+    runInventoryInvariantCheck();
+});
 
 // Start Background Workers
 startReservationWorker();
 await import('./workers/variantWorker.js'); // Starts BullMQ worker
+startReconciliationDaemon();
+runReconciliation(); // Run immediately on boot
 
 const PORT = process.env.PORT || 5000;
 

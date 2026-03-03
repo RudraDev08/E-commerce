@@ -34,17 +34,27 @@ class SearchSyncWorker {
             return;
         }
 
+        if (!redis || redis.status !== 'ready') {
+            logger.warn('SearchSyncWorker cannot start: Redis disconnected or disabled');
+            return;
+        }
+
         this.isRunning = true;
         logger.info('SearchSyncWorker Started');
 
         this.intervalId = setInterval(async () => {
-            await this.processBatch();
+            if (redis && redis.status === 'ready') {
+                await this.processBatch();
+            } else {
+                logger.warn('SearchSyncWorker batch skipped: Redis disconnected');
+            }
         }, 5000);
 
         // Graceful shutdown
         process.on('SIGTERM', () => this.stop());
         process.on('SIGINT', () => this.stop());
     }
+
 
     /**
      * Stop Worker

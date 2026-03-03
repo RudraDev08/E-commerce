@@ -189,10 +189,22 @@ export const CartProvider = ({ children }) => {
         );
     };
 
+    // FIX 3: Update individual cart item fields by variantId (for server-side price corrections)
+    const updateCartItem = (variantId, patches) => {
+        setCart(prevCart => {
+            const newItems = prevCart.items.map(item =>
+                item.variantId === variantId ? { ...item, ...patches } : item
+            );
+            const totals = calculateTotals(newItems);
+            return { items: newItems, ...totals };
+        });
+    };
+
     const value = {
         cart,
         addToCart,
         updateQuantity,
+        updateCartItem,   // FIX 3
         removeFromCart,
         clearCart,
         getCartCount,
@@ -200,6 +212,7 @@ export const CartProvider = ({ children }) => {
         isCartOpen,
         setIsCartOpen
     };
+
 
     return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };

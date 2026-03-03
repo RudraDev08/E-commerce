@@ -8,6 +8,7 @@ import { useCart } from '../context/CartContext';
 import ProductImageGallery from '../components/product/ProductImageGallery';
 import { ProductConfigurator } from '../components/product/configurator/ProductConfigurator';
 import { PriceDisplay, StockIndicator } from '../components/product/configurator/PriceStockComponents';
+import { useSubmissionLock } from '../hooks/useSubmissionLock';
 import '../styles/ProductDetails.css';
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -71,16 +72,18 @@ const ProductDetailPage = () => {
     const { addToCart } = useCart();
     const { toast, show: showToast } = useToast();
     const selectorRef = useRef(null);
+    const { executeSafe, isSubmitting: addingToCart } = useSubmissionLock();
 
     const [product, setProduct] = useState(null);
-    const [variants, setVariants] = useState([]);          // ALL ACTIVE variants (inc. OOS)
-    const [allVariantsOOS, setAllVariantsOOS] = useState(false); // Phase 4 safe guard
+    const [variants, setVariants] = useState([]);
+    const [allVariantsOOS, setAllVariantsOOS] = useState(false);
     const [selectedVariant, setSelectedVariant] = useState(null);
+    const [lastResolvedVariant, setLastResolvedVariant] = useState(null);
     const [activeTab, setActiveTab] = useState('description');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [quantity, setQuantity] = useState(1);
-    const [addingToCart, setAddingToCart] = useState(false);
+    const [conflictInfo, setConflictInfo] = useState(null);
 
     // ── DATA FETCHING ─────────────────────────────────────────────────────────
     useEffect(() => {
@@ -110,7 +113,7 @@ const ProductDetailPage = () => {
                 }
 
                 // Fetch variants + attribute types in parallel
-                const [variantsRes, attrTypesRes] = await Promise.all([
+                const [variantsRes] = await Promise.all([
                     getVariantsByProduct(productData._id),
                     getAttributeTypes(),
                 ]);
@@ -148,20 +151,11 @@ const ProductDetailPage = () => {
 
                 // If all ACTIVE variants are explicitly OOS (stock === 0),
                 // set a banner flag but still render the page.
-                const allOOS = activeVariants.every(v => v.stock !== null && v.stock !== undefined && v.stock === 0);
-                if (!cancelled) setAllVariantsOOS(allOOS);
-
-                const mappedVariants = activeVariants.map(v => ({
-                    ...v,
-                    // stock already joined by backend; null = unknown, 0 = OOS, N = sellable
-                    stock: v.stock ?? null,
-                    // Prices already parsed to float by backend flattenVariant
-                    resolvedPrice: v.resolvedPrice ?? null,
-                    compareAtPrice: v.compareAtPrice ?? null,
-                    price: v.price ?? null,
-                }));
-
-                if (!cancelled) setVariants(mappedVariants);
+                const allOOS = activeVariants.every(v => (v.stock ?? 0) === 0);
+                if (!cancelled) {
+                    setAllVariantsOOS(allOOS);
+                    setVariants(activeVariants);
+                }
 
             } catch (err) {
                 console.error('[ProductDetailPage] fetchData error:', err);
@@ -174,6 +168,20 @@ const ProductDetailPage = () => {
         fetchData();
         return () => { cancelled = true; };
     }, [slug]);
+
+    // ── Phase 8: Image Gallery Switch Race Protection ───────────────────────
+    // Using a derived key to force React to remount/reset the gallery on variant change
+    const galleryKey = useMemo(() => {
+        return selectedVariant?._id || 'product-base';
+    }, [selectedVariant]);
+
+    // Track resolution for UX stability
+    useEffect(() => {
+        if (selectedVariant) {
+            setLastResolvedVariant(selectedVariant);
+            setConflictInfo(null); // Clear old conflicts on new selection
+        }
+    }, [selectedVariant]);
 
     // ── PHASE 5 — Canonical price from resolved variant ───────────────────────
     // currentPrice is ONLY the resolvedPrice — never the base price.
@@ -191,37 +199,27 @@ const ProductDetailPage = () => {
 
     // ── Gallery images ────────────────────────────────────────────────────────
     const galleryImages = useMemo(() => {
-        if (selectedVariant?.imageGallery?.length > 0) {
-            return [...selectedVariant.imageGallery]
-                .sort((a, b) => {
-                    if (a.isPrimary && !b.isPrimary) return -1;
-                    if (!a.isPrimary && b.isPrimary) return 1;
-                    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-                })
-                .map(img => img.url);
-        }
-        if (selectedVariant?.images?.length > 0)
-            return selectedVariant.images.map(img => typeof img === 'string' ? img : img.url);
-        if (product?.gallery?.length > 0) return product.gallery.map(img => img.url);
-        if (product?.image) return [product.image];
-        return ['https://via.placeholder.com/600x600?text=No+Image'];
+        const target = selectedVariant || product;
+        if (!target) return ['https://via.placeholder.com/600x600?text=No+Image'];
+
+        const imgs = target.imageGallery?.length > 0 ? target.imageGallery : target.images;
+        if (!imgs || imgs.length === 0) return ['https://via.placeholder.com/600x600?text=No+Image'];
+
+        return imgs.map(img => typeof img === 'string' ? img : img.url);
     }, [selectedVariant, product]);
 
     // ── Dynamic title ─────────────────────────────────────────────────────────
     const displayTitle = useMemo(() => {
         if (!selectedVariant) return product?.name || 'Product';
-        const colorObj = selectedVariant.colorId && typeof selectedVariant.colorId === 'object'
-            ? selectedVariant.colorId
-            : selectedVariant.color;
-        const colorName = colorObj?.displayName || colorObj?.name;
-        return colorName ? `${product?.name} — ${colorName}` : (product?.name || 'Product');
+        const color = selectedVariant.colorId?.name || selectedVariant.color?.name;
+        return color ? `${product.name} — ${color}` : product.name;
     }, [product, selectedVariant]);
 
     // ── Alternatives for OOS ──────────────────────────────────────────────────
     const alternatives = useMemo(() => {
         if (!selectedVariant || (selectedVariant.stock ?? 0) > 0) return [];
         return variants
-            .filter(v => v.status === 'ACTIVE' && (v.stock ?? 0) > 0 && v._id !== selectedVariant._id)
+            .filter(v => (v.stock ?? 0) > 0 && v._id !== selectedVariant._id)
             .slice(0, 3);
     }, [selectedVariant, variants]);
 
@@ -235,133 +233,75 @@ const ProductDetailPage = () => {
             // Clamp to max available
             setQuantity(avail);
         }
-    }, [selectedVariant]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [selectedVariant, quantity]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── PHASE 6 — handleAddToCart with freshness validation ───────────────────
     const handleAddToCart = useCallback(async () => {
         if (!selectedVariant) {
-            showToast('Please select all product options first.', 'warn');
+            showToast('Please select all options first.', 'warn');
             selectorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
 
-        // PHASE 5: Block if price is unavailable
-        if (currentPrice === null || currentPrice === undefined) {
-            showToast('Price unavailable. Please reselect options.', 'error');
-            return;
-        }
+        await executeSafe(async () => {
+            try {
+                // 1. Lightweight Server Validation (Phase 1)
+                const validation = await validateVariantForCart({
+                    variantId: selectedVariant._id,
+                    quantity,
+                    clientPrice: currentPrice,
+                });
 
-        const availableStock = selectedVariant.stock ?? 0;
-        if (availableStock <= 0) {
-            showToast("We'll notify you when back in stock.", 'info');
-            return;
-        }
-
-        // Guard: ensure variant has a valid ID before API call
-        if (!selectedVariant?._id) {
-            console.error('[handleAddToCart] selectedVariant missing _id:', selectedVariant);
-            showToast('Selected item is invalid. Please refresh.', 'error');
-            return;
-        }
-
-        setAddingToCart(true);
-        try {
-            // PHASE 8 — Server-side freshness validation (3 gates: status, stock, price)
-            const validationResult = await validateVariantForCart({
-                variantId: selectedVariant._id,
-                quantity,
-                clientPrice: currentPrice,
-            });
-
-            // If middleware returns a specific logic error (200 OK but success: false)
-            // Note: axios usually throws on 4xx/5xx, but if API returns 200 with { success: false }...
-            if (!validationResult.success) {
-                const code = validationResult.code;
-                if (code === 'PRICE_MISMATCH') {
-                    showToast(validationResult.message || 'Price changed. Please refresh.', 'error');
-                    // Auto-update price if provided
-                    if (validationResult.serverPrice) {
-                        // Logic to update local price could go here
+                if (!validation.success) {
+                    // Phase 10: Conflict Handling
+                    if (validation.code === 'PRICE_MISMATCH') {
+                        setConflictInfo({
+                            type: 'PRICE',
+                            oldPrice: currentPrice,
+                            newPrice: validation.serverPrice,
+                            message: validation.message
+                        });
+                        return;
                     }
-                } else if (code === 'INSUFFICIENT_STOCK') {
-                    showToast(validationResult.message || 'Not enough stock.', 'error');
-                } else {
-                    showToast(validationResult.message || 'Item no longer available. Please refresh.', 'error');
+                    if (validation.code === 'INSUFFICIENT_STOCK') {
+                        showToast(validation.message || 'Item just sold out.', 'error');
+                        // Suggest recovery (Phase 9)
+                        return;
+                    }
+                    throw new Error(validation.message || 'Validation failed');
                 }
-                return;
-            }
 
-            // Build cart payload with locked authoritative price from server
-            const serverPrice = parseFloat(validationResult.data?.serverPrice ?? currentPrice);
-            const cartPayload = {
-                variantId: selectedVariant._id,
-                productId: product._id,
-                name: product.name,
-                sku: selectedVariant.sku,
-                // Always use server-validated price
-                price: serverPrice,
-                currency: product.currency || 'INR',
-                quantity,
-                attributes: {
-                    // Pull display values from populated color/size objects
-                    color: (selectedVariant.colorId?.displayName || selectedVariant.colorId?.name
-                        || selectedVariant.color?.displayName || selectedVariant.color?.name),
-                    size: (selectedVariant.sizes?.[0]?.sizeId?.displayName
-                        || selectedVariant.sizes?.[0]?.sizeId?.value
-                        || selectedVariant.size?.displayName
-                        || selectedVariant.size?.name),
-                },
-                attributeValueIds: Array.isArray(selectedVariant.attributeValueIds)
-                    ? selectedVariant.attributeValueIds.map(a => (typeof a === 'object' ? a._id : a))
-                    : [],
-                image: galleryImages[0],
-                stock: selectedVariant.stock,
-            };
+                // 2. Add to Cart with authoritative data
+                const finalPrice = validation.data?.serverPrice ?? currentPrice;
 
-            addToCart(cartPayload);
-            showToast(`${product.name} added to cart!`, 'success');
-
-        } catch (err) {
-            // If the validation endpoint itself fails (network), still use client-side guards
-            console.error('[handleAddToCart] Validation error:', err);
-            const errCode = err?.code || err?.data?.code || err?.response?.data?.code;
-
-            if (errCode === 'PRICE_MISMATCH') {
-                showToast('Price has changed. Please refresh the page.', 'error');
-            } else if (errCode === 'INSUFFICIENT_STOCK') {
-                showToast('Not enough stock available.', 'error');
-            } else if (errCode === 'VARIANT_INACTIVE') {
-                showToast('This item is no longer available.', 'error');
-            } else if (errCode === 'INVALID_ID') {
-                // Handle 400 Bad Request explicitly
-                showToast('Invalid item selected. Please refresh.', 'error');
-            } else {
-                // Fallback: only add if we are sure it's just a network glitch, not a logic error.
-                // If error is 400/422, we should probably BLOCK.
-                // But for now, we keep the fallback for 500s.
-                if (err?.response?.status === 400 || err?.response?.status === 422) {
-                    showToast(err?.response?.data?.message || 'Cannot add item to cart.', 'error');
-                    return;
-                }
+                // Construct human-readable attributes for cart UI
+                const displayAttributes = {};
+                if (selectedVariant.colorId?.name) displayAttributes.Color = selectedVariant.colorId.name;
+                (selectedVariant.sizes || []).forEach(sz => {
+                    if (sz.category) displayAttributes[sz.category] = sz.sizeId?.displayName || sz.sizeId?.value;
+                });
 
                 addToCart({
                     variantId: selectedVariant._id,
                     productId: product._id,
                     name: product.name,
                     sku: selectedVariant.sku,
-                    price: currentPrice,
+                    price: finalPrice,
                     currency: product.currency || 'INR',
                     quantity,
-                    attributes: {},
                     image: galleryImages[0],
-                    stock: selectedVariant.stock,
+                    attributes: displayAttributes,
+                    attributeValueIds: selectedVariant.attributeValueIds || [],
+                    stock: validation.data?.availableStock ?? selectedVariant.stock
                 });
-                showToast(`${product.name} added to cart!`, 'success');
+                showToast('Added to cart!', 'success');
+
+            } catch (err) {
+                console.error('[PDP_CART_ERROR]', err);
+                showToast(err.message || 'Failed to add item.', 'error');
             }
-        } finally {
-            setAddingToCart(false);
-        }
-    }, [selectedVariant, currentPrice, quantity, product, galleryImages, addToCart, showToast]);
+        });
+    }, [selectedVariant, currentPrice, quantity, product, galleryImages, executeSafe, addToCart, showToast]);
 
     const handleBuyNow = useCallback(async () => {
         await handleAddToCart();
@@ -370,6 +310,7 @@ const ProductDetailPage = () => {
 
     // ── Tab content ───────────────────────────────────────────────────────────
     const renderTabContent = () => {
+        if (!product) return null;
         switch (activeTab) {
             case 'description':
                 return (
@@ -377,10 +318,7 @@ const ProductDetailPage = () => {
                         <div
                             className="description-content"
                             dangerouslySetInnerHTML={{
-                                __html: DOMPurify.sanitize(product.description || '', {
-                                    ALLOWED_TAGS: ['p', 'br', 'b', 'i', 'strong', 'em', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote'],
-                                    ALLOWED_ATTR: [],
-                                })
+                                __html: DOMPurify.sanitize(product.description || '')
                             }}
                         />
                     </div>
@@ -391,7 +329,7 @@ const ProductDetailPage = () => {
                         {product.features?.length > 0 ? (
                             <ul className="features-list">
                                 {product.features.map((f, idx) => (
-                                    <li key={idx}><span className="bullet-point" /><span>{f}</span></li>
+                                    <li key={idx}><span>{f}</span></li>
                                 ))}
                             </ul>
                         ) : (
@@ -401,10 +339,8 @@ const ProductDetailPage = () => {
                 );
             case 'specs': {
                 const specAttrs = selectedVariant?.attributes?.filter(a => a.role === 'SPECIFICATION') || [];
-
                 return (
                     <div className="tab-pane fade-in specs-grid">
-                        {/* PHASE 4: Render SPECIFICATION attributes beautifully */}
                         {specAttrs.length > 0 && (
                             <div className="specs-section">
                                 <h4>Technical Specifications</h4>
@@ -418,32 +354,39 @@ const ProductDetailPage = () => {
                                 </div>
                             </div>
                         )}
-
-                        {product.dimensions && (
-                            <div className="specs-section">
-                                <h4>Physical Details</h4>
-                                <div className="specs-table">
-                                    {product.dimensions.length > 0 && <div className="spec-row"><span className="label">Length</span><span className="value">{product.dimensions.length} {product.dimensions.unit || 'cm'}</span></div>}
-                                    {product.dimensions.width > 0 && <div className="spec-row"><span className="label">Width</span><span className="value">{product.dimensions.width} {product.dimensions.unit || 'cm'}</span></div>}
-                                    {product.dimensions.height > 0 && <div className="spec-row"><span className="label">Height</span><span className="value">{product.dimensions.height} {product.dimensions.unit || 'cm'}</span></div>}
-                                    {product.dimensions.weight > 0 && <div className="spec-row"><span className="label">Weight</span><span className="value">{product.dimensions.weight} kg</span></div>}
-                                </div>
-                            </div>
-                        )}
-                        {product.tags?.length > 0 && (
-                            <div className="specs-section">
-                                <h4>Tags &amp; Keywords</h4>
-                                <div className="tags-list">
-                                    {product.tags.map((tag, idx) => <span key={idx} className="tag-pill">#{tag}</span>)}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 );
             }
             default: return null;
         }
     };
+
+    const ConflictBanner = ({ info, onResolve }) => (
+        <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6 shadow-sm animate-in slide-in-from-top duration-300">
+            <div className="flex items-center">
+                <div className="flex-shrink-0">
+                    <span className="text-amber-400 text-xl">⚠️</span>
+                </div>
+                <div className="ml-3">
+                    <p className="text-sm text-amber-800">
+                        <span className="font-bold">Price Update:</span> {info.message}
+                    </p>
+                    <div className="mt-2 text-xs text-amber-700 flex space-x-4">
+                        <span>Original: <del>₹{info.oldPrice}</del></span>
+                        <span className="font-bold text-amber-900">New: ₹{info.newPrice}</span>
+                    </div>
+                </div>
+                <div className="ml-auto">
+                    <button
+                        onClick={onResolve}
+                        className="text-xs bg-amber-200 hover:bg-amber-300 text-amber-900 px-3 py-1 rounded transition-colors"
+                    >
+                        Acknowledge
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 
     // ── RENDER ────────────────────────────────────────────────────────────────
 
@@ -510,10 +453,23 @@ const ProductDetailPage = () => {
                             </span>
                         </div>
                     )}
+
+                    {conflictInfo && (
+                        <ConflictBanner
+                            info={conflictInfo}
+                            onResolve={() => setConflictInfo(null)}
+                        />
+                    )}
+
                     <div className="product-main-grid">
                         {/* Left: Gallery */}
                         <div className="gallery-section">
-                            <ProductImageGallery images={galleryImages} alt={displayTitle} />
+                            {/* Phase 8: Key forces gallery reset on switch */}
+                            <ProductImageGallery
+                                key={galleryKey}
+                                images={galleryImages}
+                                alt={displayTitle}
+                            />
                         </div>
 
                         {/* Right: Details */}
@@ -531,7 +487,7 @@ const ProductDetailPage = () => {
                             {/* Price & Stock */}
                             <div className="price-stock-row">
                                 <PriceDisplay
-                                    price={currentPrice}
+                                    price={conflictInfo?.newPrice ?? currentPrice}
                                     originalPrice={compareAtPrice}
                                     currency={product.currency}
                                     loading={loading}
@@ -540,27 +496,22 @@ const ProductDetailPage = () => {
                                 {selectedVariant && (
                                     <div className="stock-wrapper">
                                         <StockIndicator stock={currentStock} />
-                                        {/* Alternatives for OOS variant */}
+
+                                        {/* Phase 9: Recovery Suggestion */}
                                         {isOutOfStock && alternatives.length > 0 && (
-                                            <div className="alternatives-box">
-                                                <span className="alternatives-label">Also available:</span>
-                                                <div className="alternatives-list">
-                                                    {alternatives.map(alt => {
-                                                        const altColor = alt.colorId?.displayName || alt.colorId?.name || alt.color?.name;
-                                                        const altSize = alt.sizes?.[0]?.sizeId?.displayName || alt.size?.displayName;
-                                                        return (
-                                                            <button
-                                                                key={alt._id}
-                                                                onClick={() => setSelectedVariant(alt)}
-                                                                className="alt-btn"
-                                                            >
-                                                                <span className="alt-dot" />
-                                                                {altColor || 'Variant'}
-                                                                {altSize ? ` · ${altSize}` : ''}
-                                                                <span className="alt-stock">({alt.stock} left)</span>
-                                                            </button>
-                                                        );
-                                                    })}
+                                            <div className="alternatives-box mt-4 p-3 bg-slate-50 border border-slate-100 rounded-lg animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                                <span className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Available Alternatives:</span>
+                                                <div className="flex flex-wrap gap-2 mt-2">
+                                                    {alternatives.map(alt => (
+                                                        <button
+                                                            key={alt._id}
+                                                            onClick={() => setSelectedVariant(alt)}
+                                                            className="text-xs bg-white hover:border-blue-500 border border-slate-200 px-3 py-2 rounded-md shadow-sm transition-all flex items-center"
+                                                        >
+                                                            <div className="w-2 h-2 rounded-full bg-green-500 mr-2" />
+                                                            {alt.colorId?.name || 'In Stock'} ({alt.stock})
+                                                        </button>
+                                                    ))}
                                                 </div>
                                             </div>
                                         )}
@@ -588,7 +539,7 @@ const ProductDetailPage = () => {
                                             className="qty-select"
                                             value={quantity}
                                             onChange={e => setQuantity(Number(e.target.value))}
-                                            disabled={isOutOfStock || !selectedVariant}
+                                            disabled={isOutOfStock || !isFullySelected}
                                         >
                                             {/* PHASE 4: Clamp to availableStock */}
                                             {[...Array(maxQty)].map((_, i) => (
@@ -607,20 +558,20 @@ const ProductDetailPage = () => {
                                         // PHASE 3: disabled only when fully OOS (stock===0)
                                         // Unselected shows tooltip-like hint, not disabled
                                         disabled={addingToCart || isOutOfStock}
-                                        aria-disabled={!canAddToCart}
                                     >
                                         {addingToCart
                                             ? 'Validating…'
-                                            : !isFullySelected
-                                                ? 'Select Options'
-                                                : isOutOfStock
-                                                    ? 'Out of Stock'
+                                            : isOutOfStock
+                                                ? 'Just Sold Out'
+                                                : !isFullySelected
+                                                    ? 'Select Options'
                                                     : 'Add to Cart'}
                                     </button>
 
                                     {isFullySelected && !isOutOfStock && (
                                         <button
                                             id="buy-now-btn"
+                                            disabled={addingToCart}
                                             className="btn-buy-now"
                                             onClick={handleBuyNow}
                                         >
@@ -657,16 +608,16 @@ const ProductDetailPage = () => {
             {/* Mobile Sticky Bar */}
             <div className="mobile-sticky-bar" aria-hidden="false">
                 <div className="mobile-sticky-bar__price">
-                    {currentPrice !== null
-                        ? formatCurrency(currentPrice, product.currency || 'INR')
+                    {(conflictInfo?.newPrice ?? currentPrice) !== null
+                        ? `₹${conflictInfo?.newPrice ?? currentPrice}`
                         : '—'}
                 </div>
                 <button
                     className={`btn-add-cart btn-add-cart--mobile ${!isFullySelected || isOutOfStock ? 'disabled' : ''}`}
                     onClick={handleAddToCart}
-                    disabled={addingToCart}
+                    disabled={addingToCart || isOutOfStock}
                 >
-                    {!isFullySelected ? 'Select Options' : isOutOfStock ? 'Notify Me' : 'Add to Cart'}
+                    {addingToCart ? '...' : !isFullySelected ? 'Select Options' : isOutOfStock ? 'OOS' : 'Add to Cart'}
                 </button>
             </div>
         </div>

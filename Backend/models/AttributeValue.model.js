@@ -9,6 +9,26 @@ const attributeValueSchema = new mongoose.Schema({
         index: true
     },
 
+    // ==================== IMMUTABLE IDENTITY ====================
+    internalKey: {
+        type: String,
+        immutable: true,
+        required: true,
+        unique: true,
+        uppercase: true,
+        trim: true,
+        description: "Deterministic internal identifier (e.g. VAL_RED, VAL_XL). Never changes."
+    },
+
+    canonicalId: {
+        type: String,
+        required: true,
+        unique: true,
+        uppercase: true,
+        trim: true,
+        description: "Standardized ID for cross-system syncing."
+    },
+
     // ==================== BASIC FIELDS ====================
     name: {
         type: String,
@@ -672,6 +692,7 @@ const attributeValueSchema = new mongoose.Schema({
     }
 }, {
     timestamps: true,
+    optimisticConcurrency: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
 });
@@ -683,6 +704,7 @@ attributeValueSchema.index({ attributeType: 1, status: 1, isDeleted: 1 });
 attributeValueSchema.index({ attributeType: 1, displayOrder: 1 });
 attributeValueSchema.index({ 'measurements.sizeGroup': 1, 'measurements.gender': 1 });
 attributeValueSchema.index({ 'visualData.colorFamily': 1 });
+attributeValueSchema.index({ 'visualData.hexCode': 1 });
 attributeValueSchema.index({ 'analytics.popularityScore': -1 });
 attributeValueSchema.index({ 'analytics.purchaseCount': -1 });
 attributeValueSchema.index({ 'availabilityRules.isAvailable': 1 });
@@ -744,6 +766,49 @@ attributeValueSchema.statics.findTrending = function (attributeTypeId, limit = 1
         .sort({ 'analytics.trendingScore': -1 })
         .limit(limit);
 };
+
+// ==================== IMMUTABILITY GUARDS ====================
+attributeValueSchema.pre('save', async function () {
+    if (this.isNew) return;
+
+    const modifiedPaths = this.modifiedPaths();
+    const immutablePaths = ['internalKey', 'visualData.hexCode'];
+
+    const violations = modifiedPaths.filter(path => immutablePaths.includes(path));
+
+    if (violations.length > 0) {
+        throw new Error(`IMMUTABILITY VIOLATION: Structural fields [${violations.join(', ')}] cannot be modified after creation.`);
+    }
+});
+
+attributeValueSchema.pre('findOneAndUpdate', async function () {
+    const update = this.getUpdate();
+    const docToUpdate = await this.model.findOne(this.getQuery()).lean();
+
+    if (!docToUpdate) return;
+
+    const immutableFields = ['internalKey', 'visualData.hexCode'];
+    const updateObj = update.$set || update;
+
+    const violations = immutableFields.filter(field => {
+        if (field.includes('.')) {
+            const parts = field.split('.');
+            let value = updateObj;
+            for (const part of parts) {
+                if (value && typeof value === 'object') value = value[part];
+                else break;
+            }
+            // Use lodash-style or simple equality for primitives
+            const originalValue = parts.reduce((acc, part) => acc?.[part], docToUpdate);
+            return value !== undefined && value !== originalValue;
+        }
+        return updateObj[field] !== undefined && updateObj[field] !== docToUpdate[field];
+    });
+
+    if (violations.length > 0) {
+        throw new Error(`IMMUTABILITY VIOLATION: Mutation blocked for structural fields: ${violations.join(', ')}`);
+    }
+});
 
 // ==================== INSTANCE METHODS ====================
 attributeValueSchema.methods.softDelete = function (userId) {

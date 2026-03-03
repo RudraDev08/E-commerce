@@ -150,6 +150,11 @@ class VariantService {
      * Queue SearchDocument Sync (Redis-Based)
      */
     static async queueSearchDocumentSync(variantId) {
+        if (!redis || redis.status !== 'ready') {
+            logger.warn('Redis disconnected, skipping SearchDocument sync queuing', { variantId });
+            return;
+        }
+
         try {
             await redis.lpush(SEARCH_SYNC_QUEUE, JSON.stringify({
                 variantId: variantId.toString(),
@@ -232,25 +237,40 @@ class VariantService {
      * Cache Attribute Values (Redis)
      */
     static async getCachedAttributeValues(ids) {
-        const keys = ids.map(id => `attr:${id}`);
-        const values = await redis.mget(keys);
+        if (!redis || redis.status !== 'ready') {
+            return {}; // Fallback to DB
+        }
 
-        const result = {};
-        values.forEach((val, i) => {
-            if (val) {
-                result[ids[i].toString()] = JSON.parse(val);
-            }
-        });
+        try {
+            const keys = ids.map(id => `attr:${id}`);
+            const values = await redis.mget(keys);
 
-        return result;
+            const result = {};
+            values.forEach((val, i) => {
+                if (val) {
+                    result[ids[i].toString()] = JSON.parse(val);
+                }
+            });
+
+            return result;
+        } catch (err) {
+            logger.error('Redis Cache Get Failed', { error: err.message });
+            return {}; // Silent fallback to DB
+        }
     }
 
     static async cacheAttributeValues(values) {
-        const pipeline = redis.pipeline();
-        values.forEach(v => {
-            pipeline.setex(`attr:${v._id}`, 3600, JSON.stringify(v));
-        });
-        await pipeline.exec();
+        if (!redis || redis.status !== 'ready') return;
+
+        try {
+            const pipeline = redis.pipeline();
+            values.forEach(v => {
+                pipeline.setex(`attr:${v._id}`, 3600, JSON.stringify(v));
+            });
+            await pipeline.exec();
+        } catch (err) {
+            logger.error('Redis Cache Set Failed', { error: err.message });
+        }
     }
 
     /**

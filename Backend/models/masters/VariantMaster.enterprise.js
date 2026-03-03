@@ -132,6 +132,12 @@ const variantMasterSchema = new mongoose.Schema(
             },
         },
 
+        priceVersion: {
+            type: Number,
+            default: 1,
+            description: "Increments on every price update (for cart/checkout locking)"
+        },
+
         compareAtPrice: {
             type: mongoose.Schema.Types.Decimal128, // MRP / strikethrough price
         },
@@ -205,8 +211,6 @@ const variantMasterSchema = new mongoose.Schema(
 
         configHash: {
             type: String,
-            unique: true,
-            index: true,
             immutable: true,
         },
 
@@ -329,8 +333,14 @@ variantMasterSchema.virtual('isOnSale').get(function () {
 
 /**
  * [STEP 0] Size Category Duplication Check & FilterToken Generation
+ * Also stamps _wasNew and _wasModifiedStatus flags here so the post('save')
+ * hook can reliably read them — after save(), isNew is always false.
  */
 variantMasterSchema.pre('validate', function () {
+    // Capture creation/status-change intent before mongoose clears these flags
+    this._wasNew = this.isNew;
+    this._wasStatusModified = !this.isNew && this.isModified('status');
+
     // 1. Array validation for Size Categories
     if (this.sizes && this.sizes.length > 0) {
         const categorySet = new Set();
@@ -344,6 +354,9 @@ variantMasterSchema.pre('validate', function () {
     }
 
     // 2. Generate Search/Filter Tokens for O(1) Reads
+    // Token format is kept backward-compatible for existing queries.
+    // Dimension-agnostic path: attributeValueIds are always indexed.
+    // colorId / sizes are still tokenized when present (legacy compat).
     const tks = new Set();
     if (this.colorId) tks.add(`color:${this.colorId.toString()}`);
     if (this.sizes && this.sizes.length) {
@@ -355,12 +368,11 @@ variantMasterSchema.pre('validate', function () {
     this.filterTokens = Array.from(tks).sort();
 });
 
+import { DependencyValidator } from '../../services/DependencyValidator.service.js';
+
 /**
  * [STEP 1] Scope Validation Middleware
  * Prevent mapping unrelated attributes to variants.
- * ONLY runs when attributeValueIds is actually being changed — not on every
- * price/status/image update. This avoids false failures when an existing
- * AttributeValue's status changes in the master table after the variant was created.
  */
 variantMasterSchema.pre('save', async function () {
     // Skip if attributeValueIds hasn't changed (covers price/status/image edits)
@@ -370,14 +382,10 @@ variantMasterSchema.pre('save', async function () {
 
     if (!shouldCheck) return;
 
-    // [STEP 1 — FIXED] Category-Scope Validation
-    // The previous implementation was a dead no-op: it checked
-    // `v.attributeType.applicableTo` and `this.productGroupType` — neither
-    // field exists on the respective schemas, so `invalid` was always [].
-    //
-    // The correct path is:
-    //   this.productGroupId → ProductGroup.categoryId → CategoryAttribute → allowedTypeIds
-    //   Then verify each attributeValueId's .attributeType is in allowedTypeIds.
+    // [STEP 1.1] Dependency Validation (Phase 5)
+    await DependencyValidator.validate(this.attributeValueIds, this.attributeDimensions);
+
+    // [STEP 1.2] Category-Scope Validation
     const assertScope = await getCategoryScopeFn();
     await assertScope(
         this.productGroupId?.toString(),
@@ -409,6 +417,13 @@ variantMasterSchema.pre('save', function () {
  */
 variantMasterSchema.pre('save', async function () {
     if (this.isModified('price') || this.isModified('attributeValueIds')) {
+        // Increment priceVersion on BOTH base price change AND attribute modifier change.
+        // attributeValueIds can carry priceModifiers (FIXED/PERCENTAGE) so any change
+        // to them alters resolvedPrice — the checkout price-lock MUST reflect this.
+        if (!this.isNew && (this.isModified('price') || this.isModified('attributeValueIds'))) {
+            this.priceVersion = (this.priceVersion || 1) + 1;
+        }
+
         const basePrice = new Decimal(this.price ? this.price.toString() : 0);
 
         // Option A: Deterministic Rebuild Model Reset
@@ -652,6 +667,37 @@ variantMasterSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], async f
             err.status = 400;
             throw err;
         }
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// [STEP 6] POST-SAVE HOOK — DEAD INVENTORY PREVENTION (Phase 5)
+// Gate logic:
+//   isNew (creation)  → ensureForVariant (creates the 1:1 record)
+//   status → ARCHIVED  → soft-archive inventory (status=DISCONTINUED)
+//   all other saves  → SKIP (price/image/sku changes never touch inventory)
+// Uses _wasNew/_wasStatusModified flags set in pre('validate').
+// ═══════════════════════════════════════════════════════════
+variantMasterSchema.post('save', async function (doc) {
+    try {
+        const InventoryMaster = mongoose.models.InventoryMaster;
+        if (!InventoryMaster) return;
+
+        if (doc._wasNew) {
+            // NEW VARIANT: create the mandatory 1:1 InventoryMaster record
+            await InventoryMaster.ensureForVariant(doc);
+        } else if (doc._wasStatusModified && doc.status === 'ARCHIVED') {
+            // ARCHIVED: soft-archive the linked inventory record
+            await InventoryMaster.updateOne(
+                { variantId: doc._id },
+                { $set: { status: 'DISCONTINUED', isDeleted: true } }
+            );
+        }
+        // All other saves (price, image, sku, etc.) — do nothing here.
+        // They do not affect inventory and must not trigger ensureForVariant.
+    } catch (err) {
+        // Log but never fail the variant save due to inventory sync errors
+        console.error(`[VariantMaster.post('save')] Inventory sync failed for variant ${doc._id}:`, err.message);
     }
 });
 

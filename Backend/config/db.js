@@ -25,6 +25,22 @@ const connectDB = async () => {
         console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
         console.log(`📊 Database: ${conn.connection.name}`);
 
+        // Check for Replica Set (Required for Transactions)
+        try {
+            const admin = conn.connection.db.admin();
+            const status = await admin.command({ hello: 1 });
+            if (!status.setName && !status.isWritablePrimary) {
+                console.warn('⚠️  WARNING: MongoDB is running in standalone mode.');
+                console.warn('💡 Transactions will NOT work. Please convert to a replica set.');
+                console.warn('👉 Run: `mongod --replSet rs0` and then `rs.initiate()` in mongosh.');
+            } else {
+                console.log(`🛡️  Replica Set: ${status.setName || 'Active'}`);
+            }
+        } catch (err) {
+            console.warn('⚠️  Could not verify Replica Set status:', err.message);
+        }
+
+
         // Handle connection events
         mongoose.connection.on('error', (err) => {
             console.error('❌ MongoDB connection error:', err);

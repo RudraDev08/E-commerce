@@ -23,7 +23,7 @@
 │           ↑ Strikethrough              │
 │                                         │
 │  ⭐⭐⭐⭐⭐ 4.8 (120)                    │  ← Star rating with count
-│                                         │
+│                                         │a
 │  ○ ○ ○ ○  +2                           │  ← Color swatches (max 4 shown)
 │                                         │
 │  ✅ In Stock  |  📦 Free Delivery       │  ← Status badges

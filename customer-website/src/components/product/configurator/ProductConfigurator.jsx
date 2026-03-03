@@ -195,8 +195,13 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
         });
 
         // Build sorted relevant attribute type list
+        // Phase 5: Stable sorting (Priority ASC, then Slug ASC)
         const relevant = Object.values(usedTypes)
-            .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+            .sort((a, b) => {
+                const diff = (a.priority ?? 99) - (b.priority ?? 99);
+                if (diff !== 0) return diff;
+                return (a.slug || "").localeCompare(b.slug || "");
+            });
 
         return { relevantAttributes: relevant, attributeValuesMap: finalValuesMap };
     }, [variants, attributeTypesConfig]);
@@ -207,6 +212,7 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
         setSelectedAttributes,
         selectAttribute,
         resolvedVariant,
+        isFullyResolved,
         isOptionAvailable,
         getVariantAttributeValue,
     } = useProductConfiguration(variants, relevantAttributes);
@@ -227,11 +233,20 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
 
     // Notify parent when resolved variant changes
     useEffect(() => {
-        onVariantChange?.(resolvedVariant);
-    }, [resolvedVariant, onVariantChange]);
+        // Phase 7: Only notify if fully resolved or selection cleared
+        if (isFullyResolved || Object.keys(selectedAttributes).length === 0) {
+            onVariantChange?.(resolvedVariant);
+        } else {
+            onVariantChange?.(null);
+        }
+    }, [resolvedVariant, isFullyResolved, selectedAttributes, onVariantChange]);
 
     if (loadingConfig) {
-        return <div className="animate-pulse h-20 bg-gray-100 rounded" aria-label="Loading options…" />;
+        return (
+            <div className="space-y-4" aria-label="Loading options…">
+                {[1, 2].map(i => <div key={i} className="animate-pulse h-20 bg-gray-100 rounded" />)}
+            </div>
+        );
     }
 
     if (relevantAttributes.length === 0) {
@@ -246,7 +261,7 @@ export const ProductConfigurator = ({ product, variants, onVariantChange, contro
         <div className="space-y-6">
             {relevantAttributes.map(attr => (
                 <AttributeGroup
-                    key={attr._id || attr.slug}
+                    key={attr.slug} // Stable key assignment (Phase 5)
                     attribute={attr}
                     values={attributeValuesMap[attr.slug] || []}
                     selectedValue={selectedAttributes[attr.slug]}

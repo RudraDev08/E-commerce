@@ -36,22 +36,36 @@ class InventoryService {
 
     // Auto-create if missing (Self-Healing)
     if (!inventory) {
-      const variant = await Variant.findById(variantId).populate('product');
+      const variant = await Variant.findById(variantId);
       if (!variant) throw new Error(`Variant ${variantId} not found`);
+
+      // Fetch default warehouse
+      const Warehouse = mongoose.models.Warehouse;
+      let whId = null;
+      let whName = 'Default';
+      if (Warehouse) {
+        const wh = await Warehouse.findOne({ isDefault: true }).lean();
+        if (wh) {
+          whId = wh._id;
+          whName = wh.name;
+        }
+      }
 
       inventory = new InventoryMaster({
         variantId: variant._id,
-        productId: variant.product._id,
+        productId: variant.productGroupId,
         sku: variant.sku,
         totalStock: initialStock || 0,
-        reservedStock: 0
+        reservedStock: 0,
+        warehouseId: whId,
+        warehouseLocation: whName
       });
       await inventory.save({ session });
 
       if (initialStock > 0) {
         await this._createLedgerEntry({
           variantId: variant._id,
-          productId: variant.product._id,
+          productId: variant.productGroupId,
           sku: variant.sku,
           transactionType: 'STOCK_IN',
           quantity: initialStock,
@@ -369,6 +383,102 @@ class InventoryService {
     }
   }
 
+  // ========================================================================
+  // MULTI-WAREHOUSE ALLOCATION STRATEGY
+  // ========================================================================
+
+  /**
+   * Intelligently allocates stock from warehouses for an order line item.
+   *
+   * Strategy:
+   *   1. Sort warehouses by proximity (pincode distance if available, else by stock DESC)
+   *   2. Prefer warehouse with enough stock to fulfill the full quantity (no split)
+   *   3. If no single warehouse can fulfill, split across multiple warehouses
+   *   4. If total stock is insufficient across all warehouses → throw
+   *
+   * @param {ObjectId}  variantId   - Variant to allocate
+   * @param {number}    quantity    - Required quantity
+   * @param {string}    orderId     - For ledger reference
+   * @param {object}    session     - Mongo session (transaction)
+   * @param {string}    customerPin - Optional pincode for proximity sort
+   *
+   * @returns {Array} allocations: [{ warehouseId, allocated }]
+   */
+  async allocateFromWarehouses(variantId, quantity, orderId, session = null, customerPin = null) {
+    const inventory = await this._getOrCreateInventory(variantId, session);
+    if (!inventory.locations || inventory.locations.length === 0) {
+      // Fallback: single default stock
+      return this.deductStockForOrder(variantId, quantity, orderId, session)
+        .then(() => [{ warehouseId: inventory.warehouseId, allocated: quantity }]);
+    }
+
+    // 1. Filter and sort warehouse locations
+    let locations = inventory.locations.filter(loc => loc.stock > 0);
+
+    // Proximity sort: if we have zip codes, sort by nearest — currently sort by highest stock
+    // (Replace with geospatial calculation when Warehouse model has coordinates)
+    locations.sort((a, b) => b.stock - a.stock);
+
+    let remaining = quantity;
+    const allocations = [];
+    const Warehouse = mongoose.models.Warehouse;
+
+    for (const loc of locations) {
+      if (remaining <= 0) break;
+
+      const toTake = Math.min(loc.stock, remaining);
+
+      // Attempt atomic deduction from this warehouse location
+      const updated = await InventoryMaster.findOneAndUpdate(
+        {
+          _id: inventory._id,
+          'locations.warehouseId': loc.warehouseId,
+          'locations.stock': { $gte: toTake }
+        },
+        {
+          $inc: {
+            'locations.$.stock': -toTake,
+            totalStock: -toTake,
+            reservedStock: -Math.min(toTake, inventory.reservedStock || 0)
+          },
+          $set: { lastUpdated: new Date() }
+        },
+        { new: true, session }
+      );
+
+      if (!updated) {
+        // Concurrent update won — skip this warehouse
+        import('../services/MetricsService.js').then(m => m.default.trackAllocationFailure(loc.warehouseId, variantId));
+        continue;
+      }
+
+      allocations.push({ warehouseId: loc.warehouseId, allocated: toTake });
+      remaining -= toTake;
+
+      await this._createLedgerEntry({
+        variantId: inventory.variantId,
+        productId: inventory.productId,
+        sku: inventory.sku,
+        transactionType: 'STOCK_OUT',
+        quantity: -toTake,
+        warehouseId: loc.warehouseId,
+        stockBefore: { total: inventory.totalStock, reserved: inventory.reservedStock, available: inventory.availableStock },
+        stockAfter: { total: updated.totalStock, reserved: updated.reservedStock, available: updated.availableStock },
+        reason: 'ORDER_SALE',
+        notes: `Multi-WH Alloc: Order ${orderId}`,
+        performedBy: 'SYSTEM',
+        referenceType: 'ORDER',
+        referenceId: orderId
+      }, session);
+    }
+
+    if (remaining > 0) {
+      throw new Error(`Insufficient stock: could only allocate ${quantity - remaining} of ${quantity} units for variant ${variantId}`);
+    }
+
+    return allocations;
+  }
+
   async restoreStockForCancelledOrder(variantId, quantity, orderId) {
     try {
       const inventory = await this._getOrCreateInventory(variantId);
@@ -411,22 +521,29 @@ class InventoryService {
   // 4. RESERVATIONS
   // ========================================================================
 
-  async reserveStock(variantId, quantity, referenceId) {
+  async reserveStock(variantId, quantity, referenceId, session = null) {
     try {
-      const inventory = await this._getOrCreateInventory(variantId);
+      const inventory = await this._getOrCreateInventory(variantId, session);
 
-      const available = inventory.totalStock - (inventory.reservedStock || 0);
+      const available = inventory.availableStock || (inventory.totalStock - (inventory.reservedStock || 0));
       if (available < quantity) throw new Error('Insufficient available stock');
 
       const stockBefore = { total: inventory.totalStock, reserved: inventory.reservedStock, available };
 
+      // Step 2.1 & 5.3: Atomic reservation
       const updatedInventory = await InventoryMaster.findOneAndUpdate(
-        { _id: inventory._id, totalStock: { $gte: (inventory.reservedStock || 0) + quantity } },
         {
-          $inc: { reservedStock: quantity },
+          _id: inventory._id,
+          availableStock: { $gte: quantity }
+        },
+        {
+          $inc: {
+            reservedStock: quantity,
+            availableStock: -quantity
+          },
           $set: { lastUpdated: new Date() }
         },
-        { new: true }
+        { new: true, session }
       );
 
       if (!updatedInventory) throw new Error('Reservation failed (Concurrent update or insufficient stock)');
@@ -519,16 +636,25 @@ class InventoryService {
       query.isDeleted = { $ne: true };
     }
 
+    if (filters.warehouseId) {
+      query.warehouseId = filters.warehouseId;
+    }
+
     const inventories = await InventoryMaster.find(query)
       .skip(skip)
       .limit(limit)
       .populate({
         path: 'variantId',
-        select: 'attributes size color price mrp images colorwayName colorParts',
+        select: 'attributes sizes colorId price mrp images colorwayName attributeValueIds',
         populate: [
-          { path: 'size', select: 'name code' },
-          { path: 'color', select: 'name hexCode' }
-        ]
+          {
+            path: 'attributeValueIds',
+            populate: { path: 'attributeType', select: 'name slug attributeRole' }
+          },
+          { path: 'colorId', select: 'name hexCode' },
+          { path: 'sizes.sizeId', select: 'name code' }
+        ],
+        strictPopulate: true // ✅ STRICT ENFORCEMENT
       })
       .populate('productId', 'name slug brand category')
       .populate('locations.warehouseId', 'name code');
@@ -658,11 +784,16 @@ class InventoryService {
     const inventory = await InventoryMaster.findOne({ variantId, isDeleted: { $ne: true } })
       .populate({
         path: 'variantId',
-        select: 'attributes size color price mrp images colorwayName colorParts',
+        select: 'attributes sizes colorId price mrp images colorwayName attributeValueIds',
         populate: [
-          { path: 'size', select: 'name code' },
-          { path: 'color', select: 'name hexCode' }
-        ]
+          {
+            path: 'attributeValueIds',
+            populate: { path: 'attributeType', select: 'name slug attributeRole' }
+          },
+          { path: 'colorId', select: 'name hexCode' },
+          { path: 'sizes.sizeId', select: 'name code' }
+        ],
+        strictPopulate: true
       })
       .populate('productId', 'name slug brand category')
       .populate('locations.warehouseId', 'name code');
@@ -676,9 +807,14 @@ class InventoryService {
       .populate({
         path: 'variantId',
         populate: [
-          { path: 'size', select: 'name code' },
-          { path: 'color', select: 'name hexCode' }
-        ]
+          {
+            path: 'attributeValueIds',
+            populate: { path: 'attributeType', select: 'name slug attributeRole' }
+          },
+          { path: 'colorId', select: 'name hexCode' },
+          { path: 'sizes.sizeId', select: 'name code' }
+        ],
+        strictPopulate: true
       })
       .populate('productId')
       .populate('locations.warehouseId', 'name code');

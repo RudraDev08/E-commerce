@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useStockPoller } from '../hooks/useStockPoller';
 
 /**
  * REUSABLE VARIANT SELECTOR COMPONENT
@@ -192,6 +193,14 @@ const ProductDetailPage = ({ productGroup }) => {
         setActiveImageIndex(0); // Reset gallery on variant change
     }, []);
 
+    // FIX 7 — 30-second stock polling for PDP
+    const [liveStock, setLiveStock] = useState(activeVariant?.inventory ?? null);
+    useStockPoller(activeVariantId, (fresh) => setLiveStock(fresh), 30_000);
+    // Re-sync when variant selection changes
+    useEffect(() => {
+        setLiveStock(activeVariant?.inventory ?? null);
+    }, [activeVariantId, activeVariant?.inventory]);
+
     // 4. Derived UI data
     const images = activeVariant?.images || [];
     const primaryImage = images.find(img => img.isPrimary) || images[activeImageIndex] || images[0];
@@ -256,9 +265,9 @@ const ProductDetailPage = ({ productGroup }) => {
                                 <span className="px-2.5 py-0.5 bg-slate-100 text-[10px] font-bold tracking-widest text-slate-600 uppercase rounded-md">
                                     New Release
                                 </span>
-                                {activeVariant?.inventory < 10 && activeVariant?.inventory > 0 && (
+                                {liveStock !== null && liveStock < 10 && liveStock > 0 && (
                                     <span className="text-amber-600 text-xs font-medium animate-pulse">
-                                        Only {activeVariant.inventory} units left
+                                        Only {liveStock} units left
                                     </span>
                                 )}
                             </div>
@@ -297,23 +306,23 @@ const ProductDetailPage = ({ productGroup }) => {
                         <div className="flex justify-between items-center text-xs font-medium text-slate-500">
                             <span className="tracking-widest uppercase">SKU: {activeVariant?.sku || 'N/A'}</span>
                             <div className="flex items-center gap-1.5">
-                                <div className={`w-1.5 h-1.5 rounded-full ${activeVariant?.inventory > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                {activeVariant?.inventory > 0 ? 'Ships within 24 hours' : 'Out of Stock'}
+                                <div className={`w-1.5 h-1.5 rounded-full ${(liveStock ?? 0) > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                {(liveStock ?? 0) > 0 ? 'Ships within 24 hours' : 'Out of Stock'}
                             </div>
                         </div>
 
                         {/* Actions */}
                         <div className="space-y-4">
                             <button
-                                disabled={!activeVariant || activeVariant.inventory <= 0}
+                                disabled={!activeVariant || (liveStock ?? 0) <= 0}
                                 className={`
                   w-full py-5 px-8 rounded-full text-lg font-semibold transition-all duration-300 shadow-lg
-                  ${activeVariant && activeVariant.inventory > 0
+                  ${activeVariant && (liveStock ?? 0) > 0
                                         ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-indigo-100 hover:-translate-y-1'
                                         : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'}
                 `}
                             >
-                                {activeVariant?.inventory > 0 ? 'Add to Bag' : 'Join Waitlist'}
+                                {(liveStock ?? 0) > 0 ? 'Add to Bag' : 'Join Waitlist'}
                             </button>
 
                             <div className="grid grid-cols-2 gap-4">

@@ -89,11 +89,13 @@ const EnhancedProductForm = ({ isOpen, onClose, onProductAdded, initialData }) =
 
         // Marketing
         badges: [],
+        scheduledBadges: [],     // FIX 12 — [{ type, startsAt, endsAt, priority }]
         tags: [],
         searchKeywords: [],
         featured: false,
         displayPriority: 0,
         publishStatus: 'draft',
+
         visibility: {
             website: true,
             mobileApp: true,

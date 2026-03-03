@@ -7,6 +7,24 @@ const categorySchema = new mongoose.Schema(
     slug: { type: String, unique: true, required: true, index: true },
     description: { type: String, default: '' },
 
+    // ==================== IMMUTABLE IDENTITY ====================
+    internalKey: {
+      type: String,
+      immutable: true,
+      required: true,
+      unique: true,
+      uppercase: true,
+      trim: true
+    },
+
+    canonicalId: {
+      type: String,
+      required: true,
+      unique: true,
+      uppercase: true,
+      trim: true
+    },
+
     // Hierarchy
     parentId: { type: mongoose.Schema.Types.ObjectId, ref: "Category", default: null },
 
@@ -49,6 +67,7 @@ const categorySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    optimisticConcurrency: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   }
@@ -60,11 +79,33 @@ categorySchema.index({ parentId: 1 });
 categorySchema.index({ status: 1, isVisible: 1 });
 categorySchema.index({ isFeatured: 1 });
 
-// Virtual for children (populated when needed)
 categorySchema.virtual('children', {
   ref: 'Category',
   localField: '_id',
   foreignField: 'parentId'
+});
+
+// ==================== IMMUTABILITY GUARDS ====================
+categorySchema.pre('save', async function () {
+  if (this.isNew) return;
+  const modifiedPaths = this.modifiedPaths();
+  const immutablePaths = ['internalKey', 'parentId'];
+  const violations = modifiedPaths.filter(path => immutablePaths.includes(path));
+  if (violations.length > 0) {
+    throw new Error(`IMMUTABILITY VIOLATION: Category structural fields [${violations.join(', ')}] are locked.`);
+  }
+});
+
+categorySchema.pre('findOneAndUpdate', async function () {
+  const update = this.getUpdate();
+  const docToUpdate = await this.model.findOne(this.getQuery()).lean();
+  if (!docToUpdate) return;
+  const immutableFields = ['internalKey', 'parentId'];
+  const updateObj = update.$set || update;
+  const violations = immutableFields.filter(f => updateObj[f] !== undefined && updateObj[f] !== docToUpdate[f]?.toString());
+  if (violations.length > 0) {
+    throw new Error(`IMMUTABILITY VIOLATION: Mutation blocked for structural fields: ${violations.join(', ')}`);
+  }
 });
 
 export default mongoose.model("Category", categorySchema);

@@ -30,6 +30,26 @@ const attributeTypeSchema = new mongoose.Schema({
         maxlength: 500
     },
 
+    // ==================== IMMUTABLE IDENTITY ====================
+    internalKey: {
+        type: String,
+        immutable: true,
+        required: true,
+        unique: true,
+        uppercase: true,
+        trim: true,
+        description: "Deterministic internal identifier (e.g. ATTR_COLOR, ATTR_SIZE). Never changes."
+    },
+
+    canonicalId: {
+        type: String,
+        required: true,
+        unique: true,
+        uppercase: true,
+        trim: true,
+        description: "Standardized ID for cross-system syncing."
+    },
+
     // ==================== CATEGORY CLASSIFICATION ====================
     attributeRole: {
         type: String,
@@ -347,31 +367,11 @@ const attributeTypeSchema = new mongoose.Schema({
         }
     },
 
-    // ==================== PRODUCT CATEGORIES ====================
+    // applicableCategories is used for categoryId scoping in junction-based attribute management
     applicableCategories: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Category'
     }],
-
-    // ==================== STATUS & AUDIT ====================
-    status: {
-        type: String,
-        enum: ['active', 'inactive', 'draft'],
-        default: 'active',
-        index: true
-    },
-
-    isDeleted: {
-        type: Boolean,
-        default: false,
-        index: true
-    },
-
-    deletedAt: Date,
-    deletedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
 
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
@@ -384,11 +384,12 @@ const attributeTypeSchema = new mongoose.Schema({
     }
 }, {
     timestamps: true,
+    optimisticConcurrency: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
 });
 
-// Indexes
+// Comprehensive Indexes
 attributeTypeSchema.index({ slug: 1, isDeleted: 1 });
 attributeTypeSchema.index({ status: 1, isDeleted: 1 });
 
@@ -419,27 +420,101 @@ attributeTypeSchema.statics.findByCategory = function (categoryId) {
     }).sort({ displayOrder: 1 });
 };
 
-// Governance: Lock Check
-// NOTE: In Mongoose v9, async middleware does NOT receive `next` as an argument.
-// Use the synchronous signature (next as first arg) or a plain async without next.
+// ==================== IMMUTABILITY GUARDS ====================
+attributeTypeSchema.pre('save', async function () {
+    if (this.isNew) return;
+
+    const modifiedPaths = this.modifiedPaths();
+
+    // internalKey, allowMultipleSelection, affectsPrice are permanently immutable
+    const hardImmutablePaths = ['internalKey', 'validationRules.allowMultipleSelection', 'businessRules.affectsPrice'];
+    const hardViolations = modifiedPaths.filter(path => hardImmutablePaths.includes(path));
+    if (hardViolations.length > 0) {
+        throw new Error(`IMMUTABILITY VIOLATION: The following structural fields cannot be modified after creation: ${hardViolations.join(', ')}`);
+    }
+
+    // attributeRole is conditionally immutable:
+    // It CAN be changed ONLY if no ACTIVE variants currently use this attribute type.
+    // This allows the migration script to reclassify unattached or SPECIFICATION-only attributes.
+    if (modifiedPaths.includes('attributeRole')) {
+        const VariantMaster = mongoose.models.VariantMaster;
+        if (VariantMaster) {
+            // Find any AttributeValue for this AttributeType
+            const AttributeValue = mongoose.models.AttributeValue;
+            const attrValueIds = AttributeValue
+                ? (await AttributeValue.find({ attributeType: this._id }, '_id').lean()).map(av => av._id)
+                : [];
+
+            if (attrValueIds.length > 0) {
+                const isUsedInActiveVariant = await VariantMaster.exists({
+                    attributeValueIds: { $elemMatch: { $in: attrValueIds } },
+                    status: 'ACTIVE'
+                });
+                if (isUsedInActiveVariant) {
+                    throw new Error(
+                        `GOVERNANCE VIOLATION: Cannot change attributeRole on '${this.name}' because it is referenced by ACTIVE variants. ` +
+                        `Archive all dependent variants before changing the role.`
+                    );
+                }
+            }
+        }
+    }
+});
+
 attributeTypeSchema.pre('findOneAndUpdate', async function () {
+    const update = this.getUpdate();
     const docToUpdate = await this.model.findOne(this.getQuery()).lean();
 
-    // Allow if doc doesn't exist (it will fail anyway) or isn't locked
-    if (!docToUpdate || !docToUpdate.isLocked) {
-        return; // Mongoose v9: just return from async middleware
+    if (!docToUpdate) return;
+
+    const updateObj = update.$set || update;
+
+    // Hard immutable fields (never changeable)
+    const hardImmutableFields = ['internalKey', 'validationRules.allowMultipleSelection', 'businessRules.affectsPrice'];
+    const hardViolations = hardImmutableFields.filter(field => {
+        if (field.includes('.')) {
+            const parts = field.split('.');
+            let value = updateObj;
+            for (const part of parts) {
+                if (value && typeof value === 'object') value = value[part];
+                else break;
+            }
+            return value !== undefined && JSON.stringify(value) !== JSON.stringify(docToUpdate[parts[0]]?.[parts[1]]);
+        }
+        return updateObj[field] !== undefined && updateObj[field] !== docToUpdate[field];
+    });
+    if (hardViolations.length > 0) {
+        throw new Error(`IMMUTABILITY VIOLATION: Mutation blocked for structural fields: ${hardViolations.join(', ')}`);
     }
 
-    // Better implementation: Check if 'isLocked' is being set to false in the update.
-    const update = this.getUpdate();
-    if (update.isLocked === false || update?.$set?.isLocked === false) {
-        return; // Unlocking is permitted
+    // attributeRole: conditionally immutable — block if active variants depend on this attribute
+    if (updateObj.attributeRole && updateObj.attributeRole !== docToUpdate.attributeRole) {
+        const VariantMaster = mongoose.models.VariantMaster;
+        const AttributeValue = mongoose.models.AttributeValue;
+        if (VariantMaster && AttributeValue) {
+            const attrValueIds = (await AttributeValue.find({ attributeType: docToUpdate._id }, '_id').lean()).map(av => av._id);
+            if (attrValueIds.length > 0) {
+                const isUsedInActiveVariant = await VariantMaster.exists({
+                    attributeValueIds: { $elemMatch: { $in: attrValueIds } },
+                    status: 'ACTIVE'
+                });
+                if (isUsedInActiveVariant) {
+                    throw new Error(
+                        `GOVERNANCE VIOLATION: Cannot change attributeRole on '${docToUpdate.name}' because it is referenced by ACTIVE variants. ` +
+                        `Archive all dependent variants before changing the role.`
+                    );
+                }
+            }
+        }
     }
 
-    // If it remains locked, we could throw here to block the update.
-    // For now, we log a warning and allow (prevent breaking existing flows).
-    console.warn('[AttributeType] Attempted update on a locked AttributeType. Consider blocking.');
-    // To hard-block: throw new Error('This AttributeType is locked and cannot be modified.');
+    // Lock check
+    if (docToUpdate.isLocked) {
+        if (update.isLocked === false || update?.$set?.isLocked === false) {
+            return; // Unlocking is permitted
+        }
+        throw new Error('LOCKED: This AttributeType is locked and cannot be modified.');
+    }
 });
 
 const AttributeType = mongoose.models.AttributeType || mongoose.model('AttributeType', attributeTypeSchema);

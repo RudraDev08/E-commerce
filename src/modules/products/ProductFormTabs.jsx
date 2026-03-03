@@ -201,12 +201,19 @@ export const DescriptionsTab = ({ formData, onChange, onArrayAdd, onArrayUpdate,
 );
 
 // ============================================================================
-// TAB 3: PRICING
+// TAB 3: PRICING — FIX 10: below-cost warning
 // ============================================================================
 export const PricingTab = ({ formData, onChange }) => {
     const calculatedDiscountPrice = formData.basePrice && formData.discount
         ? Number(formData.basePrice) * (1 - Number(formData.discount) / 100)
         : Number(formData.price) || 0;
+
+    // FIX 10 — margin guard
+    const costNum = Number(formData.costPrice || 0);
+    const priceNum = calculatedDiscountPrice;
+    const margin = priceNum - costNum;
+    const marginPct = priceNum > 0 ? (margin / priceNum * 100) : 0;
+    const belowCost = !!(formData.costPrice && priceNum > 0 && margin < 0);
 
     return (
         <div className="space-y-6">
@@ -255,7 +262,10 @@ export const PricingTab = ({ formData, onChange }) => {
                         onChange={(e) => onChange('costPrice', e.target.value)}
                         min="0"
                         step="0.01"
-                        className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                        className={`w-full rounded-lg border px-4 py-2.5 focus:ring-2 outline-none ${belowCost
+                                ? 'border-red-400 bg-red-50 focus:border-red-500 focus:ring-red-200'
+                                : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-200'
+                            }`}
                         placeholder="500"
                     />
                     <p className="mt-1 text-xs text-gray-500">For margin calculation</p>
@@ -297,8 +307,18 @@ export const PricingTab = ({ formData, onChange }) => {
 
             {/* Pricing Summary */}
             {formData.basePrice && (
-                <div className="rounded-lg bg-indigo-50 border border-indigo-200 p-4">
-                    <h4 className="font-medium text-indigo-900 mb-3">Pricing Summary</h4>
+                <div className={`rounded-lg border p-4 ${belowCost ? 'bg-red-50 border-red-300' : 'bg-indigo-50 border-indigo-200'
+                    }`}>
+                    <h4 className={`font-medium mb-3 ${belowCost ? 'text-red-900' : 'text-indigo-900'
+                        }`}>Pricing Summary</h4>
+
+                    {/* FIX 10 — below-cost warning banner */}
+                    {belowCost && (
+                        <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-red-100 border border-red-300 rounded-lg text-sm font-bold text-red-700">
+                            <span>⚠️</span> Selling BELOW cost! Margin: ₹{margin.toFixed(2)} ({marginPct.toFixed(1)}%)
+                        </div>
+                    )}
+
                     <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                             <span className="text-gray-600">Base Price (MRP):</span>
@@ -317,11 +337,11 @@ export const PricingTab = ({ formData, onChange }) => {
                             </span>
                         </div>
                         {formData.costPrice && (
-                            <div className="flex justify-between text-green-600">
+                            <div className={`flex justify-between ${belowCost ? 'text-red-700 font-bold' : 'text-green-600'
+                                }`}>
                                 <span>Profit Margin:</span>
                                 <span className="font-medium">
-                                    ₹{(calculatedDiscountPrice - Number(formData.costPrice || 0)).toFixed(2)} (
-                                    {((calculatedDiscountPrice - Number(formData.costPrice || 0)) / calculatedDiscountPrice * 100).toFixed(1)}%)
+                                    ₹{margin.toFixed(2)} ({marginPct.toFixed(1)}%)
                                 </span>
                             </div>
                         )}
@@ -474,12 +494,9 @@ export const SEOTab = ({ formData, onNestedChange }) => (
         {/* Open Graph */}
         <div className="border-t pt-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Open Graph (Social Media)</h3>
-
             <div className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        OG Title
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">OG Title</label>
                     <input
                         type="text"
                         value={formData.seo.ogTitle}
@@ -488,11 +505,8 @@ export const SEOTab = ({ formData, onNestedChange }) => (
                         placeholder="Premium Product - Amazing Deal"
                     />
                 </div>
-
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        OG Description
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">OG Description</label>
                     <textarea
                         value={formData.seo.ogDescription}
                         onChange={(e) => onNestedChange('seo', 'ogDescription', e.target.value)}
@@ -501,11 +515,8 @@ export const SEOTab = ({ formData, onNestedChange }) => (
                         placeholder="Get the best product online"
                     />
                 </div>
-
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        OG Image URL
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">OG Image URL</label>
                     <input
                         type="url"
                         value={formData.seo.ogImage}
@@ -520,47 +531,121 @@ export const SEOTab = ({ formData, onNestedChange }) => (
 );
 
 // ============================================================================
-// TAB 6: MARKETING
+// TAB 6: MARKETING — FIX 12 (badge scheduling) + FIX 13 (displayPriority)
 // ============================================================================
 export const MarketingTab = ({ formData, onChange, onNestedChange, onArrayAdd, onArrayUpdate, onArrayRemove }) => {
-    const BADGE_OPTIONS = ['new', 'sale', 'bestseller', 'featured', 'limited', 'exclusive', 'trending'];
+    // FIX 12 — Scheduled badges: [{ type, startsAt, endsAt, priority }]
+    const scheduledBadges = formData.scheduledBadges || [];
+    const BADGE_TYPES = ['NEW', 'SALE', 'BESTSELLER', 'FEATURED', 'LIMITED', 'EXCLUSIVE', 'TRENDING', 'HOT', 'CLEARANCE'];
 
-    const toggleBadge = (badge) => {
-        const badges = formData.badges.includes(badge)
-            ? formData.badges.filter(b => b !== badge)
-            : [...formData.badges, badge];
-        onChange('badges', badges);
+    const addScheduledBadge = () => {
+        onChange('scheduledBadges', [...scheduledBadges, { type: 'NEW', startsAt: '', endsAt: '', priority: 0 }]);
+    };
+
+    const updateScheduledBadge = (idx, field, value) => {
+        onChange('scheduledBadges', scheduledBadges.map((b, i) => i === idx ? { ...b, [field]: value } : b));
+    };
+
+    const removeScheduledBadge = (idx) => {
+        onChange('scheduledBadges', scheduledBadges.filter((_, i) => i !== idx));
+    };
+
+    // Overlap detection — same type, overlapping date ranges
+    const hasOverlap = (badge, idx) => {
+        return scheduledBadges.some((other, i) => {
+            if (i === idx || other.type !== badge.type || !badge.startsAt || !other.startsAt) return false;
+            const aStart = new Date(badge.startsAt);
+            const aEnd = badge.endsAt ? new Date(badge.endsAt) : new Date('2099-01-01');
+            const bStart = new Date(other.startsAt);
+            const bEnd = other.endsAt ? new Date(other.endsAt) : new Date('2099-01-01');
+            return aStart <= bEnd && bStart <= aEnd;
+        });
     };
 
     return (
         <div className="space-y-6">
-            {/* Badges */}
+
+            {/* FIX 12 — Scheduled Badges */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Product Badges
-                </label>
-                <div className="flex flex-wrap gap-2">
-                    {BADGE_OPTIONS.map((badge) => (
-                        <button
-                            key={badge}
-                            type="button"
-                            onClick={() => toggleBadge(badge)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${formData.badges.includes(badge)
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                        >
-                            {badge.charAt(0).toUpperCase() + badge.slice(1)}
-                        </button>
-                    ))}
+                <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">Scheduled Badges</label>
+                    <button
+                        type="button"
+                        onClick={addScheduledBadge}
+                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-400 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                        + Add Badge
+                    </button>
+                </div>
+                {scheduledBadges.length === 0 && (
+                    <p className="text-xs text-gray-400 italic">No scheduled badges. Click "Add Badge" to create one.</p>
+                )}
+                <div className="space-y-3">
+                    {scheduledBadges.map((badge, idx) => {
+                        const overlap = hasOverlap(badge, idx);
+                        return (
+                            <div key={idx} className={`border rounded-xl p-4 space-y-3 ${overlap ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'
+                                }`}>
+                                {overlap && (
+                                    <p className="text-xs font-bold text-red-600">
+                                        ⚠️ Overlapping badges of the same type! Adjust dates.
+                                    </p>
+                                )}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-semibold text-gray-600 block mb-1">Badge Type</label>
+                                        <select
+                                            value={badge.type}
+                                            onChange={e => updateScheduledBadge(idx, 'type', e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                        >
+                                            {BADGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-semibold text-gray-600 block mb-1">Priority</label>
+                                        <input
+                                            type="number" min="0" max="100"
+                                            value={badge.priority}
+                                            onChange={e => updateScheduledBadge(idx, 'priority', Number(e.target.value))}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-semibold text-gray-600 block mb-1">Starts At</label>
+                                        <input
+                                            type="datetime-local"
+                                            value={badge.startsAt ? badge.startsAt.slice(0, 16) : ''}
+                                            onChange={e => updateScheduledBadge(idx, 'startsAt', e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-semibold text-gray-600 block mb-1">Ends At (optional)</label>
+                                        <input
+                                            type="datetime-local"
+                                            value={badge.endsAt ? badge.endsAt.slice(0, 16) : ''}
+                                            onChange={e => updateScheduledBadge(idx, 'endsAt', e.target.value)}
+                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => removeScheduledBadge(idx)}
+                                    className="text-xs font-semibold text-red-500 hover:text-red-700"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 
             {/* Tags */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tags
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
                 <input
                     type="text"
                     value={formData.tags.join(', ')}
@@ -584,11 +669,9 @@ export const MarketingTab = ({ formData, onChange, onNestedChange, onArrayAdd, o
                 </label>
             </div>
 
-            {/* Display Priority */}
+            {/* FIX 13 — Display Priority drives server-side sort */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Display Priority
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Display Priority</label>
                 <input
                     type="number"
                     value={formData.displayPriority}
@@ -597,14 +680,14 @@ export const MarketingTab = ({ formData, onChange, onNestedChange, onArrayAdd, o
                     className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                     placeholder="0"
                 />
-                <p className="mt-1 text-xs text-gray-500">Higher number = shown first</p>
+                <p className="mt-1 text-xs text-gray-500">
+                    Higher = shown first in Featured section. Server sorts by <code>displayPriority DESC</code>.
+                </p>
             </div>
 
             {/* Visibility */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Visibility
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Visibility</label>
                 <div className="space-y-3">
                     {[
                         { key: 'website', label: 'Website' },
@@ -653,17 +736,14 @@ export const PhysicalTab = ({ formData, onChange, onNestedChange }) => (
     <div className="space-y-6">
         {/* Dimensions */}
         <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-                Dimensions
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-3">Dimensions</label>
             <div className="grid grid-cols-4 gap-4">
                 <div>
                     <input
                         type="number"
                         value={formData.dimensions.length}
                         onChange={(e) => onNestedChange('dimensions', 'length', e.target.value)}
-                        min="0"
-                        step="0.01"
+                        min="0" step="0.01"
                         className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                         placeholder="Length"
                     />
@@ -673,8 +753,7 @@ export const PhysicalTab = ({ formData, onChange, onNestedChange }) => (
                         type="number"
                         value={formData.dimensions.width}
                         onChange={(e) => onNestedChange('dimensions', 'width', e.target.value)}
-                        min="0"
-                        step="0.01"
+                        min="0" step="0.01"
                         className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                         placeholder="Width"
                     />
@@ -684,8 +763,7 @@ export const PhysicalTab = ({ formData, onChange, onNestedChange }) => (
                         type="number"
                         value={formData.dimensions.height}
                         onChange={(e) => onNestedChange('dimensions', 'height', e.target.value)}
-                        min="0"
-                        step="0.01"
+                        min="0" step="0.01"
                         className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                         placeholder="Height"
                     />
@@ -707,17 +785,14 @@ export const PhysicalTab = ({ formData, onChange, onNestedChange }) => (
 
         {/* Weight */}
         <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-                Weight
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-3">Weight</label>
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <input
                         type="number"
                         value={formData.weight.value}
                         onChange={(e) => onNestedChange('weight', 'value', e.target.value)}
-                        min="0"
-                        step="0.01"
+                        min="0" step="0.01"
                         className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
                         placeholder="Weight"
                     />
@@ -739,9 +814,7 @@ export const PhysicalTab = ({ formData, onChange, onNestedChange }) => (
 
         {/* Material */}
         <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-                Material
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Material</label>
             <input
                 type="text"
                 value={formData.material.join(', ')}

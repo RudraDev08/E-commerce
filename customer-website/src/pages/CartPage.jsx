@@ -1,9 +1,92 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { formatCurrency, getImageUrl } from '../utils/formatters';
+import { useStockPoller } from '../hooks/useStockPoller';
 import './CartPage.css';
 
+// ── Per-item polling wrapper — FIX 8 (60-second cart stock polling) ───────────
+const CartItemRow = ({ item, onUpdateQuantity, onRemove }) => {
+    const [liveStock, setLiveStock] = useState(item.availableStock ?? null);
+    useStockPoller(item.variantId, (fresh) => setLiveStock(fresh), 60_000);
+
+    const isOOS = liveStock !== null && liveStock <= 0;
+    const isLowStock = liveStock !== null && liveStock > 0 && liveStock < 5;
+
+    return (
+        <div className={`cart-item-card ${isOOS ? 'oos-warning' : ''}`}>
+            {/* Real-time OOS/low-stock banners */}
+            {isOOS && (
+                <div className="oos-banner">
+                    ⚠️ This item is now out of stock. Remove it before checking out.
+                </div>
+            )}
+            {isLowStock && (
+                <div className="low-stock-banner">
+                    Only {liveStock} left in stock!
+                </div>
+            )}
+
+            <div className="cart-item-content">
+                {/* Image */}
+                <div className="cart-item-image">
+                    <Link to={`/product/${item.slug}`}>
+                        <img
+                            src={getImageUrl(item.image)}
+                            alt={item.name}
+                            onError={(e) => { e.target.src = 'https://placehold.co/120x120?text=No+Image'; }}
+                        />
+                    </Link>
+                </div>
+
+                {/* Details */}
+                <div className="cart-item-details">
+                    <div className="item-header">
+                        <h3 className="item-name">
+                            <Link to={`/product/${item.slug}`}>{item.name}</Link>
+                        </h3>
+                        <button
+                            className="remove-btn"
+                            onClick={() => onRemove(item.productId, item.variantId)}
+                            aria-label="Remove item"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    {item.variantInfo && <p className="item-variant">{item.variantInfo}</p>}
+
+                    <div className="item-pricing">
+                        <span className="item-price">{formatCurrency(item.price)}</span>
+                    </div>
+
+                    {/* Qty controls — increment blocked at liveStock cap */}
+                    <div className="item-quantity">
+                        <button
+                            className="qty-btn"
+                            onClick={() => onUpdateQuantity(item.productId, item.variantId, item.quantity - 1)}
+                            disabled={item.quantity <= 1}
+                        >
+                            −
+                        </button>
+                        <span className="qty-display">{item.quantity}</span>
+                        <button
+                            className="qty-btn"
+                            onClick={() => onUpdateQuantity(item.productId, item.variantId, item.quantity + 1)}
+                            disabled={liveStock !== null && item.quantity >= liveStock}
+                        >
+                            +
+                        </button>
+                    </div>
+
+                    <p className="item-subtotal">Subtotal: {formatCurrency(item.price * item.quantity)}</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ── Main CartPage ─────────────────────────────────────────────────────────────
 const CartPage = () => {
     const { cart, updateQuantity, removeFromCart, clearCart } = useCart();
 
@@ -30,74 +113,15 @@ const CartPage = () => {
                 <h1>Shopping Cart ({cart.items.reduce((acc, item) => acc + item.quantity, 0)} Items)</h1>
 
                 <div className="cart-grid">
-                    {/* Cart Items List */}
+                    {/* Cart Items List — each item self-polls every 60s */}
                     <div className="cart-items-list">
                         {cart.items.map(item => (
-                            <div key={`${item.productId}-${item.variantId}`} className="cart-item-card">
-                                <div className="cart-item-content">
-                                    <div className="cart-item-image">
-                                        <Link to={`/product/${item.slug}`}>
-                                            <img
-                                                src={getImageUrl(item.image)}
-                                                alt={item.name}
-                                                onError={(e) => {
-                                                    e.target.src = 'https://placehold.co/120x120?text=No+Image';
-                                                }}
-                                            />
-                                        </Link>
-                                    </div>
-                                    <div className="cart-item-details">
-                                        <div className="item-header">
-                                            <h3>
-                                                <Link to={`/product/${item.slug}`}>{item.name}</Link>
-                                            </h3>
-                                            {item.variant && (
-                                                <div className="item-variant">
-                                                    {item.variant.size && <span>Size: {item.variant.size}</span>}
-                                                    {item.variant.color && <span>Color: {item.variant.color}</span>}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="item-price">
-                                            {formatCurrency(item.price)}
-                                        </div>
-
-                                        <div className="item-controls">
-                                            <div className="quantity-control">
-                                                <button
-                                                    className="qty-btn"
-                                                    onClick={() => updateQuantity(item.productId, item.variantId, item.quantity - 1)}
-                                                    disabled={item.quantity <= 1}
-                                                >
-                                                    −
-                                                </button>
-                                                <span className="qty-display">{item.quantity}</span>
-                                                <button
-                                                    className="qty-btn"
-                                                    onClick={() => updateQuantity(item.productId, item.variantId, item.quantity + 1)}
-                                                    disabled={item.quantity >= item.stock}
-                                                >
-                                                    +
-                                                </button>
-                                            </div>
-
-                                            <button
-                                                className="remove-btn"
-                                                onClick={() => removeFromCart(item.productId, item.variantId)}
-                                            >
-                                                🗑️ Remove
-                                            </button>
-                                        </div>
-
-                                        {item.quantity >= item.stock && (
-                                            <div style={{ color: 'var(--error)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-                                                Max stock reached
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            <CartItemRow
+                                key={`${item.productId}-${item.variantId}`}
+                                item={item}
+                                onUpdateQuantity={updateQuantity}
+                                onRemove={removeFromCart}
+                            />
                         ))}
                     </div>
 

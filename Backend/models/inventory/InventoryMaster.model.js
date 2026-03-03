@@ -11,7 +11,7 @@ const inventoryMasterSchema = new mongoose.Schema({
     },
     productId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'ProductGroupSnapshot',  // ✅ FIXED: closest to the ProductGroup concept in this system
+        ref: 'Product',  // ✅ ALIGNED with Product table in new module structure
         required: false,  // ✅ Made optional — variants seeded via repair may not have productId
         index: true
     },
@@ -52,6 +52,11 @@ const inventoryMasterSchema = new mongoose.Schema({
         default: 5,
         min: 0
     },
+    warehouseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Warehouse',
+        index: true
+    },
     warehouseLocation: {
         type: String,
         default: 'Default',
@@ -66,7 +71,8 @@ const inventoryMasterSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: ['IN_STOCK', 'OUT_OF_STOCK', 'LOW_STOCK', 'DISCONTINUED'],
-        default: 'OUT_OF_STOCK'
+        default: 'OUT_OF_STOCK',
+        index: true
     },
 
     // Multi-Warehouse Distribution
@@ -98,22 +104,44 @@ const inventoryMasterSchema = new mongoose.Schema({
     deletedAt: {
         type: Date,
         default: null
+    },
+    // For Checkout Idempotency (Phase 3)
+    idempotencyKey: {
+        type: String,
+        unique: true,
+        sparse: true,
+        index: true
     }
 }, {
     timestamps: true,
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    toObject: { virtuals: true },
+    optimisticConcurrency: true
 });
 
 // Pre-save to update status and sync availableStock
 inventoryMasterSchema.pre('save', async function () {
-    // CRITICAL: Keep availableStock in sync
+    // 1. Drift Guard: reservedStock cannot exceed totalStock.
+    // CRITICAL: CAP reservedStock at totalStock — never zero it.
+    // Zeroing would silently discard real cart reservations and cause over-selling.
+    // Capping preserves the semantics of the existing reservation while correcting the invariant.
+    if (this.reservedStock > this.totalStock) {
+        console.error(
+            `[InventoryMaster] DRIFT DETECTED for variantId=${this.variantId}: ` +
+            `reservedStock(${this.reservedStock}) > totalStock(${this.totalStock}). ` +
+            `Capping reservedStock to totalStock to preserve reservation integrity.`
+        );
+        this.reservedStock = this.totalStock; // CAP — never zero
+    }
+
+    // 2. CRITICAL: Keep availableStock in sync.
+    // Hard floor at 0: availableStock = max(0, totalStock - reservedStock)
     this.availableStock = Math.max(0, this.totalStock - this.reservedStock);
 
-    // Update status based on total stock
-    if (this.totalStock === 0) {
+    // 3. Update status based on available stock
+    if (this.availableStock === 0) {
         this.status = 'OUT_OF_STOCK';
-    } else if (this.totalStock <= this.lowStockThreshold) {
+    } else if (this.availableStock <= (this.lowStockThreshold ?? 5)) {
         this.status = 'LOW_STOCK';
     } else {
         this.status = 'IN_STOCK';

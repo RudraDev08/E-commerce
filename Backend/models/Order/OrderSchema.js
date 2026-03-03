@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 
 const orderItemSchema = new mongoose.Schema({
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
-    variantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Variant' }, // Updated ref to correct Model Name
+    variantId: { type: mongoose.Schema.Types.ObjectId, ref: 'VariantMaster' }, // ✅ FIXED: was 'Variant' — model is registered as 'VariantMaster'
 
     // Snapshot Data (Deep Isolation)
     productName: { type: String, required: true },
@@ -116,9 +116,19 @@ const orderSchema = new mongoose.Schema({
         note: String,
         timestamp: { type: Date, default: Date.now },
         user: { type: String, default: 'system' } // 'system', 'admin', 'customer'
-    }]
+    }],
+
+    // Phase 10: Flash-Sale Capacity Prep
+    idempotencyKey: {
+        type: String,
+        unique: true,
+        sparse: true,
+        index: true,
+        immutable: true
+    }
 }, {
-    timestamps: true
+    timestamps: true,
+    optimisticConcurrency: true
 });
 
 // ✅ Step 2 — Enforce in Schema Hook

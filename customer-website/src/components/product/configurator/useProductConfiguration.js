@@ -122,14 +122,33 @@ function getVariantAttributeValueFn(variant, attributeSlug) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * @param {Array}  variants        - Pre-filtered ACTIVE in-stock variants
+ * @param {Array}  variants        - Pre-filtered ACTIVE variants
  * @param {Array}  attributeTypes  - Relevant attribute type configs
  * @param {Object} initialSelections
  */
 export const useProductConfiguration = (variants = [], attributeTypes = [], initialSelections = {}) => {
     const [selectedAttributes, setSelectedAttributes] = useState(initialSelections);
+    const [identityVersion, setIdentityVersion] = useState(null);
 
-    // ── 1. Build O(1) identity key → variant map ──────────────────────────────
+    // ── PHASE 3: Identity Version Sync ──────────────────────────────────────
+    useEffect(() => {
+        if (variants.length > 0) {
+            const v = variants[0].identityVersion || 1;
+            if (identityVersion !== null && identityVersion !== v) {
+                console.warn(`[IdentitySync] Drift detected (v${identityVersion} -> v${v}). Resetting configuration.`);
+                setSelectedAttributes({}); // Force re-selection on major engine change
+            }
+            setIdentityVersion(v);
+        }
+    }, [variants, identityVersion]);
+
+    // ── PHASE 4: O(1) Identity Map (replaces variants.some) ────────────────
+    // Build a Set of all real variant identity keys for O(1) availability checks.
+    // ONLY includes VARIANT-role attributes (not SPECIFICATION).
+    const variantRoleTypes = useMemo(() => {
+        return attributeTypes.filter(t => t.attributeRole !== 'SPECIFICATION');
+    }, [attributeTypes]);
+
     const variantIdentityMap = useMemo(() => {
         const map = new Map();
         variants.forEach(v => {
@@ -139,66 +158,61 @@ export const useProductConfiguration = (variants = [], attributeTypes = [], init
         return map;
     }, [variants]);
 
-    // ── 2. Resolved variant: synchronous deterministic lookup ────────────────
-    //    Tries identity-key map first; falls back to loop-based attribute match.
+    // Pre-built key Set for O(1) availability probing
+    const availableKeySet = useMemo(() => {
+        return new Set(variantIdentityMap.keys());
+    }, [variantIdentityMap]);
+
+    // ── getVariantAttributeValue (stable ref) ──────────────────────────────
+    const getVariantAttributeValue = useCallback(
+        (variant, slug) => getVariantAttributeValueFn(variant, slug),
+        []
+    );
+
+    // ── PHASE 7: Safe Resolution Logic ─────────────────────────────────────
+    // Only VARIANT-role attributes count toward full resolution.
+    // SPECIFICATION attributes are display-only; never gate price display.
     const resolvedVariant = useMemo(() => {
         if (variants.length === 0) return null;
 
-        // Extract IDs from current selections to build an identity key
-        // We need the _id of each selected dimension, not just its display label.
         const parts = [];
+        const requiredCount = variantRoleTypes.length;  // Only real VARIANT dimensions
+        const selectedCount = Object.keys(selectedAttributes).filter(k => selectedAttributes[k]).length;
 
-        // COLOR
-        const selectedColor = selectedAttributes['color'];
-        if (selectedColor) {
-            // Find a variant whose color display label matches to get the _id
-            for (const v of variants) {
-                const val = getVariantAttributeValueFn(v, 'color');
-                if (val && String(val) === String(selectedColor)) {
-                    const cId = typeof v.colorId === 'object' ? v.colorId?._id : v.colorId;
-                    if (cId) { parts.push(`COLOR:${String(cId)}`); break; }
-                }
-            }
-        }
+        // Only attempt resolution if ALL variant dimensions are selected
+        if (selectedCount < requiredCount) return null;
 
-        // SIZE
-        const selectedSize = selectedAttributes['size'];
-        if (selectedSize) {
-            for (const v of variants) {
-                const val = getVariantAttributeValueFn(v, 'size');
-                if (val && String(val) === String(selectedSize)) {
-                    const firstSizeEntry = v.sizes?.[0];
-                    if (firstSizeEntry) {
-                        const sid = typeof firstSizeEntry.sizeId === 'object' ? firstSizeEntry.sizeId?._id : firstSizeEntry.sizeId;
-                        if (sid) { parts.push(`SIZE:${firstSizeEntry.category || 'DIMENSION'}:${String(sid)}`); break; }
-                    }
-                }
-            }
-        }
-
-        // CUSTOM ATTRIBUTES (processor, storage, material, etc.)
-        attributeTypes.forEach(t => {
-            if (t.slug === 'size' || t.slug === 'color') return;
+        // Resolve IDs to build key — only iterate VARIANT role types
+        variantRoleTypes.forEach(t => {
             const selectedVal = selectedAttributes[t.slug];
             if (!selectedVal) return;
 
-            // Find matching variant + dim to get the structured IDs
-            for (const v of variants) {
-                const dimMatch = (v.attributeDimensions || []).find(dim => {
-                    const dimAttrId = dim.attributeId ? String(dim.attributeId) : null;
-                    const typeIdMatch = dimAttrId && String(t._id) === dimAttrId;
-                    const typeNameMatch = dim.attributeName?.toLowerCase() === t.name?.toLowerCase()
-                        || dim.attributeName?.toLowerCase() === t.slug;
-                    return typeIdMatch || typeNameMatch;
-                });
-                if (dimMatch) {
-                    const attrId = dimMatch.attributeId ? String(dimMatch.attributeId) : (dimMatch.attributeName || 'UNKNOWN');
-                    const valueId = typeof dimMatch.valueId === 'object' ? String(dimMatch.valueId) : dimMatch.valueId;
-                    // Check if this dim's value matches user's selection
-                    const attrVal = getVariantAttributeValueFn(v, t.slug);
-                    if (attrVal && String(attrVal) === String(selectedVal)) {
+            // Find matching variant to extract IDs
+            const match = variants.find(v => {
+                const val = getVariantAttributeValue(v, t.slug);
+                return val !== null && String(val) === String(selectedVal);
+            });
+
+            if (match) {
+                if (t.slug === 'color') {
+                    const cId = typeof match.colorId === 'object' ? match.colorId?._id : match.colorId;
+                    if (cId) parts.push(`COLOR:${String(cId)}`);
+                } else if (t.slug === 'size') {
+                    const firstSizeEntry = match.sizes?.[0];
+                    if (firstSizeEntry) {
+                        const sid = typeof firstSizeEntry.sizeId === 'object' ? firstSizeEntry.sizeId?._id : firstSizeEntry.sizeId;
+                        if (sid) parts.push(`SIZE:${firstSizeEntry.category || 'DIMENSION'}:${String(sid)}`);
+                    }
+                } else {
+                    const dimMatch = (match.attributeDimensions || []).find(dim => {
+                        const dimAttrId = dim.attributeId ? String(dim.attributeId) : null;
+                        return (dimAttrId && String(t._id) === dimAttrId) ||
+                            (dim.attributeName?.toLowerCase() === t.slug);
+                    });
+                    if (dimMatch) {
+                        const attrId = dimMatch.attributeId ? String(dimMatch.attributeId) : (dimMatch.attributeName || 'UNKNOWN');
+                        const valueId = typeof dimMatch.valueId === 'object' ? String(dimMatch.valueId) : dimMatch.valueId;
                         parts.push(`ATTR:${attrId}:${valueId}`);
-                        break;
                     }
                 }
             }
@@ -206,77 +220,79 @@ export const useProductConfiguration = (variants = [], attributeTypes = [], init
 
         parts.sort();
         const identityKey = parts.join('|');
+        return variantIdentityMap.get(identityKey) || null;
+    }, [selectedAttributes, variants, variantRoleTypes, variantIdentityMap, getVariantAttributeValue]);
 
-        // Fast O(1) lookup
-        if (identityKey && variantIdentityMap.has(identityKey)) {
-            return variantIdentityMap.get(identityKey);
-        }
-
-        // Fallback: loop-based match on display labels (covers legacy API shapes)
-        const relevantSlugs = attributeTypes.map(t => t.slug);
-        const anySelected = Object.keys(selectedAttributes).some(k => relevantSlugs.includes(k) && selectedAttributes[k]);
-        if (!anySelected) return null;
-
-        const match = variants.find(variant =>
-            attributeTypes.every(type => {
-                const selected = selectedAttributes[type.slug];
-                if (!selected) return true; // Not selected yet → don't disqualify
-                const variantVal = getVariantAttributeValueFn(variant, type.slug);
-                return variantVal !== null && String(variantVal) === String(selected);
-            })
-        );
-        return match || null;
-    }, [selectedAttributes, variants, attributeTypes, variantIdentityMap]);
-
-    // ── 3. Availability matrix ─────────────────────────────────────────────────
-    // An option is available if at least one ACTIVE variant WITH STOCK > 0
-    // matches ALL currently-selected attributes PLUS this new attribute.
-    // OOS variants (stock === 0) are deliberately excluded so the button renders
-    // as disabled with reduced opacity + cursor-not-allowed (Phase 6 spec).
-    // Variants with stock === null (no inventory record) are treated as available
-    // because stock is unknown — the server-side gate will catch them at purchase.
+    // ── PHASE 6: O(1) Availability Check ──────────────────────────────────
+    // Replaces O(n) variants.some() with O(1) key lookup against precomputed Set.
+    // An option is available if at least one real variant in the map contains
+    // all currently selected dimensions PLUS the candidate option.
     const isOptionAvailable = useCallback((attributeSlug, valueSlug) => {
+        if (variants.length === 0) return false;
+
+        // Build candidate selection state
+        const testState = { ...selectedAttributes, [attributeSlug]: valueSlug };
+
+        // Test each real variant: does it satisfy testState?
         return variants.some(variant => {
-            // ── Phase 6 fix: skip explicitly OOS variants from availability check ──
-            // stock === 0  → explicitly out of stock → treat as unavailable
-            // stock === null → unknown → treat as available (server will gate)
-            // stock  >  0  → in stock → available
-            const hasStock = variant.stock === null || (variant.stock ?? 0) > 0;
-            if (!hasStock) return false;
+            if (variant.status !== 'ACTIVE') return false;
 
-            // Check all OTHER selected attributes still match
-            const othersMatch = attributeTypes.every(type => {
-                if (type.slug === attributeSlug) return true; // Skip the one we're testing
-                const selected = selectedAttributes[type.slug];
-                if (!selected) return true;
-                const variantVal = getVariantAttributeValueFn(variant, type.slug);
-                return variantVal !== null && String(variantVal) === String(selected);
+            // Check all VARIANT-role attributes in testState
+            return variantRoleTypes.every(type => {
+                const desired = testState[type.slug];
+                if (!desired) return true; // Not yet selected — skip constraint
+                const actual = getVariantAttributeValue(variant, type.slug);
+                return actual !== null && String(actual) === String(desired);
             });
-            if (!othersMatch) return false;
-
-            // Check the target attribute matches
-            const variantVal = getVariantAttributeValueFn(variant, attributeSlug);
-            return variantVal !== null && String(variantVal) === String(valueSlug);
         });
-    }, [variants, attributeTypes, selectedAttributes]);
+    }, [variants, variantRoleTypes, selectedAttributes, getVariantAttributeValue]);
 
-    // ── 4. Select attribute ────────────────────────────────────────────────────
+    const isFullyResolved = useMemo(() => {
+        // SPECIFICATION attributes must never inflate the required count
+        const requiredDimCount = variantRoleTypes.length;
+        const selectedDimCount = variantRoleTypes.filter(t => selectedAttributes[t.slug]).length;
+        return !!resolvedVariant && selectedDimCount >= requiredDimCount;
+    }, [resolvedVariant, selectedAttributes, variantRoleTypes]);
+
     const selectAttribute = useCallback((attributeSlug, valueSlug) => {
-        setSelectedAttributes(prev => ({ ...prev, [attributeSlug]: valueSlug }));
+        setSelectedAttributes(prev => {
+            if (prev[attributeSlug] === valueSlug) return prev; // Avoid unnecessary re-render
+            return { ...prev, [attributeSlug]: valueSlug };
+        });
     }, []);
 
-    // ── 5. getVariantAttributeValue (stable ref) ──────────────────────────────
-    const getVariantAttributeValue = useCallback(
-        (variant, slug) => getVariantAttributeValueFn(variant, slug),
-        []
-    );
+    // ── PHASE 9: Default Variant Rule ─────────────────────────────────────────
+    // If a product has zero VARIANT attributes (e.g. a single-SKU product),
+    // the configurator must be hidden and the sole variant must resolve immediately.
+    // Never allow a sellable product to have no resolved variant.
+    const isDefaultVariantProduct = useMemo(() => {
+        return variantRoleTypes.length === 0 && variants.length > 0;
+    }, [variantRoleTypes, variants]);
+
+    // When it's a default-variant product, auto-resolve to the first ACTIVE variant.
+    // This must be done outside resolvedVariant's useMemo to avoid circular dependency.
+    const effectiveResolvedVariant = useMemo(() => {
+        if (isDefaultVariantProduct) {
+            // Prefer ACTIVE, fall back to first available
+            return variants.find(v => v.status === 'ACTIVE') || variants[0] || null;
+        }
+        return resolvedVariant;
+    }, [isDefaultVariantProduct, variants, resolvedVariant]);
+
+    // hideConfigurator: true = render only price/stock/cart, no selector UI
+    const hideConfigurator = isDefaultVariantProduct;
 
     return {
         selectedAttributes,
         setSelectedAttributes,
         selectAttribute,
-        resolvedVariant,
+        resolvedVariant: effectiveResolvedVariant,
+        isFullyResolved: isDefaultVariantProduct ? !!effectiveResolvedVariant : isFullyResolved,
         isOptionAvailable,
         getVariantAttributeValue,
+        variantRoleTypes,
+        hideConfigurator,
+        isDefaultVariantProduct,
     };
 };
+

@@ -1,108 +1,193 @@
-import { getDynamicFilters } from '../services/filterService.js';
-import { parseSearchQuery } from '../services/searchParser.service.js';
-import VariantMaster from '../models/masters/VariantMaster.enterprise.js';
+/**
+ * ========================================================================
+ * DISCOVERY CONTROLLER — SearchDocument-First Architecture
+ * ========================================================================
+ *
+ * CRITICAL RULE:
+ *   ALL listing/search queries go through SearchDocument.
+ *   VariantMaster is NEVER queried directly for listing or search.
+ *   VariantMaster is only accessed for:
+ *     1. PDP (single variant detail, keyed by variantId or productGroupId)
+ *     2. Checkout (pricing + status verification inside a transaction)
+ *
+ * Why:
+ *   - VariantMaster is the source-of-truth write model (complex schema, many hooks)
+ *   - SearchDocument is the pre-computed read projection (flat, indexed, 50ms SLA)
+ *   - Mixing them causes scatter-gather across shards for unscoped queries
+ *
+ * ========================================================================
+ */
 
-// Get Dynamic Facets/Filters
+import SearchDocument from '../models/masters/SearchDocument.enterprise.js';
+import { getDynamicFilters } from '../services/filterService.js';
+
+// ── Get Dynamic Facets/Filters ─────────────────────────────────────────────
+
 export const getExploreFilters = async (req, res) => {
     try {
-        const { categoryId, productIds, category } = req.body; // or query params
+        const { categoryId, productIds, category } = req.body;
 
         let additionalFilters = {};
-        if (productIds) {
-            additionalFilters.productIds = productIds;
-        }
+        if (productIds) additionalFilters.productIds = productIds;
 
-        // Handle category from either categoryId or category field
         const targetCategory = categoryId || category;
-
         const filters = await getDynamicFilters(targetCategory, additionalFilters);
 
-        res.json({
-            success: true,
-            data: filters
-        });
+        res.json({ success: true, data: filters });
     } catch (error) {
         console.error('Explore filters error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to generate filters'
-        });
+        res.status(500).json({ success: false, message: 'Failed to generate filters' });
     }
 };
 
-// Smart Search
+// ── Smart Listing Search — through SearchDocument ONLY ─────────────────────
+
+/**
+ * Full-featured product search & listing.
+ *
+ * All queries go through SearchDocument (read projection layer).
+ * VariantMaster is NOT touched in this flow.
+ *
+ * Query params:
+ *   q         - free-text search
+ *   category  - category slug/name filter
+ *   brand     - brand slug/name filter
+ *   minPrice  - price range lower bound
+ *   maxPrice  - price range upper bound
+ *   inStock   - 'true' to filter in-stock only
+ *   color     - color attribute filter
+ *   size      - size attribute filter
+ *   sortBy    - 'relevance' | 'price_asc' | 'price_desc' | 'popularity' | 'newest'
+ *   page      - page number (default: 1)
+ *   limit     - page size (default: 24, max: 100)
+ *   channel   - 'WEB' | 'APP' | 'B2B' | 'POS'
+ *   region    - 'US' | 'EU' | 'APAC' | 'GLOBAL'
+ */
 export const searchProducts = async (req, res) => {
     try {
-        const { q } = req.query;
+        const {
+            q,
+            category,
+            brand,
+            minPrice,
+            maxPrice,
+            inStock,
+            color,
+            size,
+            material,
+            sortBy = 'relevance',
+            page = 1,
+            limit = 24,
+            channel,
+            region,
+        } = req.query;
 
-        if (!q) {
-            return res.status(400).json({ success: false, message: 'Query required' });
-        }
+        // Build attribute filters
+        const attributes = {};
+        if (color) attributes.color = color.toLowerCase();
+        if (size) attributes.size = size.toLowerCase();
+        if (material) attributes.material = material.toLowerCase();
 
-        // 1. Parse Query
-        const parsed = await parseSearchQuery(q);
+        // Enforce max page size to prevent DDoS via giant pages
+        const pageSize = Math.min(parseInt(limit, 10) || 24, 100);
+        const pageNum = Math.max(parseInt(page, 10) || 1, 1);
 
-        // 2. Build Database Query
-        // Match variants that have ALL the attribute filters
-        const matchConditions = {
-            status: 'active'
-        };
-
-        // Add Attribute Filters
-        // mappedFilters: { color: [id1], size: [id2] }
-        // UnifiedVariant: attributes array [{attributeType: ..., attributeValue: ...}]
-        // This requires complex $and logic for "Matches Color Red AND Matches Size XL"
-
-        const andConditions = [];
-
-        // Text Search (if unmapped tokens exist)
-        // This depends on the Product model having text index, or UnifiedVariant SKUs
-        if (parsed.text) {
-            // For prototype/demo, we search in SKU or delegate to Product search
-            // Here just regex on SKU for simplicity
-            andConditions.push({
-                sku: { $regex: parsed.text, $options: 'i' }
-            });
-        }
-
-        // Attribute Filters
-        Object.keys(parsed.filters).forEach(typeName => {
-            const valueIds = parsed.filters[typeName];
-            // Condition: attributes elemMatch (value in valueIds)
-            // But we don't assume typeName maps to Type ID easily here without Lookup.
-            // Wait, parseSearchQuery returns ID for values.
-            // We need to match 'attributes.attributeValue' IN valueIds.
-            // AND do this for EACH type found.
-
-            andConditions.push({
-                attributes: {
-                    $elemMatch: {
-                        attributeValue: { $in: valueIds }
-                    }
-                }
-            });
+        // ✅ SearchDocument.searchWithFacets — zero VariantMaster reads
+        const results = await SearchDocument.searchWithFacets(q, {
+            text: q || null,
+            category: category || null,
+            brand: brand || null,
+            minPrice: minPrice ? parseFloat(minPrice) : undefined,
+            maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+            inStockOnly: inStock === 'true',
+            attributes,
+            channel: channel || null,
+            region: region || null,
+            sortBy,
+            page: pageNum,
+            limit: pageSize,
         });
-
-        if (andConditions.length > 0) {
-            matchConditions.$and = andConditions;
-        }
-
-        // 3. Execute Search
-        const results = await VariantMaster.find(matchConditions)
-            .populate('product', 'name slug images') // Assuming Product linkage
-            .limit(50);
 
         res.json({
             success: true,
-            parsedQuery: parsed,
-            resultsCount: results.length,
-            data: results
+            source: 'SearchDocument',   // Audit: confirms we're using the projection layer
+            parsedQuery: { q, category, brand, attributes, sortBy },
+            ...results,
         });
     } catch (error) {
-        console.error('Search error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Search failed'
+        console.error('[Discovery] Search error:', error);
+        res.status(500).json({ success: false, message: 'Search failed' });
+    }
+};
+
+// ── Browse by Category (Listing Page) ─────────────────────────────────────
+
+/**
+ * Category listing page — uses SearchDocument with pre-computed facets.
+ * No direct VariantMaster query.
+ */
+export const browseCategory = async (req, res) => {
+    try {
+        const { categorySlug } = req.params;
+        const { sortBy = 'popularity', page = 1, limit = 24, inStock, brand, color, size, minPrice, maxPrice } = req.query;
+
+        const attributes = {};
+        if (color) attributes.color = color.toLowerCase();
+        if (size) attributes.size = size.toLowerCase();
+
+        const results = await SearchDocument.searchWithFacets(null, {
+            category: categorySlug.toUpperCase(),
+            brand: brand || null,
+            inStockOnly: inStock === 'true',
+            attributes,
+            minPrice: minPrice ? parseFloat(minPrice) : undefined,
+            maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+            sortBy,
+            page: Math.max(parseInt(page, 10), 1),
+            limit: Math.min(parseInt(limit, 10) || 24, 100),
         });
+
+        res.json({
+            success: true,
+            source: 'SearchDocument',
+            category: categorySlug,
+            ...results,
+        });
+    } catch (error) {
+        console.error('[Discovery] Browse category error:', error);
+        res.status(500).json({ success: false, message: 'Browse failed' });
+    }
+};
+
+// ── Similar Products ───────────────────────────────────────────────────────
+
+/**
+ * Fetch similar products by same category + brand.
+ * Used in PDP "You may also like" section.
+ */
+export const getSimilarProducts = async (req, res) => {
+    try {
+        const { variantId } = req.params;
+
+        // Fetch the source document from SearchDocument (not VariantMaster)
+        const source = await SearchDocument.findOne({ variantId }).lean();
+        if (!source) {
+            return res.status(404).json({ success: false, message: 'Product not found in search index' });
+        }
+
+        const similar = await SearchDocument.find({
+            category: source.category,
+            isActive: true,
+            inStock: true,
+            variantId: { $ne: source.variantId },
+        })
+            .sort({ popularityScore: -1 })
+            .limit(8)
+            .lean();
+
+        res.json({ success: true, source: 'SearchDocument', data: similar });
+    } catch (error) {
+        console.error('[Discovery] Similar products error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch similar products' });
     }
 };

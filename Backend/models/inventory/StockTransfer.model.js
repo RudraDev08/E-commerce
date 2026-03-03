@@ -26,7 +26,7 @@ const stockTransferSchema = new mongoose.Schema({
         required: true
     },
     items: [{
-        variant: { type: mongoose.Schema.Types.ObjectId, ref: 'Variant', required: true },
+        variant: { type: mongoose.Schema.Types.ObjectId, ref: 'VariantMaster', required: true }, // ✅ FIXED: was 'Variant'
         sku: { type: String, required: true },
         quantity: { type: Number, required: true, min: 1 }
     }],

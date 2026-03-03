@@ -15,6 +15,24 @@ const productGroupSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
+
+    // ==================== IMMUTABLE IDENTITY ====================
+    internalKey: {
+        type: String,
+        immutable: true,
+        required: true,
+        unique: true,
+        uppercase: true,
+        trim: true
+    },
+
+    canonicalId: {
+        type: String,
+        required: true,
+        unique: true,
+        uppercase: true,
+        trim: true
+    },
     baseDescription: {
         type: String
     },
@@ -48,10 +66,30 @@ const productGroupSchema = new mongoose.Schema({
 // Read optimization
 productGroupSchema.index({ tenantId: 1, status: 1 });
 
-// Governance Hook: Block Archival if ACTIVE variants exist
+// Governance Hook: Immutability & Block Archival if ACTIVE variants exist
+productGroupSchema.pre('save', async function () {
+    if (this.isNew) return;
+    const modifiedPaths = this.modifiedPaths();
+    const immutablePaths = ['internalKey', 'categoryId'];
+    const violations = modifiedPaths.filter(path => immutablePaths.includes(path));
+    if (violations.length > 0) {
+        throw new Error(`IMMUTABILITY VIOLATION: ProductGroup structural fields [${violations.join(', ')}] are locked.`);
+    }
+});
+
 productGroupSchema.pre(['findOneAndUpdate', 'updateOne'], async function () {
     const update = this.getUpdate();
     const setUpdate = update.$set || update;
+
+    const docToUpdate = await this.model.findOne(this.getQuery()).lean();
+    if (!docToUpdate) return;
+
+    // Immutability Check
+    const immutableFields = ['internalKey', 'categoryId'];
+    const violations = immutableFields.filter(f => setUpdate[f] !== undefined && setUpdate[f]?.toString() !== docToUpdate[f]?.toString());
+    if (violations.length > 0) {
+        throw new Error(`IMMUTABILITY VIOLATION: Mutation blocked for structural fields: ${violations.join(', ')}`);
+    }
 
     // Check if transitioning to ARCHIVED
     const newStatus = setUpdate.status || update.status;

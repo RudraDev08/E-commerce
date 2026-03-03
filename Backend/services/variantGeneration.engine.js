@@ -1,5 +1,6 @@
 import ProductGroupMaster from '../models/masters/ProductGroupMaster.enterprise.js';
 import VariantMaster from '../models/masters/VariantMaster.enterprise.js';
+import { buildVariantCombinations } from './cartesianEngine.js';
 
 /**
  * Antigravity Variant Generation Guard Layer
@@ -184,4 +185,99 @@ export class VariantGenerationEngine {
             };
         }
     }
+
+    /**
+     * BULK GENERATE VARIANTS
+     * Phase 4: Bulk Consistency & Transactional Guard
+     */
+    static async bulkGenerateFromProductGroup(params) {
+        const { productGroupId, brand, basePrice, tenantId, baseDimensions, maxCombinations = 500 } = params;
+
+        const session = await VariantMaster.startSession();
+        session.startTransaction();
+
+        try {
+            // 1. Resolve & Pre-validate PG Scope
+            const pg = await ProductGroupMaster.findById(productGroupId).session(session).lean();
+            if (!pg) throw new Error('PRODUCT_GROUP_NOT_FOUND');
+            if ((pg.tenantId || 'GLOBAL') !== (tenantId || 'GLOBAL')) throw new Error('TENANT_SCOPE_VIOLATION');
+
+            // 2. Generate Combinations
+            const dimensions = Object.entries(baseDimensions).map(([key, values]) => ({
+                key,
+                values
+            }));
+
+            const combinations = buildVariantCombinations({
+                productGroupId,
+                dimensions,
+                maxCombinations
+            });
+
+            if (combinations.length === 0) throw new Error('NO_COMBINATIONS_GENERATED');
+
+            // 3. Prepare Bulk Operations
+            const variantOps = [];
+            const inventoryOps = [];
+
+            for (const combo of combinations) {
+                // We generate a temporary ID to link variant to inventory in the same batch
+                const variantId = new mongoose.Types.ObjectId();
+
+                variantOps.push({
+                    insertOne: {
+                        document: {
+                            _id: variantId,
+                            ...combo,
+                            productGroupId,
+                            brand,
+                            price: basePrice,
+                            status: 'DRAFT',
+                            tenantId: pg.tenantId || 'GLOBAL',
+                            governance: { identityVersion: 2 }
+                        }
+                    }
+                });
+
+                inventoryOps.push({
+                    insertOne: {
+                        document: {
+                            variantId: variantId,
+                            productId: productGroupId,
+                            totalStock: 0,
+                            reservedStock: 0,
+                            availableStock: 0,
+                            status: 'OUT_OF_STOCK'
+                        }
+                    }
+                });
+            }
+
+            // 4. Execute Atomic Writes
+            // We use ordered: true here to ensure if one fails, the whole transaction fails predictably
+            const variantResult = await VariantMaster.bulkWrite(variantOps, { session, ordered: true });
+
+            // Import InventoryMaster dynamically or ensure it's available
+            const InventoryMaster = mongoose.model('InventoryMaster');
+            await InventoryMaster.bulkWrite(inventoryOps, { session, ordered: true });
+
+            await session.commitTransaction();
+
+            return {
+                success: true,
+                count: variantResult.insertedCount,
+                totalCreated: combinations.length,
+                state: 'ATOMIC_SUCCESS'
+            };
+
+        } catch (error) {
+            await session.abortTransaction();
+            console.error('[BULK_GENERATE_FAILED] Rolling back...', error.message);
+            throw error;
+        } finally {
+            session.endSession();
+        }
+    }
 }
+
+export default VariantGenerationEngine;

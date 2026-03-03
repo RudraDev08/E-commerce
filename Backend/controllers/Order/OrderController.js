@@ -2,23 +2,18 @@ import Order, { ORDER_TRANSITIONS } from '../../models/Order/OrderSchema.js';
 import '../../src/modules/product/product.model.js';
 import inventoryService from '../../services/inventory.service.js';
 import IdempotencyKey from '../../models/Order/IdempotencyKey.schema.js';
+import { nextSequence } from '../../models/Counter.model.js';
 
-// Helper: Generate Order ID (ORD-YYYYMMDD-XXXX)
+import crypto from 'crypto';
+
+/**
+ * Generate Order ID using a true UUID instead of sequential dates/counters.
+ * This completely eliminates collision risks and limits predictability.
+ * 
+ * Format: ORD-<UUID>
+ */
 const generateOrderId = async () => {
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const prefix = `ORD-${date}`;
-
-    const latestOrder = await Order.findOne({ orderId: { $regex: prefix } })
-        .sort({ orderId: -1 })
-        .select('orderId');
-
-    let sequence = 1;
-    if (latestOrder) {
-        const parts = latestOrder.orderId.split('-');
-        sequence = parseInt(parts[2]) + 1;
-    }
-
-    return `${prefix}-${String(sequence).padStart(4, '0')}`;
+    return `ORD-${crypto.randomUUID()}`;
 };
 
 // --------------------------------------------------------------------------
@@ -90,6 +85,19 @@ export const createOrder = async (req, res) => {
                     throw { status: 400, message: `Variant ${item.variantId} not found.` };
                 }
 
+                // Phase 4: Price Version Lock
+                // If client provides a priceVersion, we MUST match it to prevent stale checkout
+                if (item.priceVersion !== undefined && dbVariant.priceVersion !== undefined) {
+                    if (dbVariant.priceVersion !== item.priceVersion) {
+                        throw {
+                            status: 409,
+                            code: 'PRICE_MISMATCH',
+                            message: `Price for ${dbVariant.sku || 'one of the items'} has changed since it was added to cart. Please review and try again.`,
+                            variantId: dbVariant._id
+                        };
+                    }
+                }
+
                 if (dbVariant.status?.toUpperCase() !== 'ACTIVE') {
                     throw { status: 409, code: 'INSUFFICIENT_STOCK', message: `Item ${dbVariant.sku || 'selected'} is no longer available.` };
                 }
@@ -113,6 +121,7 @@ export const createOrder = async (req, res) => {
                     image: dbVariant.images?.[0]?.url || '',
                     quantity: quantity,
                     price: truePrice,
+                    priceVersion: dbVariant.priceVersion, // Snapshot the version used (Phase 4)
                     total: itemTotal
                 });
             }
@@ -120,7 +129,7 @@ export const createOrder = async (req, res) => {
             const serverTax = parseFloat((serverSubtotal * 0.18).toFixed(2));
             const serverGrandTotal = serverSubtotal + serverTax;
 
-            // 3. Generate Order ID
+            // 3. Generate true UUID Order ID
             const orderId = await generateOrderId();
 
             // 4. Create Order Object

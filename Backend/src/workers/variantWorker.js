@@ -6,7 +6,8 @@ import { generateVariantDimensions } from '../../services/variantDimension.servi
 import { createRedisConnection } from '../../config/redis.js';
 
 const connection = createRedisConnection();
-export const variantGenerationWorker = new Worker('variant-generation', async job => {
+
+export const variantGenerationWorker = connection ? new Worker('variant-generation', async job => {
     logger.info(`[VariantWorker] Processing job ${job.id} for productGroup ${job.data.productGroupId} | Attempt ${job.attemptsMade + 1}`);
 
     const controller = new AbortController();
@@ -40,16 +41,21 @@ export const variantGenerationWorker = new Worker('variant-generation', async jo
     lockDuration: 60000,   // prevent stalled resurrection
     stalledInterval: 30000,
     maxStalledCount: 1     // prevent infinite stalled loops
-});
+}) : null;
 
-variantGenerationWorker.on('completed', job => {
-    logger.info(`[VariantWorker] Job ${job.id} has completed!`);
-});
+if (variantGenerationWorker) {
+    variantGenerationWorker.on('completed', job => {
+        logger.info(`[VariantWorker] Job ${job.id} has completed!`);
+    });
 
-variantGenerationWorker.on('failed', async (job, err) => {
-    logger.error(`[VariantWorker] Job ${job.id} failed permanently`, { error: err.message });
-});
+    variantGenerationWorker.on('failed', async (job, err) => {
+        logger.error(`[VariantWorker] Job ${job.id} failed permanently`, { error: err.message });
+    });
 
-variantGenerationWorker.on('error', (err) => {
-    // Suppress repeated Redis connection errors
-});
+    variantGenerationWorker.on('error', (err) => {
+        // Suppress repeated Redis connection errors
+    });
+} else {
+    logger.warn('[VariantWorker] Worker not initialized because Redis is disabled.');
+}
+

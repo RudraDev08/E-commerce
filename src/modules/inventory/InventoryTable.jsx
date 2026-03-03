@@ -135,12 +135,19 @@ const InventoryTable = ({ inventories, onUpdateStock, onViewLedger, formatNumber
                 {/* Actions */}
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <button
-                      onClick={() => onUpdateStock(inventory)}
-                      className="text-[13px] font-medium text-purple-600 hover:text-purple-700 hover:underline"
-                    >
-                      Update
-                    </button>
+                    {/* FIX 5 — Hard block editing if variant is ARCHIVED */}
+                    {inventory.variantId?.status === 'ARCHIVED' || inventory.variantStatus === 'ARCHIVED' ? (
+                      <span className="text-[11px] font-semibold text-slate-400 italic select-none" title="Variant is ARCHIVED — stock editing disabled">
+                        🔒 Archived
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => onUpdateStock(inventory)}
+                        className="text-[13px] font-medium text-purple-600 hover:text-purple-700 hover:underline"
+                      >
+                        Update
+                      </button>
+                    )}
                     <span className="text-gray-300">|</span>
                     <button
                       onClick={() => onViewLedger(inventory)}
@@ -150,6 +157,7 @@ const InventoryTable = ({ inventories, onUpdateStock, onViewLedger, formatNumber
                     </button>
                   </div>
                 </td>
+
               </tr>
             ))}
           </tbody>

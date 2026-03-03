@@ -5,10 +5,13 @@ import api from './axios.config';
  * Connects to Backend Order APIs
  */
 
-// Create new order
-export const createOrder = async (orderData) => {
-    return await api.post('/orders', orderData);
+// Create new order — idempotencyKey prevents duplicate orders on network retries
+export const createOrder = async (orderData, idempotencyKey) => {
+    return await api.post('/orders', orderData, {
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
+    });
 };
+
 
 // Get my orders
 export const getMyOrders = async () => {

@@ -139,3 +139,50 @@
         grid-column: span 1;
     }
 }
+
+/* ── FIX 3 — Cart validation banner ──────────────────────────────────────── */
+
+.validate-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 1px solid #93c5fd;
+    color: #1d4ed8;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.75rem 1.25rem;
+    border-radius: 10px;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 4px rgba(59, 130, 246, 0.12);
+    animation: validate-fadein 0.3s ease;
+}
+
+@keyframes validate-fadein {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.validate-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2.5px solid #93c5fd;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: validate-spin 0.75s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes validate-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

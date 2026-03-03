@@ -44,6 +44,7 @@ const priceSnapshotSchema = new mongoose.Schema({
         breakdown: mongoose.Schema.Types.Mixed
     },
     currency: { type: String, default: 'USD' },
+    priceVersion: Number, // Snapshot for verification (Phase 4)
 
     // Price components (for accounting)
     components: {
@@ -354,7 +355,8 @@ orderItemSnapshotSchema.statics.createFromVariant = async function (variant, ord
                 code: discount.code,
                 type: discount.type
             },
-            currency: variant.currentPrice.currency,
+            currency: variant.currentPrice ? (variant.currentPrice.currency || 'USD') : 'USD',
+            priceVersion: variant.priceVersion,
             components: {
                 product: finalPrice,
                 shipping: orderInfo.shippingCost || 0,

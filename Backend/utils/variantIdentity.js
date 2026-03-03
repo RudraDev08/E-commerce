@@ -65,8 +65,9 @@ export const LIMITS = Object.freeze({
     MAX_COMBINATIONS: 5000,  // Cartesian product hard stop (per batch)
     MAX_IDENTITY_BYTES: 1024, // Raw canonical string byte limit
     MAX_ATTR_DIMENSIONS: 5,    // Enterprise Guard: Dynamic attribute axes only
-    IDENTITY_VERSION: 1, // 6.2 Hash Algorithm Version sentinel
+    IDENTITY_VERSION: 3, // V3: Uses immutable internalKey instead of ObjectId for configHash
 });
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NAMESPACE ORDERING  (SECTION 1 — explicit priority, not ASCII)
@@ -94,6 +95,27 @@ export function normalizeId(raw) {
 }
 
 /**
+ * Resolve an immutable key from a raw object or string.
+ * Prioritizes internalKey > slug > id.
+ * 
+ * @param {string|Object|null|undefined} raw
+ * @returns {string|null}
+ */
+export function resolveKey(raw) {
+    if (!raw) return null;
+    if (typeof raw === 'object') {
+        const key = raw.internalKey || raw.key || raw.slug;
+        if (key) return String(key).trim().toLowerCase();
+
+        if (raw._id) return raw._id.toString();
+        if (raw.id) return String(raw.id).trim().toLowerCase();
+    }
+    const str = String(raw).trim().toLowerCase();
+    if (!str || str === '[object object]') return null;
+    return str;
+}
+
+/**
  * Build a sorted canonical identity segment list from a normalized variant.
  *
  * Accepts a plain object or VariantMaster doc with any combination of:
@@ -112,15 +134,15 @@ export function buildSegments(variant) {
     const segments = [];
 
     // ── COLOR ─────────────────────────────────────────────────────────────────
-    const colorId = normalizeId(variant.colorId);
-    if (colorId) {
-        segments.push({ priority: ORDER_PRIORITY.COLOR, sub: '', val: '', str: `COLOR:${colorId}` });
+    const colorKey = resolveKey(variant.colorId);
+    if (colorKey) {
+        segments.push({ priority: ORDER_PRIORITY.COLOR, sub: '', val: '', str: `COLOR:${colorKey}` });
     }
 
     // ── SIZE ──────────────────────────────────────────────────────────────────
     if (Array.isArray(variant.sizes)) {
         for (const s of variant.sizes) {
-            const sid = normalizeId(s.sizeId);
+            const sid = resolveKey(s.sizeId);
             const cat = (s.category ?? '').trim().toLowerCase();
             if (sid && cat) {
                 segments.push({ priority: ORDER_PRIORITY.SIZE, sub: cat, val: sid, str: `SIZE:${cat}:${sid}` });
@@ -131,15 +153,10 @@ export function buildSegments(variant) {
     // ── ATTR ──────────────────────────────────────────────────────────────────
     if (Array.isArray(variant.attributeDimensions)) {
         for (const dim of variant.attributeDimensions) {
-            const attrId = normalizeId(dim.attributeId);
-            const valueId = normalizeId(dim.valueId);
-            if (attrId && valueId) {
-                segments.push({ priority: ORDER_PRIORITY.ATTR, sub: attrId, val: valueId, str: `ATTR:${attrId}:${valueId}` });
-            }
-            // null attributeId is acceptable (orphaned type), use 'unknown' sentinel
-            // so the segment is still stable and not silently dropped
-            if (!attrId && valueId) {
-                segments.push({ priority: ORDER_PRIORITY.ATTR, sub: 'unknown', val: valueId, str: `ATTR:unknown:${valueId}` });
+            const attrKey = resolveKey(dim.attributeId) || 'unknown';
+            const valueKey = resolveKey(dim.valueId);
+            if (valueKey) {
+                segments.push({ priority: ORDER_PRIORITY.ATTR, sub: attrKey, val: valueKey, str: `ATTR:${attrKey}:${valueKey}` });
             }
         }
     }

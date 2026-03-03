@@ -17,13 +17,20 @@ import {
   Palette,
   ArrowRightLeft,
   ClipboardCheck,
-  Settings
+  Settings,
+  ShoppingCart,
+  Activity,
+  ListTree
 } from "lucide-react";
 
 // Configuration for sidebar menu items
 const MENU_ITEMS = [
   { type: 'header', label: 'Main' },
   { type: 'item', label: 'Dashboard', icon: LayoutGrid, path: '/' },
+  { type: 'item', label: 'System Health', icon: Activity, path: '/system' },
+
+  { type: 'header', label: 'Orders' },
+  { type: 'item', label: 'All Orders', icon: ShoppingCart, path: '/orders' },
 
   { type: 'header', label: 'Infrastructure' },
   { type: 'item', label: 'Country', icon: Globe, path: '/country' },
@@ -39,7 +46,7 @@ const MENU_ITEMS = [
   { type: 'item', label: 'Products', icon: Package, path: '/products' },
   { type: 'item', label: 'Size Management', icon: Ruler, path: '/size-management' },
   { type: 'item', label: 'Color Management', icon: Palette, path: '/color-management' },
-  { type: 'item', label: 'Attribute Manager', icon: Settings, path: '/attributes' },
+  { type: 'item', label: 'Attribute', icon: Settings, path: '/attributes' },
   { type: 'item', label: 'Variant Mapping', icon: Layers, path: '/variant-mapping' },
 
   { type: 'header', label: 'Inventory' },

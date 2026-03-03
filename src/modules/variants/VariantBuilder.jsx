@@ -53,9 +53,11 @@ const VARIANT_COLUMNS = [
     { key: 'select', label: '', width: 52 },
     { key: 'color', label: 'Color', width: 160 },
     { key: 'size', label: 'Size', width: 130 },
-    { key: 'attributes', label: 'Attributes', width: 220 },
+    { key: 'attributes', label: 'Attrs (VARIANT)', width: 220 },
     { key: 'sku', label: 'SKU Ref', width: 160 },
-    { key: 'price', label: 'Price', width: 120 },
+    { key: 'price', label: 'Base Price', width: 120 },
+    { key: 'compareAt', label: 'MRP', width: 110 },
+    { key: 'priceVersion', label: 'Price v', width: 80 },
     { key: 'resolved', label: 'Resolved', width: 140 },
     { key: 'media', label: 'Media', width: 110 },
     { key: 'status', label: 'Status', width: 150 },
@@ -243,7 +245,7 @@ const VariantRow = React.memo(function VariantRow({
                 />
             </td>
 
-            {/* PRICE */}
+            {/* PRICE + compareAtPrice + priceVersion */}
             <td className="px-4 py-4 w-[120px]">
                 <div className="relative">
                     <span className="absolute left-2 top-[7px] text-xs font-bold text-slate-400">₹</span>
@@ -255,9 +257,46 @@ const VariantRow = React.memo(function VariantRow({
                             const norm = normalizePrice(e.target.value);
                             if (norm !== '' && norm !== v.price?.toString()) onUpdateVariant(v._id, 'price', norm);
                         }}
+                        title={isActive ? '⚠️ Editing price of ACTIVE variant will invalidate customer carts.' : 'Edit base price'}
                         className={`w-full font-semibold text-sm pl-6 pr-2 py-1.5 border rounded outline-none ${priceReadonly ? 'bg-slate-100 border-transparent text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200 focus:border-indigo-500'}`}
                     />
+                    {isActive && !priceReadonly && (
+                        <span className="absolute -top-4 left-0 text-[9px] font-bold text-amber-500">⚠ ACTIVE</span>
+                    )}
                 </div>
+            </td>
+
+            {/* MRP / Compare-at price — FIX 9 */}
+            <td className="px-4 py-4 w-[110px]">
+                <div className="relative">
+                    <span className="absolute left-2 top-[7px] text-xs font-bold text-slate-300">₹</span>
+                    <input type="number" step="0.01" min="0"
+                        value={v.compareAtPrice || ''}
+                        readOnly={priceReadonly}
+                        onChange={e => onUpdateVariant(v._id, 'compareAtPrice', e.target.value)}
+                        placeholder="MRP"
+                        title={parseFloat(v.compareAtPrice) < parseFloat(v.price) ? '⚠️ MRP must be ≥ base price' : 'Compare-at / MRP price'}
+                        className={`w-full font-semibold text-sm pl-6 pr-2 py-1.5 border rounded outline-none placeholder:font-normal placeholder:text-slate-300 ${parseFloat(v.compareAtPrice) < parseFloat(v.price)
+                            ? 'border-red-400 bg-red-50 text-red-700 focus:border-red-500'
+                            : priceReadonly ? 'bg-slate-100 border-transparent text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200 focus:border-indigo-500'
+                            }`}
+                    />
+                </div>
+            </td>
+
+            {/* PRICE VERSION — FIX 4 */}
+            <td className="px-4 py-4 w-[80px]">
+                {!v.isNew && v.priceVersion !== undefined ? (
+                    <span
+                        title={isActive ? `Price Version: ${v.priceVersion}. Editing price invalidates carts.` : `Price Version: ${v.priceVersion}`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold font-mono ${isActive ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-slate-100 text-slate-500 border border-slate-200'
+                            }`}
+                    >
+                        v{v.priceVersion}
+                    </span>
+                ) : (
+                    <span className="text-[10px] text-slate-300">—</span>
+                )}
             </td>
 
             {/* RESOLVED PRICE */}
@@ -406,8 +445,14 @@ const VariantBuilder = () => {
             setAllSizes(loadedSizes);
             setAllColors(loadedColors);
 
+            // FIX 6 — Only VARIANT-role attribute types allowed in variant builder
+            // SPECIFICATION attributes are display-only and must never create variant dimensions
+            const variantOnlyTypes = loadedTypes.filter(
+                t => !t.attributeRole || t.attributeRole === 'VARIANT' || t.role === 'VARIANT'
+            );
+
             // Group values by type for the generator UI
-            const groupedAttributes = loadedTypes.map(type => ({
+            const groupedAttributes = variantOnlyTypes.map(type => ({
                 ...type,
                 values: loadedVals.filter(v => v.typeId === type._id || v.type === type._id)
             }));
