@@ -11,13 +11,14 @@ config({ path: path.join(__dirname, '../.env') });
 // Dynamic imports ensure env vars are loaded first
 const { default: logger } = await import('../config/logger.js');
 const { default: connectDB } = await import('../config/db.js');
-const { default: app, runInventoryInvariantCheck } = await import('./app.js');
+const { default: app, runInventoryInvariantCheck, loadSystemState } = await import('./app.js');
 const { startReservationWorker } = await import('../jobs/reservationCleanup.js');
 const { startReconciliationDaemon, runReconciliation } = await import('../services/reconciliation/ReconciliationEngine.js');
 
 // Database Connection
-connectDB().then(() => {
+connectDB().then(async () => {
     // Run non-blocking startup integrity checks after DB connects
+    await loadSystemState();
     runInventoryInvariantCheck();
 });
 

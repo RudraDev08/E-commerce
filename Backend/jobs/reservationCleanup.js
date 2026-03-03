@@ -23,12 +23,12 @@ export const cleanupExpiredReservations = async () => {
     isWorkerRunning = true;
 
     try {
-        const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+        const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
 
         // 2. Find reservations older than 30 mins that are still active
         const expiredReservations = await InventoryReservation.find({
             status: 'active',
-            createdAt: { $lt: thirtyMinsAgo }
+            createdAt: { $lt: fiveMinsAgo }
         }).lean();
 
         if (!expiredReservations.length) return;

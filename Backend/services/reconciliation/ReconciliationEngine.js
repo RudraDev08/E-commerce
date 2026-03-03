@@ -6,49 +6,114 @@ export const runReconciliation = async () => {
     try {
         const VM = mongoose.models.VariantMaster;
         const IM = mongoose.models.InventoryMaster;
-        if (!VM || !IM) return;
+        const IL = mongoose.models.InventoryLedger;
+        if (!VM || !IM || !IL) return;
 
-        // 1. Find variants that are ACTIVE but have no inventory
-        const variants = await VM.find({ status: { $ne: 'ARCHIVED' } }).lean();
-
+        const inventories = await IM.find({ isDeleted: { $ne: true } }).lean();
         let driftCount = 0;
 
-        for (const variant of variants) {
-            const inv = await IM.findOne({ variantId: variant._id });
+        // STEP 2.2: Reconciliation Math
+        // expected = (Total Stock In) - (Total Sold) - (Current Reserved)
+        // masterStock here refers to total physical units ever introduced
 
-            // Missing entirely
-            if (!inv) {
-                driftCount++;
-                continue;
-            }
-
-            // Mismatched Math
-            const expectedAvailable = Math.max(0, inv.totalStock - inv.reservedStock);
-            if (inv.availableStock !== expectedAvailable || inv.reservedStock > inv.totalStock) {
-
-                await IM.updateOne(
-                    { _id: inv._id },
-                    {
-                        $set: {
-                            reservedStock: Math.min(inv.totalStock, inv.reservedStock),
-                            availableStock: expectedAvailable
+        for (const inv of inventories) {
+            const stats = await IL.aggregate([
+                { $match: { variantId: inv.variantId, transactionType: { $in: ['STOCK_IN', 'RETURN_RESTORE', 'ORDER_CANCEL', 'OPENING_STOCK', 'STOCK_OUT', 'ORDER_DEDUCT'] } } },
+                {
+                    $group: {
+                        _id: null,
+                        totalIn: {
+                            $sum: { $cond: [{ $in: ['$transactionType', ['STOCK_IN', 'RETURN_RESTORE', 'ORDER_CANCEL', 'OPENING_STOCK']] }, '$quantity', 0] }
+                        },
+                        totalSold: {
+                            $sum: { $cond: [{ $in: ['$transactionType', ['STOCK_OUT', 'ORDER_DEDUCT']] }, { $abs: '$quantity' }, 0] }
                         }
                     }
-                );
+                }
+            ]);
 
-                logger.warn('INVENTORY_DRIFT_FIXED', { variantId: variant._id });
+            const masterStock = stats[0]?.totalIn || 0;
+            const sold = stats[0]?.totalSold || 0;
+            const reserved = inv.reservedStock || 0;
+
+            // STEP 5: Formula
+            const expectedStock = masterStock - sold - reserved;
+            const expectedTotalStock = masterStock - sold;
+
+            if (inv.totalStock !== expectedTotalStock || inv.availableStock !== expectedStock) {
                 driftCount++;
+
+                const session = await mongoose.startSession();
+                session.startTransaction();
+                try {
+                    await IM.updateOne(
+                        { _id: inv._id },
+                        {
+                            $set: {
+                                totalStock: expectedTotalStock,
+                                availableStock: Math.max(0, expectedStock),
+                                reservedStock: reserved,
+                                lastUpdated: new Date()
+                            }
+                        },
+                        { session }
+                    );
+
+                    await session.commitTransaction();
+
+                    logger.warn('INVENTORY_DRIFT_FIXED', {
+                        variantId: inv.variantId,
+                        sku: inv.sku,
+                        actualTotal: inv.totalStock,
+                        expectedTotal: expectedTotalStock,
+                        actualAvailable: inv.availableStock,
+                        expectedAvailable: expectedStock
+                    });
+                } catch (e) {
+                    await session.abortTransaction();
+                    logger.error(`Reconciliation failed for ${inv.variantId}`, e);
+                } finally {
+                    session.endSession();
+                }
             }
         }
 
-        // Setup global threshold triggering
         if (driftCount > 0) {
             MetricsService.trackStockDrift('SYSTEM', driftCount);
 
-            // In a real system you'd set checkoutFrozen = true globally here if the threshold is massive
-            if (driftCount >= 20) {
+            if (driftCount >= 10) {
+                global.systemState = global.systemState || {};
                 global.systemState.checkoutFrozen = true;
-                logger.error('CRITICAL: Massive stock drift detected. Checkout frozen.', { drift: driftCount });
+                global.systemState.reason = 'Critical stock drift >= 10';
+
+                try {
+                    const SystemState = mongoose.models.SystemState;
+                    if (SystemState) {
+                        await SystemState.findOneAndUpdate(
+                            {},
+                            { checkoutFrozen: true, reason: 'Critical stock drift >= 10', triggeredAt: new Date() },
+                            { upsert: true }
+                        );
+                    }
+
+                    const AlertLog = mongoose.models.AlertLog;
+                    if (AlertLog) {
+                        const activeAlert = await AlertLog.findOne({ metric: 'stock_drift_total', isActive: true });
+                        if (!activeAlert) {
+                            await AlertLog.create({
+                                metric: 'stock_drift_total',
+                                value: driftCount,
+                                severity: 'CRITICAL',
+                                threshold: 10,
+                                triggeredBy: 'RECONCILIATION_ENGINE'
+                            });
+                        }
+                    }
+                } catch (e) {
+                    logger.error('Failed to persist drift freeze state', e);
+                }
+
+                logger.error('CRITICAL: Stock drift detected. Checkout FROZEN for safety.');
             }
         }
 

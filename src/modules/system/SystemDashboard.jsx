@@ -3,18 +3,18 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const METRICS_URL = `${API_URL}/internal/metrics`;
-const POLL_INTERVAL = 15_000; // 15 s
+const POLL_INTERVAL = 30_000; // 30 s (Step 14)
 
 // ── Threshold config ──────────────────────────────────────────────────────────
 const THRESHOLDS = {
-    stockDriftCount: { warn: 5, crit: 20 },
-    OCCConflictRate: { warn: 0.05, crit: 0.2 },
-    reservationSpikeRate: { warn: 0.1, crit: 0.3 },
-    allocationFailureRate: { warn: 0.03, crit: 0.1 },
-    transactionRetryRate: { warn: 0.05, crit: 0.15 },
-    priceMismatchRate: { warn: 0.02, crit: 0.08 },
-    orderIdCollisions: { warn: 1, crit: 5 },
-    promotionConflicts: { warn: 3, crit: 10 },
+    stock_drift_count: { warn: 5, crit: 20 },
+    occ_conflict_rate: { warn: 0.05, crit: 0.2 },
+    reservation_spike_rate: { warn: 0.1, crit: 0.3 },
+    allocation_failure_rate: { warn: 0.03, crit: 0.1 },
+    transaction_retry_rate: { warn: 0.05, crit: 0.15 },
+    price_mismatch_rate: { warn: 0.02, crit: 0.08 },
+    order_id_collisions: { warn: 1, crit: 5 },
+    promotion_conflicts: { warn: 3, crit: 10 },
 };
 
 const getLevel = (key, value) => {
@@ -39,14 +39,14 @@ const fmt = (v) => {
 };
 
 const METRIC_META = [
-    { key: 'stockDriftCount', label: 'Stock Drift Count', desc: 'Variants with inventory mismatches' },
-    { key: 'OCCConflictRate', label: 'OCC Conflict Rate', desc: 'Optimistic concurrency conflicts / total writes' },
-    { key: 'reservationSpikeRate', label: 'Reservation Spike Rate', desc: 'Flash sale reservation over-demand ratio' },
-    { key: 'allocationFailureRate', label: 'Allocation Failure Rate', desc: 'Warehouse allocation failures / total allocations' },
-    { key: 'transactionRetryRate', label: 'Transaction Retry Rate', desc: 'Mongo transaction retries / total attempts' },
-    { key: 'priceMismatchRate', label: 'Price Mismatch Rate', desc: 'Orders with stale price vs backend price' },
-    { key: 'orderIdCollisions', label: 'Order ID Collisions', desc: 'Duplicate order ID attempts (should be 0)' },
-    { key: 'promotionConflicts', label: 'Promotion Conflicts', desc: 'Concurrent promotion rule conflicts' },
+    { key: 'stock_drift_count', label: 'Stock Drift Count', desc: 'Variants with inventory mismatches' },
+    { key: 'occ_conflict_rate', label: 'OCC Conflict Rate', desc: 'Optimistic concurrency conflicts / total writes' },
+    { key: 'reservation_spike_rate', label: 'Reservation Spike Rate', desc: 'Flash sale reservation over-demand ratio' },
+    { key: 'allocation_failure_rate', label: 'Allocation Failure Rate', desc: 'Warehouse allocation failures / total allocations' },
+    { key: 'transaction_retry_rate', label: 'Transaction Retry Rate', desc: 'Mongo transaction retries / total attempts' },
+    { key: 'price_mismatch_rate', label: 'Price Mismatch Rate', desc: 'Orders with stale price vs backend price' },
+    { key: 'order_id_collisions', label: 'Order ID Collisions', desc: 'Duplicate order ID attempts (should be 0)' },
+    { key: 'promotion_conflicts', label: 'Promotion Conflicts', desc: 'Concurrent promotion rule conflicts' },
 ];
 
 // ── Single metric card ────────────────────────────────────────────────────────
@@ -81,16 +81,34 @@ const SystemDashboard = () => {
     const [lastFetch, setLastFetch] = useState(null);
     const [uptime, setUptime] = useState(null);
 
+    const parsePrometheus = (text) => {
+        const lines = text.split('\n');
+        const obj = {};
+        lines.forEach(line => {
+            const [key, val] = line.trim().split(/\s+/);
+            if (key && val !== undefined) obj[key] = parseFloat(val);
+        });
+        return obj;
+    };
+
     const fetchMetrics = useCallback(async () => {
         try {
             const res = await axios.get(METRICS_URL);
-            const data = res.data?.data || res.data;
+
+            // Handle both JSON and Plaintext (Step 1.2 transitioning)
+            let data = res.data;
+            if (typeof data === 'string') {
+                data = parsePrometheus(data);
+            } else if (data?.data) {
+                data = data.data;
+            }
+
             setMetrics(data);
             setLastFetch(new Date());
             setError(null);
             if (data?.uptime) setUptime(data.uptime);
         } catch (err) {
-            setError('Cannot reach /internal/metrics — is the backend running with this endpoint exposed?');
+            setError('Cannot reach /internal/metrics — is the backend running?');
         } finally {
             setLoading(false);
         }
@@ -117,6 +135,11 @@ const SystemDashboard = () => {
         <div className="min-h-screen bg-gray-50 pb-20">
             {/* ── HEADER ─────────────────────────────────────────────── */}
             <div className="bg-white border-b border-gray-200">
+                {metrics?.checkout_frozen === 1 && (
+                    <div className="bg-red-600 text-white text-center py-2 font-bold uppercase tracking-widest text-sm">
+                        🚨 CHECKOUT IS CURRENTLY FROZEN FOR SAFETY 🚨
+                    </div>
+                )}
                 <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">System Observability</h1>

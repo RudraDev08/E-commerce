@@ -116,7 +116,8 @@ const inventoryMasterSchema = new mongoose.Schema({
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-    optimisticConcurrency: true
+    optimisticConcurrency: true,
+    versionKey: "__v"
 });
 
 // Pre-save to update status and sync availableStock

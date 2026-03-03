@@ -17,13 +17,96 @@ class MetricsService {
         this.counters = new Map();
         this.histograms = new Map();
         this.gauges = new Map();
+
+        // Sliding Window for Reservation Spikes (Step 4.1)
+        this.reservationWindow = [];
+        this.WINDOW_MS = 30000; // 30 seconds
+        this.baselineRes = 10;  // Minimum baseline to avoid noise
     }
 
     /** Increment a counter metric */
     inc(name, labels = {}, value = 1) {
         const key = this._serialize(name, labels);
         this.counters.set(key, (this.counters.get(key) || 0) + value);
+
+        // Handle sliding window for reservations (Step 4.1)
+        if (name === 'total_reservations') {
+            const now = Date.now();
+            this.reservationWindow.push(now);
+            this._cleanupWindow(now);
+            this._checkCircuitBreaker();
+        }
+
         logger.info('METRIC_INCREMENT', { metric: name, labels, value });
+    }
+
+    _cleanupWindow(now) {
+        this.reservationWindow = this.reservationWindow.filter(t => now - t < 30000);
+    }
+
+    _checkCircuitBreaker() {
+        // Step 2: Fix Sliding Window Reservation Spike
+        const currentCount = this.reservationWindow.length;
+
+        let baseline = 10;
+        const uptimeSeconds = process.uptime();
+        if (uptimeSeconds > 30) {
+            const totalRes = this.counters.get(this._serialize('total_reservations', {})) || 0;
+            // rolling average of reservations per 30s
+            baseline = Math.max(10, totalRes / (uptimeSeconds / 30));
+        }
+
+        const spikeRate = ((currentCount - baseline) / baseline) * 100;
+
+        try {
+            const mongoose = require('mongoose');
+            const AlertLog = mongoose.models.AlertLog;
+            const SystemState = mongoose.models.SystemState;
+
+            if (spikeRate > 30) {
+                global.systemState = global.systemState || {};
+                if (!global.systemState.checkoutFrozen) {
+                    global.systemState.checkoutFrozen = true;
+                    global.systemState.reason = 'Reservation spike > 30%';
+                    logger.error('CIRCUIT_BREAKER_TRIGGERED: Reservation spike > 30%. Checkout frozen.');
+                    this.inc('circuit_breaker_trips_total');
+
+                    if (SystemState) {
+                        SystemState.findOneAndUpdate(
+                            {},
+                            { checkoutFrozen: true, reason: 'Reservation spike > 30%', triggeredAt: new Date() },
+                            { upsert: true }
+                        ).catch(() => { });
+                    }
+                }
+
+                // Step 4: Prevent Alert Storms
+                if (AlertLog) {
+                    AlertLog.findOne({ metric: 'reservation_spike_rate', isActive: true }).then(activeAlert => {
+                        if (!activeAlert) {
+                            AlertLog.create({
+                                metric: 'reservation_spike_rate',
+                                value: spikeRate,
+                                severity: 'CRITICAL',
+                                threshold: 30,
+                                triggeredBy: 'METRICS_ENGINE',
+                                isActive: true
+                            }).catch(() => { });
+                        }
+                    });
+                }
+            } else {
+                // If normal, resolve active alerts
+                if (AlertLog) {
+                    AlertLog.updateMany(
+                        { metric: 'reservation_spike_rate', isActive: true },
+                        { isActive: false, resolvedAt: new Date() }
+                    ).catch(() => { });
+                }
+            }
+        } catch (e) {
+            // Silent catch to prevent metrics engine from crashing the app
+        }
     }
 
     /** Observe a value for a distribution (Latency, p95, etc.) */
@@ -110,27 +193,64 @@ class MetricsService {
         });
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // 📤 Prometheus-compatible scrape output
-    // ─────────────────────────────────────────────────────────────────────
+    /** Helper to calculate rates safely (prevents division by zero, NaN, Infinity) */
+    _calcRate(numerator, denominator) {
+        if (!denominator || denominator <= 0) return 0;
+        const value = numerator / denominator;
+        if (!isFinite(value) || isNaN(value)) return 0;
+        return Number((value * 100).toFixed(2));
+    }
 
-    /**
-     * Returns all counters in Prometheus text exposition format.
-     * Mount this on GET /metrics in a separate internal port.
-     */
+    /** Returns exactly the 8 metrics required for System Hardening in Prometheus text format. */
     scrape() {
-        const lines = [];
-        for (const [key, value] of this.counters) {
-            const [name] = key.split('|');
-            lines.push(`# TYPE ${name} counter`);
-            lines.push(`${name} ${value}`);
+        const getCounter = (name) => {
+            let total = 0;
+            for (const [key, val] of this.counters) {
+                if (key.startsWith(`${name}|`)) total += val;
+            }
+            return total;
+        };
+
+        const now = Date.now();
+        this._cleanupWindow(now);
+        const currentCount = this.reservationWindow.length;
+
+        let baseline = 10;
+        const uptimeSeconds = process.uptime();
+        if (uptimeSeconds > 30) {
+            const totalRes = getCounter('total_reservations') || 0;
+            baseline = Math.max(10, totalRes / (uptimeSeconds / 30));
         }
-        for (const [key, value] of this.gauges) {
-            const [name] = key.split('|');
-            lines.push(`# TYPE ${name} gauge`);
-            lines.push(`${name} ${value}`);
-        }
-        return lines.join('\n');
+
+        const spikeRate = this._calcRate(Math.max(0, currentCount - baseline), baseline);
+
+        const metricsData = {
+            stock_drift_count: getCounter('stock_drift_total'),
+            occ_conflict_rate: this._calcRate(
+                getCounter('occ_conflict_total'),
+                getCounter('total_writes')
+            ),
+            reservation_spike_rate: spikeRate,
+            allocation_failure_rate: this._calcRate(
+                getCounter('allocation_failure_total'),
+                getCounter('total_allocations')
+            ),
+            transaction_retry_rate: this._calcRate(
+                getCounter('transaction_retry_total'),
+                getCounter('total_tx_attempts')
+            ),
+            price_mismatch_rate: this._calcRate(
+                getCounter('price_mismatch_total'),
+                getCounter('total_checkouts')
+            ),
+            order_id_collisions: getCounter('order_id_collision_attempt_total'),
+            promotion_conflicts: getCounter('promotion_conflict_total'),
+            checkout_frozen: global.systemState?.checkoutFrozen ? 1 : 0
+        };
+
+        return Object.entries(metricsData)
+            .map(([k, v]) => `${k} ${v}`)
+            .join('\n');
     }
 
     /** Returns all metrics as a plain JSON object for ELK/DataDog */

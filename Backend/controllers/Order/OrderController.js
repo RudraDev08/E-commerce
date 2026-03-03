@@ -1,10 +1,10 @@
-import Order, { ORDER_TRANSITIONS } from '../../models/Order/OrderSchema.js';
-import '../../src/modules/product/product.model.js';
+import Order from '../../models/Order/OrderSchema.js';
 import inventoryService from '../../services/inventory.service.js';
 import IdempotencyKey from '../../models/Order/IdempotencyKey.schema.js';
-import { nextSequence } from '../../models/Counter.model.js';
-
+import mongoose from 'mongoose';
 import crypto from 'crypto';
+import metrics from '../../services/MetricsService.js';
+import { runInTransaction } from '../../utils/transaction.util.js';
 
 /**
  * Generate Order ID using a true UUID instead of sequential dates/counters.
@@ -20,44 +20,53 @@ const generateOrderId = async () => {
 // CREATE ORDER
 // --------------------------------------------------------------------------
 export const createOrder = async (req, res) => {
+    if (global.systemState && global.systemState.checkoutFrozen) {
+        return res.status(503).json({
+            success: false,
+            message: 'Checkout is currently unavailable',
+            reason: global.systemState.reason || 'System protection freeze active'
+        });
+    }
+
     const key = req.headers['idempotency-key'];
     if (!key) {
         return res.status(400).json({ success: false, message: 'Idempotency-Key required' });
     }
 
+    // Step 9.3: Idempotency Protection
+    const IdempotencyKey = mongoose.model('IdempotencyKey');
     try {
-        const existing = await IdempotencyKey.findOne({ key });
-
-        if (existing && existing.orderId) {
-            const existingOrder = await Order.findById(existing.orderId);
-            return res.json({
-                success: true,
-                message: "Order placed successfully (Idempotent)",
-                data: existingOrder
-            });
-        }
-
-        if (!existing) {
-            await IdempotencyKey.create({
-                key,
-                userId: req.user?._id || req.body.userId || "65c3f9b0e4b0a1b2c3d4e5f6",
-                expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000)
-            });
-        }
+        const auditRecord = await IdempotencyKey.create({
+            key,
+            userId: req.user?._id || req.body.userId || "65c3f9b0e4b0a1b2c3d4e5f6",
+            expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+            status: 'PROCESSING'
+        });
     } catch (err) {
         if (err.code === 11000) {
-            return res.status(409).json({ success: false, message: "Request currently processing" });
+            metrics.inc('order_id_collision_attempt_total');
+            const existing = await IdempotencyKey.findOne({ key });
+            if (existing && existing.orderId) {
+                const Order = mongoose.model('Order');
+                const existingOrder = await Order.findById(existing.orderId);
+                return res.json({
+                    success: true,
+                    message: "Order placed successfully (Idempotent)",
+                    data: existingOrder
+                });
+            } else {
+                return res.status(409).json({ success: false, message: "Request currently processing" });
+            }
         }
         return res.status(500).json({ success: false, message: err.message });
     }
 
-    const mongoose = (await import('mongoose')).default;
-    const session = await mongoose.startSession();
+    metrics.inc('total_checkouts');
 
     try {
         let savedOrder = null;
 
-        await session.withTransaction(async () => {
+        await runInTransaction(async (session) => {
             const {
                 items,
                 shippingAddress,
@@ -65,49 +74,74 @@ export const createOrder = async (req, res) => {
                 userId
             } = req.body;
 
-            // 1. Basic Validation
             if (!items || !Array.isArray(items) || items.length === 0) {
                 throw { status: 400, message: "No items in order" };
             }
 
             const VariantMaster = mongoose.models.VariantMaster || mongoose.model('VariantMaster');
-            const ProductVariant = mongoose.models.Variant || mongoose.model('Variant');
+            const InventoryMaster = mongoose.models.InventoryMaster;
+            const InventoryReservation = mongoose.models.InventoryReservation;
 
             let serverSubtotal = 0;
             const processedItems = [];
 
-            // 2. Resolve Pricing & Validate Status
+            const customerId = req.user?._id || userId || "65c3f9b0e4b0a1b2c3d4e5f6";
+
             for (const item of items) {
+                metrics.inc('total_reservations');
+
                 let dbVariant = await VariantMaster.findById(item.variantId).session(session);
-                if (!dbVariant) dbVariant = await ProductVariant.findById(item.variantId).session(session);
 
                 if (!dbVariant) {
                     throw { status: 400, message: `Variant ${item.variantId} not found.` };
                 }
 
-                // Phase 4: Price Version Lock
-                // If client provides a priceVersion, we MUST match it to prevent stale checkout
+                // Step 8: Price Version Lock
                 if (item.priceVersion !== undefined && dbVariant.priceVersion !== undefined) {
                     if (dbVariant.priceVersion !== item.priceVersion) {
+                        metrics.inc('price_mismatch_total');
                         throw {
                             status: 409,
                             code: 'PRICE_MISMATCH',
-                            message: `Price for ${dbVariant.sku || 'one of the items'} has changed since it was added to cart. Please review and try again.`,
+                            message: `Price for ${dbVariant.sku || 'one of the items'} has changed since it was added to cart.`,
                             variantId: dbVariant._id
                         };
                     }
                 }
 
+                // Step 7: Allocation Failure Protection
                 if (dbVariant.status?.toUpperCase() !== 'ACTIVE') {
-                    throw { status: 409, code: 'INSUFFICIENT_STOCK', message: `Item ${dbVariant.sku || 'selected'} is no longer available.` };
+                    metrics.inc('allocation_failure_total');
+                    throw { status: 409, code: 'INSUFFICIENT_STOCK', message: `Item ${dbVariant.sku || 'selected'} is no longer active.` };
+                }
+
+                const quantity = parseInt(item.quantity, 10);
+                if (isNaN(quantity) || quantity <= 0) throw { status: 400, message: "Invalid quantity" };
+
+                // Validate Stock & Reservation
+                const dbInventory = await InventoryMaster.findOne({ variantId: item.variantId }).session(session);
+                if (!dbInventory || dbInventory.availableStock < quantity) {
+                    metrics.inc('allocation_failure_total');
+                    throw { status: 409, code: 'INSUFFICIENT_STOCK', message: `Insufficient stock for ${dbVariant.sku}` };
+                }
+
+                if (InventoryReservation) {
+                    const activeReservation = await InventoryReservation.findOne({
+                        userId: customerId,
+                        'items.variantId': item.variantId,
+                        status: 'RESERVED',
+                        expiresAt: { $gt: new Date() }
+                    }).session(session);
+
+                    if (!activeReservation) {
+                        metrics.inc('allocation_failure_total');
+                        throw { status: 409, code: 'RESERVATION_EXPIRED', message: `Reservation expired or not found for ${dbVariant.sku}` };
+                    }
                 }
 
                 let truePrice = 0;
                 if (dbVariant.resolvedPrice) truePrice = parseFloat(dbVariant.resolvedPrice.toString());
                 else if (dbVariant.price) truePrice = parseFloat(dbVariant.price.toString());
-
-                const quantity = parseInt(item.quantity, 10);
-                if (isNaN(quantity) || quantity <= 0) throw { status: 400, message: "Invalid quantity" };
 
                 const itemTotal = truePrice * quantity;
                 serverSubtotal += itemTotal;
@@ -121,7 +155,7 @@ export const createOrder = async (req, res) => {
                     image: dbVariant.images?.[0]?.url || '',
                     quantity: quantity,
                     price: truePrice,
-                    priceVersion: dbVariant.priceVersion, // Snapshot the version used (Phase 4)
+                    priceVersion: dbVariant.priceVersion,
                     total: itemTotal
                 });
             }
@@ -129,8 +163,8 @@ export const createOrder = async (req, res) => {
             const serverTax = parseFloat((serverSubtotal * 0.18).toFixed(2));
             const serverGrandTotal = serverSubtotal + serverTax;
 
-            // 3. Generate true UUID Order ID
-            const orderId = await generateOrderId();
+            // 3. Generate true UUID Order ID (Step 8.1)
+            const orderId = `ORD-${crypto.randomUUID()}`;
 
             // 4. Create Order Object
             const newOrder = new Order({
@@ -152,8 +186,7 @@ export const createOrder = async (req, res) => {
             // 5. Save Order within Transaction
             savedOrder = await newOrder.save({ session });
 
-            // 6. ATOMIC STOCK DEDUCTION
-            // This is protected by the transaction. If any deduction fails, whole order rolls back.
+            // 6. ATOMIC STOCK DEDUCTION (Step 2.1)
             for (const item of processedItems) {
                 try {
                     await inventoryService.deductStockForOrder(
@@ -163,7 +196,7 @@ export const createOrder = async (req, res) => {
                         session
                     );
                 } catch (invError) {
-                    console.error(`[Stock Error] ${invError.message}`);
+                    metrics.inc('allocation_failure_total');
                     throw {
                         status: 409,
                         code: 'INSUFFICIENT_STOCK',

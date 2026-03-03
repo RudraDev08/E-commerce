@@ -1,8 +1,9 @@
+import mongoose from 'mongoose';
+import metrics from './MetricsService.js';
 import InventoryLedger from '../models/inventory/InventoryLedger.model.js';
 import InventoryMaster from '../models/inventory/InventoryMaster.model.js';
 import Variant from '../models/variant/variantSchema.js';
 import { SnapshotService } from './snapshot.service.js';
-import mongoose from 'mongoose';
 
 /**
  * ========================================================================
@@ -28,7 +29,8 @@ class InventoryService {
       transactionDate: new Date()
     };
     const options = session ? { session } : {};
-    return InventoryLedger.create([entryData], options);
+    metrics.inc('total_writes');
+    return mongoose.model('InventoryLedger').create([entryData], options);
   }
 
   async _getOrCreateInventory(variantId, session = null, initialStock = 0) {
@@ -338,9 +340,11 @@ class InventoryService {
 
   async deductStockForOrder(variantId, quantity, orderId, session = null) {
     try {
+      metrics.inc('total_writes');
       const inventory = await this._getOrCreateInventory(variantId, session);
 
       if (inventory.totalStock < quantity) {
+        metrics.inc('allocation_failure_total');
         throw new Error(`Insufficient stock for variant ${variantId}. Available: ${inventory.totalStock}, Required: ${quantity}`);
       }
 
@@ -405,6 +409,7 @@ class InventoryService {
    * @returns {Array} allocations: [{ warehouseId, allocated }]
    */
   async allocateFromWarehouses(variantId, quantity, orderId, session = null, customerPin = null) {
+    metrics.inc('total_allocations');
     const inventory = await this._getOrCreateInventory(variantId, session);
     if (!inventory.locations || inventory.locations.length === 0) {
       // Fallback: single default stock
@@ -523,6 +528,7 @@ class InventoryService {
 
   async reserveStock(variantId, quantity, referenceId, session = null) {
     try {
+      metrics.inc('total_writes');
       const inventory = await this._getOrCreateInventory(variantId, session);
 
       const available = inventory.availableStock || (inventory.totalStock - (inventory.reservedStock || 0));

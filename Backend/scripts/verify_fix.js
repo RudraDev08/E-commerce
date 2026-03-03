@@ -1,17 +1,29 @@
-import axios from 'axios';
 
-async function test() {
-    const variantId = '699ebfc5f261904041b4d5b9';
-    try {
-        const response = await axios.get(`http://localhost:5000/api/variants/${variantId}`);
-        console.log('SUCCESS!');
-        console.log('Status:', response.status);
-        console.log('Data:', JSON.stringify(response.data, null, 2));
-    } catch (error) {
-        console.log('FAILED!');
-        console.log('Status:', error.response?.status);
-        console.log('Error Data:', JSON.stringify(error.response?.data, null, 2));
+import 'dotenv/config';
+import mongoose from 'mongoose';
+import '../models/masters/VariantMaster.enterprise.js';
+import '../models/inventory/InventoryMaster.model.js';
+
+async function verify() {
+    const uri = process.env.MONGO_URI;
+    await mongoose.connect(uri);
+
+    const VM = mongoose.models.VariantMaster;
+    const IM = mongoose.models.InventoryMaster;
+
+    const [variantCount, inventoryCount] = await Promise.all([
+        VM.countDocuments({ status: { $ne: 'ARCHIVED' } }),
+        IM.countDocuments({ isDeleted: false }),
+    ]);
+
+    console.log(`[VERIFY] Variants: ${variantCount}, Inventory: ${inventoryCount}`);
+    if (variantCount === inventoryCount) {
+        console.log('✅ INVARIANT OK');
+    } else {
+        console.log('❌ INVARIANT VIOLATED');
     }
+
+    await mongoose.disconnect();
 }
 
-test();
+verify().catch(console.error);

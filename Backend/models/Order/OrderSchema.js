@@ -128,7 +128,8 @@ const orderSchema = new mongoose.Schema({
     }
 }, {
     timestamps: true,
-    optimisticConcurrency: true
+    optimisticConcurrency: true,
+    versionKey: "__v"
 });
 
 // ✅ Step 2 — Enforce in Schema Hook

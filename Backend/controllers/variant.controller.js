@@ -57,10 +57,26 @@ exports.getConfigurations = async (req, res) => {
                 productGroupId,
                 status: 'ACTIVE'
             })
-                .select('sku price imageGallery inventory colorId sizes')
+                .select('sku price imageGallery inventory colorId sizes attributeValueIds')
                 .populate('colorId', 'name hexCode category')
                 .populate('sizes.sizeId', 'value displayName sortOrder')
+                .populate({
+                    path: 'attributeValueIds',
+                    populate: {
+                        path: 'attributeType',
+                        model: 'AttributeType'
+                    }
+                })
                 .lean();
+
+            if (variants.length === 0) {
+                return null;
+            }
+
+            const variantIds = variants.map(v => v._id);
+            const inventoryDocs = await InventoryMaster.find({ variantId: { $in: variantIds } }).lean();
+            const invMap = {};
+            inventoryDocs.forEach(inv => invMap[inv.variantId.toString()] = inv.availableStock);
 
             if (variants.length === 0) {
                 return null;
@@ -111,6 +127,25 @@ exports.getConfigurations = async (req, res) => {
                     });
                 }
 
+                // 3) Attributes Tokens
+                if (variant.attributeValueIds && variant.attributeValueIds.length > 0) {
+                    variant.attributeValueIds.forEach(attrVal => {
+                        if (!attrVal || !attrVal._id) return;
+                        const attrId = attrVal._id.toString();
+                        tokenKeys.push(attrId);
+
+                        const typeName = attrVal.attributeType?.name || attrVal.attributeType?.displayName || 'Options';
+                        if (!sizeMaps[typeName]) sizeMaps[typeName] = new Map();
+                        if (!sizeMaps[typeName].has(attrId)) {
+                            sizeMaps[typeName].set(attrId, {
+                                id: attrId,
+                                label: attrVal.displayName || attrVal.name || attrVal.value,
+                                sortOrder: 0
+                            });
+                        }
+                    });
+                }
+
                 // Generate deterministic key for combination matrix
                 const combinationKey = tokenKeys.sort().join('.');
                 responseData.matrix[combinationKey] = variant._id.toString();
@@ -118,9 +153,9 @@ exports.getConfigurations = async (req, res) => {
                 // Populate Dicionary
                 responseData.variantDictionary[variant._id.toString()] = {
                     sku: variant.sku,
-                    price: parseFloat(variant.price?.toString() || 0),
+                    price: parseFloat(variant.price?.toString() || variant.price?.$numberDecimal || 0),
                     images: variant.imageGallery || [],
-                    inventory: variant.inventory?.quantityOnHand || 0
+                    inventory: invMap[variant._id.toString()] || 0
                 };
             });
 

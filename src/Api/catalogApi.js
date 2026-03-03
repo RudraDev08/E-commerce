@@ -10,6 +10,7 @@ export const getProducts = () => api.get("/products");
 export const getAllProductTypes = () => api.get("/product-types");
 
 export const getProductType = (id) => api.get(`/product-types/${id}`);
+export const getVariants = (productId) => api.get(`/products/${productId}/variants`);
 export const createVariants = (data) => api.post("/variants", data);
 export const deleteVariant = (id, data) => api.delete(`/variants/${id}`, { data });
 export const updateVariant = (id, data) => api.patch(`/variants/${id}`, data);

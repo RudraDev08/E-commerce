@@ -130,7 +130,7 @@ const VariantList = ({ productId }) => {
             <tbody>
               {variants.map((variant) => {
                 const isLocked = ["LOCKED", "ARCHIVED"].includes(variant.status);
-                const qty = variant.inventory?.quantityOnHand || 0;
+                const qty = variant.stock ?? variant.inventory?.quantityOnHand ?? 0;
 
                 return (
                   <tr key={variant._id} className="border-b hover:bg-gray-50">
@@ -142,9 +142,17 @@ const VariantList = ({ productId }) => {
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {/* ✅ Structured Attribute Display */}
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-semibold">Size: {variant.size?.displayName || variant.size?.name || "N/A"}</span>
-                        <span>Color: {variant.color?.name || "N/A"}</span>
+                      <div className="flex flex-col gap-0.5 text-xs">
+                        {variant.color && <span>Color: {variant.color.displayName || variant.color.name}</span>}
+                        {variant.size && <span className="font-semibold">Size: {variant.size.displayName || variant.size.name || variant.size.value}</span>}
+                        {variant.attributes?.map(attr => (
+                          <span key={attr.code || attr._id} className="font-semibold">
+                            {attr.type}: {attr.value}
+                          </span>
+                        ))}
+                        {(!variant.color && !variant.size && (!variant.attributes || variant.attributes.length === 0)) && (
+                          <span className="italic text-gray-400">No configuration</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 font-semibold text-indigo-600">

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import metrics from '../../services/MetricsService.js';
 
 /**
  * ========================================================================
@@ -68,8 +69,11 @@ const promotionSchema = new mongoose.Schema(
         stackable: {
             type: Boolean,
             default: false,
-            // If true: applies alongside other stackable promotions (sorted by priority).
-            // If false: only the highest-priority promotion is applied; others are skipped.
+        },
+
+        exclusive: {
+            type: Boolean,
+            default: false,
         },
 
         // ── Scheduling ───────────────────────────────────────────────────
@@ -187,21 +191,17 @@ promotionSchema.statics.resolvePrice = async function (basePrice, { variantId, c
         return { finalPrice: basePrice, discount: 0, appliedPromotions: [] };
     }
 
-    // 3. Determine which promotions to apply
-    let toApply = [];
-    if (promotions[0].stackable) {
-        // Collect all leading stackable promotions
-        toApply = promotions.filter(p => p.stackable);
-    } else {
-        // Highest-priority non-stackable wins alone
-        toApply = [promotions[0]];
-    }
-
-    // 4. Apply sequentially in priority order
+    // 3. Apply sequentially in priority order
     let price = basePrice;
     const appliedPromotions = [];
+    let canStack = true;
 
-    for (const promo of toApply) {
+    for (const promo of promotions) {
+        if (!canStack || (promo.exclusive && appliedPromotions.length > 0)) {
+            metrics.inc('promotion_conflict_total');
+            continue;
+        }
+
         // Usage limit check
         if (promo.maxUsageTotal !== null && promo.usageCount >= promo.maxUsageTotal) continue;
 
@@ -213,6 +213,8 @@ promotionSchema.statics.resolvePrice = async function (basePrice, { variantId, c
             discountAmount = Math.min(promo.value, price);  // Can't discount more than price
         }
 
+        if (discountAmount <= 0) continue;
+
         price = Math.max(0, +(price - discountAmount).toFixed(2));  // Floor at 0
 
         appliedPromotions.push({
@@ -222,7 +224,12 @@ promotionSchema.statics.resolvePrice = async function (basePrice, { variantId, c
             value: promo.value,
             discountAmount,
             stackable: promo.stackable,
+            exclusive: promo.exclusive
         });
+
+        if (!promo.stackable || promo.exclusive) {
+            canStack = false;
+        }
     }
 
     return {

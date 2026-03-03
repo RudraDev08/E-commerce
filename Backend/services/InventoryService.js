@@ -30,7 +30,7 @@ class InventoryService {
      * @param {Number} expiryMinutes - TTL in minutes
      * @returns {Promise<InventoryReservation>}
      */
-    static async createReservation(userId, items, expiryMinutes = 15) {
+    static async createReservation(userId, items, expiryMinutes = 5) {
         // 1. Rate Limiting Check (Redis-based)
         if (redis && redis.status === 'ready') {
             try {

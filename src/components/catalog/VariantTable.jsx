@@ -97,7 +97,7 @@ const VariantTable = ({ variants, reload }) => {
           {variants.map(v => {
             const isLocked = v.status === "LOCKED";
             const isArchived = v.status === "ARCHIVED";
-            const qty = v.inventory?.quantityOnHand || 0;
+            const qty = v.stock ?? v.inventory?.quantityOnHand ?? 0;
             const isAvailable = qty > 0 && v.status === "ACTIVE";
 
             return (
@@ -110,15 +110,19 @@ const VariantTable = ({ variants, reload }) => {
                   </div>
                 </td>
 
-                {/* Structured Identity - No longer relies on legacy attributes map */}
+                {/* Structured Identity */}
                 <td className="p-3">
-                  <div className="flex flex-col text-xs">
-                    <span className="font-semibold text-slate-700">
-                      Size: {v.size?.displayName || v.size?.name || "-"}
-                    </span>
-                    <span className="text-slate-500">
-                      Color: {v.color?.name || "-"}
-                    </span>
+                  <div className="flex flex-col text-xs gap-0.5">
+                    {v.color && <span className="text-slate-500">Color: {v.color.name}</span>}
+                    {v.size && <span className="font-semibold text-slate-700">Size: {v.size.displayName || v.size.name || v.size.value}</span>}
+                    {v.attributes?.map(attr => (
+                      <span key={attr.code || attr._id} className="font-semibold text-slate-700">
+                        {attr.type}: {attr.value}
+                      </span>
+                    ))}
+                    {(!v.color && !v.size && (!v.attributes || v.attributes.length === 0)) && (
+                      <span className="italic text-slate-400">No configuration</span>
+                    )}
                   </div>
                 </td>
 

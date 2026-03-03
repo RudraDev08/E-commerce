@@ -199,3 +199,4 @@
 {"level":"error","message":"[STARTUP] ❌ INVENTORY INVARIANT VIOLATED: 9 active variants vs 0 inventory records. Drift = 9. Run: node Backend/scripts/repairInventoryMaster.js","service":"backend-api","timestamp":"2026-03-03T07:14:38.004Z"}
 {"level":"error","message":"[STARTUP] ❌ INVENTORY INVARIANT VIOLATED: 9 active variants vs 0 inventory records. Drift = 9. Run: node Backend/scripts/repairInventoryMaster.js","service":"backend-api","timestamp":"2026-03-03T07:14:53.463Z"}
 {"level":"error","message":"[STARTUP] ❌ INVENTORY INVARIANT VIOLATED: 9 active variants vs 0 inventory records. Drift = 9. Run: node Backend/scripts/repairInventoryMaster.js","service":"backend-api","timestamp":"2026-03-03T07:15:21.248Z"}
+{"level":"error","message":"[STARTUP] ❌ INVENTORY INVARIANT VIOLATED: 50 active variants vs 0 inventory records. Drift = 50. Run: node Backend/scripts/repairInventoryMaster.js","service":"backend-api","timestamp":"2026-03-03T10:44:06.875Z"}

@@ -1,15 +1,15 @@
 import mongoose from 'mongoose';
 import logger from '../config/logger.js';
+import metrics from '../services/MetricsService.js';
 
 /**
  * PRODUCTION-GRADE TRANSACTION WRAPPER
  * Phase 6: Distributed Failover Safety
  * 
  * Features:
- * 1. Automatic Retries for Transient Errors (Primary Step-down, Network Glitches)
- * 2. Idempotency Check integration
- * 3. Primary-preferred read-preference enforcement
- * 4. Graceful Cleanup
+ * 1. Automatic Retries for Transient Errors (Primary Step-down, VersionError)
+ * 2. Exponential Backoff (50ms -> 100ms -> 200ms)
+ * 3. Metrics integration for Observability
  */
 export const runInTransaction = async (logic, options = {}) => {
     const {
@@ -19,35 +19,50 @@ export const runInTransaction = async (logic, options = {}) => {
     } = options;
 
     const session = existingSession || await mongoose.startSession();
+    const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
     let attempt = 0;
-    while (attempt < retries) {
-        attempt++;
-        try {
-            let result;
-            await session.withTransaction(async (s) => {
-                result = await logic(s);
-            }, {
-                readPreference,
-                writeConcern: { w: 'majority' }
-            });
-            return result;
+    const maxRetries = 3;
 
-        } catch (error) {
-            const isTransient = error.hasErrorLabel &&
-                (error.hasErrorLabel('TransientTransactionError') ||
-                    error.hasErrorLabel('UnknownTransactionCommitResult'));
+    try {
+        while (attempt <= maxRetries) {
+            attempt++;
+            metrics.inc('total_tx_attempts');
 
-            if (isTransient && attempt < retries) {
-                logger.warn(`[TX_RETRY] Transient error, retrying... Attempt ${attempt}`, { error: error.message });
-                continue;
+            try {
+                session.startTransaction({ readPreference, writeConcern: { w: 'majority' } });
+
+                const result = await logic(session);
+                await session.commitTransaction();
+                return result;
+
+            } catch (error) {
+                if (session.inTransaction()) {
+                    await session.abortTransaction();
+                }
+
+                const isTransient = error.hasErrorLabel &&
+                    (error.hasErrorLabel('TransientTransactionError') ||
+                        error.hasErrorLabel('UnknownTransactionCommitResult'));
+                const isOCC = error.name === 'VersionError';
+
+                if ((isTransient || isOCC) && attempt <= maxRetries) {
+                    const backoff = attempt === 1 ? 50 : attempt === 2 ? 100 : 200;
+
+                    logger.warn(`[TX_RETRY] ${isOCC ? 'OCC Conflict' : 'Transient error'}, retrying... Attempt ${attempt} after ${backoff}ms`, { error: error.message });
+                    metrics.inc('transaction_retry_total', { attempt: String(attempt), type: isOCC ? 'OCC' : 'TRANSIENT' });
+
+                    await sleep(backoff);
+                    continue;
+                }
+
+                logger.error(`[TX_FATAL] Transaction failed after ${attempt} attempts`, { error: error.message });
+                throw error;
             }
-
-            // Non-transient or max retries hit
-            logger.error(`[TX_FATAL] Transaction failed after ${attempt} attempts`, { error: error.message });
-            throw error;
-        } finally {
-            if (!existingSession && attempt === retries) session.endSession();
+        }
+    } finally {
+        if (!existingSession) {
+            session.endSession();
         }
     }
 };
