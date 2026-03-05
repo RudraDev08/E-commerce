@@ -841,3 +841,90 @@ export const searchProducts = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// --------------------------------------------------------------------------
+// BULK EDIT PRODUCTS — PATCH /api/products/bulk-edit
+// --------------------------------------------------------------------------
+/**
+ * Performs a single updateMany() operation against a set of product IDs.
+ *
+ * Request body:
+ *   {
+ *     ids:    string[]   — required, list of product _id values
+ *     update: object     — required, field:value pairs to apply
+ *   }
+ *
+ * Only fields present in the ALLOWED_BULK_FIELDS whitelist are applied.
+ * This prevents mass-overwriting sensitive fields (isDeleted, sku, etc.).
+ */
+const ALLOWED_BULK_FIELDS = new Set([
+  'status',
+  'publishStatus',
+  'featured',
+  'isFeatured',
+  'category',
+  'brand',
+  'price',
+  'basePrice',
+  'costPrice',
+  'discount',
+  'tax',
+  'displayPriority',
+  'isVisible',
+  'tags',
+  'badges',
+  'metaTitle',
+  'metaDescription'
+]);
+
+export const bulkEditProducts = async (req, res) => {
+  try {
+    const { ids, update } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: '`ids` must be a non-empty array.' });
+    }
+
+    if (!update || typeof update !== 'object' || Array.isArray(update)) {
+      return res.status(400).json({ success: false, message: '`update` must be a non-empty object.' });
+    }
+
+    // Strip any fields not on the whitelist
+    const sanitised = Object.fromEntries(
+      Object.entries(update).filter(([key]) => ALLOWED_BULK_FIELDS.has(key))
+    );
+
+    if (Object.keys(sanitised).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields provided. Allowed fields: ' + [...ALLOWED_BULK_FIELDS].join(', ')
+      });
+    }
+
+    // Single DB round-trip — O(ids.length) index scan, no loop
+    const result = await Product.updateMany(
+      { _id: { $in: ids }, isDeleted: false },
+      { $set: sanitised },
+      { runValidators: true }
+    );
+
+    res.json({
+      success: true,
+      message: `${result.modifiedCount} product(s) updated.`,
+      data: {
+        matched: result.matchedCount,
+        modified: result.modifiedCount,
+        appliedFields: Object.keys(sanitised)
+      }
+    });
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(e => e.message);
+      return res.status(400).json({ success: false, message: `Validation Error: ${messages.join(', ')}` });
+    }
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: `Invalid ID format: ${error.message}` });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

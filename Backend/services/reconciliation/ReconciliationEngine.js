@@ -18,22 +18,30 @@ export const runReconciliation = async () => {
 
         for (const inv of inventories) {
             const stats = await IL.aggregate([
-                { $match: { variantId: inv.variantId, transactionType: { $in: ['STOCK_IN', 'RETURN_RESTORE', 'ORDER_CANCEL', 'OPENING_STOCK', 'STOCK_OUT', 'ORDER_DEDUCT'] } } },
+                { $match: { variantId: inv.variantId, transactionType: { $in: ['STOCK_IN', 'RETURN_RESTORE', 'ORDER_CANCEL', 'OPENING_STOCK', 'STOCK_OUT', 'ORDER_DEDUCT', 'ADJUSTMENT'] } } },
                 {
                     $group: {
                         _id: null,
+                        // Standard inflows
                         totalIn: {
                             $sum: { $cond: [{ $in: ['$transactionType', ['STOCK_IN', 'RETURN_RESTORE', 'ORDER_CANCEL', 'OPENING_STOCK']] }, '$quantity', 0] }
                         },
+                        // Standard outflows
                         totalSold: {
                             $sum: { $cond: [{ $in: ['$transactionType', ['STOCK_OUT', 'ORDER_DEDUCT']] }, { $abs: '$quantity' }, 0] }
+                        },
+                        // ADJUSTMENT: positive quantity = stock added, negative = stock removed
+                        // Net adjustment so reconciler sees the full picture including pre-fix entries
+                        adjustmentNet: {
+                            $sum: { $cond: [{ $eq: ['$transactionType', 'ADJUSTMENT'] }, '$quantity', 0] }
                         }
                     }
                 }
             ]);
 
-            const masterStock = stats[0]?.totalIn || 0;
-            const sold = stats[0]?.totalSold || 0;
+            const masterStock = (stats[0]?.totalIn || 0) + Math.max(0, stats[0]?.adjustmentNet || 0);
+            const adjustmentOut = Math.abs(Math.min(0, stats[0]?.adjustmentNet || 0));
+            const sold = (stats[0]?.totalSold || 0) + adjustmentOut;
             const reserved = inv.reservedStock || 0;
 
             // STEP 5: Formula

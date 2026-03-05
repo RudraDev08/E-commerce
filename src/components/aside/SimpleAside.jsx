@@ -20,13 +20,15 @@ import {
   Settings,
   ShoppingCart,
   Activity,
-  ListTree
+  ListTree,
+  PieChart
 } from "lucide-react";
 
 // Configuration for sidebar menu items
 const MENU_ITEMS = [
   { type: 'header', label: 'Main' },
   { type: 'item', label: 'Dashboard', icon: LayoutGrid, path: '/' },
+  { type: 'item', label: 'Executive Dashboard', icon: PieChart, path: '/executive-dashboard' },
   { type: 'item', label: 'System Health', icon: Activity, path: '/system' },
 
   { type: 'header', label: 'Orders' },

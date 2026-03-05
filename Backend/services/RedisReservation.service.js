@@ -32,6 +32,7 @@ import logger from '../config/logger.js';
 let _redisClient = null;
 
 async function getRedis() {
+    if (process.env.DISABLE_REDIS === 'true') return null;
     if (_redisClient) return _redisClient;
     try {
         const { createClient } = await import('redis');

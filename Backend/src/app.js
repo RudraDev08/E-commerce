@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
+import * as Sentry from '@sentry/node';
 
 // Security Middleware
 import {
@@ -21,8 +22,9 @@ import {
 // Logger
 import logger from "../config/logger.js";
 
-// New Modular Routes
-// import authRoutes from "./modules/auth/auth.routes.js";
+// Auth Module Routes
+import authRoutes from "./modules/auth/auth.routes.js";
+
 
 // Legacy Routes (Loaded from Backend/routes)
 import countryRoutes from "../routes/countryRoutes.js";
@@ -50,8 +52,9 @@ import binLocationRoutes from "../routes/inventory/binLocation.routes.js";
 import cycleCountRoutes from "../routes/inventory/cycleCount.routes.js";
 import uploadRoutes from "../routes/uploadRoutes.js";
 import cartRoutes from "../routes/cart/cartRoutes.js";
+import analyticsRoutes from "../routes/analytics/analytics.routes.js";
+import systemRoutes from "../routes/system/system.routes.js";
 import metrics from "../services/MetricsService.js";
-
 
 // ── INVENTORY INVARIANT GUARD ───────────────────────────────────────────────
 // Runs once at startup after DB connection. Detects orphan InventoryMaster
@@ -85,6 +88,8 @@ export async function runInventoryInvariantCheck() {
 }
 
 const app = express();
+
+Sentry.setupExpressErrorHandler(app);
 
 /* ================= SECURITY MIDDLEWARE ================= */
 
@@ -152,11 +157,13 @@ app.get("/health", (req, res) => {
 
 const API_PREFIX = '/api/v1';
 
-// Authentication (New Module)
-// app.use(`${API_PREFIX}/auth`, authRoutes);
+// Auth — mounted BEFORE rate limiter (login has its own rate limiting via security.middleware)
+app.use(`${API_PREFIX}/auth`, authRoutes);
+app.use('/api/auth', authRoutes);
 
 // Apply rate limiting to all other API routes
 app.use(API_PREFIX, apiLimiter);
+
 
 // Legacy Routes (Directly mapped)
 app.use(`${API_PREFIX}/countries`, countryRoutes);
@@ -185,6 +192,11 @@ app.use(`${API_PREFIX}/cycle-counts`, cycleCountRoutes);
 app.use(`${API_PREFIX}/orders`, orderRoutes);
 app.use(`${API_PREFIX}/upload`, uploadRoutes);
 app.use(`${API_PREFIX}/cart`, cartRoutes);
+// Fix 10: Analytics API
+app.use(`${API_PREFIX}/analytics`, analyticsRoutes);
+
+// System endpoints (Feature Flags, Roles)
+app.use(`${API_PREFIX}/system`, systemRoutes);
 
 // Step 7.3: Cache Policy for Price-Sensitive Routes
 app.use([`${API_PREFIX}/cart`, `${API_PREFIX}/orders`, `${API_PREFIX}/variants`], (req, res, next) => {
@@ -226,6 +238,8 @@ app.use("/api/bin-locations", binLocationRoutes);
 app.use("/api/cycle-counts", cycleCountRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/cart", cartRoutes);
+// Fix 10: Analytics API (legacy prefix)
+app.use("/api/analytics", analyticsRoutes);
 
 /* ================= INTERNAL / OBSERVABILITY ROUTES ================= */
 // STEP 11: Auto Freeze Protection Config

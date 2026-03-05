@@ -10,7 +10,7 @@ import {
     restoreProduct,
     bulkDeleteProducts,
     getProductStats,
-    // New enhanced methods
+    // Enhanced methods
     softDeleteProduct,
     bulkSoftDeleteProducts,
     publishProduct,
@@ -19,10 +19,14 @@ import {
     bulkUpdateStatus,
     bulkUpdatePublishStatus,
     getProductsByPublishStatus,
-    searchProducts
+    searchProducts,
+    // Fix 7: Bulk edit
+    bulkEditProducts
 } from '../../../controllers/Product/ProductController.js';
 
 import { upload } from "../../../config/multer.js";
+import { protect } from '../../../middlewares/auth.middleware.js';
+import { authorize } from '../../../middlewares/authorize.middleware.js';
 
 const router = express.Router();
 
@@ -44,34 +48,39 @@ router.get("/featured", getFeaturedProducts);
 // --------------------------------------------------------------------------
 // PUBLISH STATUS ROUTES
 // --------------------------------------------------------------------------
-router.get("/publish-status/:publishStatus", getProductsByPublishStatus); // GET /api/products/publish-status/published
+router.get("/publish-status/:publishStatus", getProductsByPublishStatus);
 
 // --------------------------------------------------------------------------
 // BULK ACTIONS
 // --------------------------------------------------------------------------
-router.post('/bulk-delete', bulkDeleteProducts); // Hard delete
-router.post('/bulk-soft-delete', bulkSoftDeleteProducts); // Soft delete (move to trash)
-router.post('/bulk-update-status', bulkUpdateStatus); // Update status (active, inactive, etc.)
-router.post('/bulk-update-publish-status', bulkUpdatePublishStatus); // Update publish status
+router.post('/bulk-delete', protect, authorize('admin'), bulkDeleteProducts);
+router.post('/bulk-soft-delete', protect, authorize('admin', 'manager'), bulkSoftDeleteProducts);
+router.post('/bulk-update-status', protect, authorize('admin', 'manager'), bulkUpdateStatus);
+router.post('/bulk-update-publish-status', protect, authorize('admin', 'manager'), bulkUpdatePublishStatus);
+
+// Fix 7: PATCH /api/products/bulk-edit — single updateMany(), admin/manager only
+router.patch('/bulk-edit', protect, authorize('admin', 'manager'), bulkEditProducts);
 
 // --------------------------------------------------------------------------
 // SINGLE PRODUCT ACTIONS
 // --------------------------------------------------------------------------
-router.patch('/:id/publish', publishProduct); // Publish product
-router.patch('/:id/unpublish', unpublishProduct); // Unpublish product
-router.post('/:id/duplicate', duplicateProduct); // Duplicate product
-router.patch('/:id/soft-delete', softDeleteProduct); // Soft delete (move to trash)
-router.patch('/:id/restore', restoreProduct); // Restore from trash
+router.patch('/:id/publish', protect, authorize('admin', 'manager'), publishProduct);
+router.patch('/:id/unpublish', protect, authorize('admin', 'manager'), unpublishProduct);
+router.post('/:id/duplicate', protect, authorize('admin', 'manager'), duplicateProduct);
+router.patch('/:id/soft-delete', protect, authorize('admin', 'manager'), softDeleteProduct);
+router.patch('/:id/restore', protect, authorize('admin', 'manager'), restoreProduct);
 
 // --------------------------------------------------------------------------
 // CRUD OPERATIONS
 // --------------------------------------------------------------------------
-router.get('/', getProducts); // GET all with filters, pagination, search
-router.get('/slug/:slug', getProductBySlug); // GET by slug (for customer website)
-router.get('/:id', getProductById); // GET single by ID
+router.get('/', getProducts);
+router.get('/slug/:slug', getProductBySlug);
+router.get('/:id', getProductById);
 
 router.post(
     '/',
+    protect,
+    authorize('admin', 'manager'),
     upload.fields([
         { name: 'image', maxCount: 1 },
         { name: 'gallery', maxCount: 10 }
@@ -81,6 +90,8 @@ router.post(
 
 router.put(
     '/:id',
+    protect,
+    authorize('admin', 'manager'),
     upload.fields([
         { name: 'image', maxCount: 1 },
         { name: 'gallery', maxCount: 10 }
@@ -88,6 +99,17 @@ router.put(
     updateProduct
 );
 
-router.delete('/:id', deleteProduct); // Hard delete
+router.patch(
+    '/:id',
+    protect,
+    authorize('admin', 'manager'),
+    upload.fields([
+        { name: 'image', maxCount: 1 },
+        { name: 'gallery', maxCount: 10 }
+    ]),
+    updateProduct
+);
+
+router.delete('/:id', protect, authorize('admin'), deleteProduct);
 
 export default router;

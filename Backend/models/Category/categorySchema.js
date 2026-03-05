@@ -58,6 +58,9 @@ const categorySchema = new mongoose.Schema(
     // Product Count (virtual or cached)
     productCount: { type: Number, default: 0 },
 
+    // Tree depth (0 = root, max 4 = 5 levels: 0-4)
+    depth: { type: Number, default: 0, min: 0, max: 4 },
+
     // Soft Delete
     isDeleted: { type: Boolean, default: false },
 
@@ -85,14 +88,61 @@ categorySchema.virtual('children', {
   foreignField: 'parentId'
 });
 
-// ==================== IMMUTABILITY GUARDS ====================
+const MAX_DEPTH = 4; // 0=root … 4=5th level
+
+// ==================== IMMUTABILITY + CIRCULAR REFERENCE GUARDS ====================
 categorySchema.pre('save', async function () {
-  if (this.isNew) return;
-  const modifiedPaths = this.modifiedPaths();
-  const immutablePaths = ['internalKey', 'parentId'];
-  const violations = modifiedPaths.filter(path => immutablePaths.includes(path));
-  if (violations.length > 0) {
-    throw new Error(`IMMUTABILITY VIOLATION: Category structural fields [${violations.join(', ')}] are locked.`);
+  // ── On UPDATE: immutability check ─────────────────────────────────────────
+  if (!this.isNew) {
+    const modifiedPaths = this.modifiedPaths();
+    const immutablePaths = ['internalKey', 'parentId'];
+    const violations = modifiedPaths.filter(path => immutablePaths.includes(path));
+    if (violations.length > 0) {
+      throw new Error(`IMMUTABILITY VIOLATION: Category structural fields [${violations.join(', ')}] are locked.`);
+    }
+    return;
+  }
+
+  // ── On CREATE: circular reference + depth guard ───────────────────────────
+  if (this.parentId) {
+    // Walk the ancestor chain from parentId up to root
+    let depth = 0;
+    let currentId = this.parentId;
+    const visited = new Set();
+
+    while (currentId) {
+      const currentIdStr = currentId.toString();
+
+      // Cycle detected: parent chain loops back to this new category's _id
+      if (this._id && currentIdStr === this._id.toString()) {
+        throw new Error('CIRCULAR REFERENCE: A category cannot be its own ancestor.');
+      }
+
+      if (visited.has(currentIdStr)) {
+        throw new Error('CIRCULAR REFERENCE: Existing category tree is already cyclic.');
+      }
+      visited.add(currentIdStr);
+
+      if (depth > MAX_DEPTH) {
+        throw new Error(`MAX DEPTH EXCEEDED: Category tree allows a maximum of ${MAX_DEPTH + 1} levels.`);
+      }
+
+      const parent = await this.constructor.findById(currentId).select('parentId depth').lean();
+      if (!parent) break;
+
+      depth++;
+      currentId = parent.parentId || null;
+    }
+
+    // Set depth on new category
+    this.depth = depth;
+
+    if (this.depth > MAX_DEPTH) {
+      throw new Error(`MAX DEPTH EXCEEDED: Category tree allows a maximum of ${MAX_DEPTH + 1} levels.`);
+    }
+  } else {
+    // Root category
+    this.depth = 0;
   }
 });
 
@@ -105,6 +155,10 @@ categorySchema.pre('findOneAndUpdate', async function () {
   const violations = immutableFields.filter(f => updateObj[f] !== undefined && updateObj[f] !== docToUpdate[f]?.toString());
   if (violations.length > 0) {
     throw new Error(`IMMUTABILITY VIOLATION: Mutation blocked for structural fields: ${violations.join(', ')}`);
+  }
+  // Block direct depth overwrite — depth is computed, not user-supplied
+  if (updateObj.depth !== undefined) {
+    delete updateObj.depth;
   }
 });
 

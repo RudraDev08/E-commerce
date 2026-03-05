@@ -122,12 +122,14 @@ class InventoryService {
       if (newStock === 0) status = 'OUT_OF_STOCK';
       else if (newStock <= (inventory.lowStockThreshold || 5)) status = 'LOW_STOCK';
 
-      // UPDATE MASTER ATOMICALLY
+      // UPDATE MASTER ATOMICALLY — also keep availableStock in sync
+      const newAvailable = Math.max(0, newStock - (inventory.reservedStock || 0));
       const updatedInventory = await InventoryMaster.findOneAndUpdate(
         { _id: inventory._id },
         {
           $set: {
             totalStock: newStock,
+            availableStock: newAvailable,
             status,
             lastUpdated: new Date()
           }
@@ -138,19 +140,26 @@ class InventoryService {
       const stockAfter = {
         total: updatedInventory.totalStock,
         reserved: updatedInventory.reservedStock,
-        available: updatedInventory.totalStock - updatedInventory.reservedStock
+        available: updatedInventory.availableStock
       };
 
-      // CREATE LOG (Best effort without transaction)
+      // CRITICAL: Write STOCK_IN / STOCK_OUT so the reconciler can count this change.
+      // The reconciler only sums STOCK_IN / STOCK_OUT / ORDER_CANCEL / RETURN_RESTORE /
+      // OPENING_STOCK for totalIn and STOCK_OUT / ORDER_DEDUCT for totalSold.
+      // Writing 'ADJUSTMENT' here made every manual stock update invisible to the
+      // reconciler, causing perpetual INVENTORY_DRIFT_FIXED warnings.
+      const ledgerType = quantityChange > 0 ? 'STOCK_IN' : 'STOCK_OUT';
+      const ledgerQty = quantityChange > 0 ? quantityChange : Math.abs(quantityChange);
+
       await this._createLedgerEntry({
         variantId: updatedInventory.variantId,
         productId: updatedInventory.productId,
         sku: updatedInventory.sku,
-        transactionType: 'ADJUSTMENT',
-        quantity: quantityChange,
+        transactionType: ledgerType,
+        quantity: ledgerQty,
         stockBefore,
         stockAfter,
-        reason,
+        reason: reason || 'STOCK_RECEIVED',
         notes,
         performedBy: 'SYSTEM',
         performedByRole: 'ADMIN'
@@ -493,19 +502,19 @@ class InventoryService {
       const updatedInventory = await InventoryMaster.findOneAndUpdate(
         { _id: inventory._id },
         {
-          $inc: { totalStock: quantity },
+          $inc: { totalStock: quantity, availableStock: quantity },
           $set: { lastUpdated: new Date() }
         },
         { new: true }
       );
 
-      const stockAfter = { total: updatedInventory.totalStock, reserved: updatedInventory.reservedStock, available: updatedInventory.totalStock - updatedInventory.reservedStock };
+      const stockAfter = { total: updatedInventory.totalStock, reserved: updatedInventory.reservedStock, available: updatedInventory.availableStock };
 
       await this._createLedgerEntry({
         variantId: updatedInventory.variantId,
         productId: updatedInventory.productId,
         sku: updatedInventory.sku,
-        transactionType: 'STOCK_IN',
+        transactionType: 'ORDER_CANCEL',   // reconciler counts ORDER_CANCEL as totalIn
         quantity: quantity,
         stockBefore,
         stockAfter,

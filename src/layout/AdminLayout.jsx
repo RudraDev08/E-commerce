@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import ProfessionalAside from "../components/aside/SimpleAside";
 import AdminHeader from "../components/header/Header";
+import { GlobalErrorBoundary } from "../components/ui/ErrorBoundaryUI";
+import { GlobalLoading } from "../components/ui/GlobalLoading";
+import { CommandPalette } from "../components/ui/CommandPalette";
 
 const AdminLayout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -26,34 +29,38 @@ const AdminLayout = () => {
     }, []);
 
     return (
-        <div className="flex bg-[#F8FAFC] min-h-screen font-sans text-slate-900 overflow-hidden">
-            {/* 1. Sidebar */}
-            <ProfessionalAside
-                isExpanded={sidebarOpen}
-                setIsExpanded={setSidebarOpen}
-            />
-
-            {/* 2. Main Wrapper */}
-            <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative transition-all duration-300">
-
-                {/* 3. Global Header */}
-                <AdminHeader
-                    sidebarOpen={sidebarOpen}
-                    onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
+        <GlobalErrorBoundary>
+            <GlobalLoading />
+            <CommandPalette />
+            <div className="flex bg-[#F8FAFC] min-h-screen font-sans text-slate-900 overflow-hidden">
+                {/* 1. Sidebar */}
+                <ProfessionalAside
+                    isExpanded={sidebarOpen}
+                    setIsExpanded={setSidebarOpen}
                 />
 
-                {/* 4. Page Content / Outlet */}
-                <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F8FAFC] scroll-smooth">
-                    {/* Gap between sidebar and content */}
-                    <div className="pl-3 h-full">
-                        <Outlet />
+                {/* 2. Main Wrapper */}
+                <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative transition-all duration-300">
 
-                        {/* Add footer here if needed in future */}
-                    </div>
-                </main>
+                    {/* 3. Global Header */}
+                    <AdminHeader
+                        sidebarOpen={sidebarOpen}
+                        onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
+                    />
 
+                    {/* 4. Page Content / Outlet */}
+                    <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#F8FAFC] scroll-smooth">
+                        {/* Gap between sidebar and content */}
+                        <div className="pl-3 h-full">
+                            <Outlet />
+
+                            {/* Add footer here if needed in future */}
+                        </div>
+                    </main>
+
+                </div>
             </div>
-        </div>
+        </GlobalErrorBoundary>
     );
 };
 

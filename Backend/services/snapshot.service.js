@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import ProductGroupSnapshot from '../models/Product/ProductGroupSnapshot.js';
 import VariantMaster from '../models/masters/VariantMaster.enterprise.js';
+import InventorySnapshot from '../models/inventory/InventorySnapshot.model.js';
 import { createRedisConnection } from '../config/redis.js';
 
 const redis = createRedisConnection();
@@ -203,6 +204,95 @@ export class SnapshotService {
         } catch (error) {
             console.error(`[Snapshot Error] ${productGroupId}:`, error);
         }
+    }
+
+    // ========================================================================
+    // INVENTORY LEDGER SNAPSHOT — Prevents full ledger scan for balance queries
+    // ========================================================================
+
+    /**
+     * Capture a closing-balance snapshot for a single variant.
+     * Call this daily from the ReconciliationScheduler.
+     *
+     * @param {ObjectId|string} variantId
+     * @param {Object} closingBalance - { totalStock, reservedStock, availableStock }
+     * @param {Object} meta           - { productId, sku, lastLedgerEntryId }
+     */
+    static async takeInventorySnapshot(variantId, closingBalance, meta = {}) {
+        const today = new Date();
+        const periodKey = today.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+
+        return InventorySnapshot.upsertSnapshot(
+            variantId,
+            periodKey,
+            closingBalance,
+            {
+                snapshotDate: today,
+                productId: meta.productId || null,
+                sku: meta.sku || null,
+                lastLedgerEntryId: meta.lastLedgerEntryId || null,
+                createdBy: 'SYSTEM'
+            }
+        );
+    }
+
+    /**
+     * Compute CURRENT balance for a variant using snapshot + recent ledger entries.
+     *
+     * Strategy:
+     *   1. Fetch the latest snapshot  →  O(1) index lookup
+     *   2. Sum ledger entries AFTER snapshot.snapshotDate  →  O(recent)
+     *   Total rows scanned = days since last snapshot, NOT full ledger history.
+     *
+     * @param {ObjectId|string} variantId
+     * @returns {{ totalStock, reservedStock, availableStock, snapshotDate, fromSnapshot }}
+     */
+    static async computeBalanceFromSnapshot(variantId) {
+        const InventoryLedger = mongoose.model('InventoryLedger');
+
+        // Step 1: Latest snapshot (O(1) via compound index)
+        const snapshot = await InventorySnapshot.getLatestForVariant(variantId);
+
+        const baseline = snapshot
+            ? { ...snapshot.closingBalance }
+            : { totalStock: 0, reservedStock: 0, availableStock: 0 };
+
+        const sinceDate = snapshot ? snapshot.snapshotDate : new Date(0);
+
+        // Step 2: Sum only RECENT ledger entries since the snapshot
+        const recentActivity = await InventoryLedger.aggregate([
+            {
+                $match: {
+                    variantId: new mongoose.Types.ObjectId(variantId),
+                    transactionDate: { $gt: sinceDate }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    stockDelta: { $sum: '$quantity' },
+                    reserveDelta: {
+                        $sum: {
+                            $switch: {
+                                branches: [
+                                    { case: { $eq: ['$transactionType', 'RESERVE'] }, then: '$quantity' },
+                                    { case: { $eq: ['$transactionType', 'RELEASE'] }, then: { $multiply: ['$quantity', -1] } }
+                                ],
+                                default: 0
+                            }
+                        }
+                    }
+                }
+            }
+        ]);
+
+        const delta = recentActivity[0] || { stockDelta: 0, reserveDelta: 0 };
+
+        const totalStock = Math.max(0, baseline.totalStock + delta.stockDelta);
+        const reservedStock = Math.max(0, baseline.reservedStock + delta.reserveDelta);
+        const availableStock = Math.max(0, totalStock - reservedStock);
+
+        return { totalStock, reservedStock, availableStock, snapshotDate: sinceDate, fromSnapshot: !!snapshot };
     }
 }
 

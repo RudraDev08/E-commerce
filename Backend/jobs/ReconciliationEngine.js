@@ -1,3 +1,4 @@
+import mongoose from 'mongoose'; // ✅ FIX: was missing — caused ReferenceError on startup
 import cron from 'node-cron';
 import VariantMaster from '../models/masters/VariantMaster.enterprise.js';
 import SearchDocument from '../models/masters/SearchDocument.enterprise.js';
@@ -382,6 +383,75 @@ class ReconciliationScheduler {
                 console.log('[CRON] Running daily search index sync');
                 this.reconciler.resetStats();
                 await this.reconciler.reconcileSearchIndex();
+            })
+        );
+
+        // Nightly at midnight: Inventory snapshots
+        // Prevents the InventoryLedger from becoming a full-scan bottleneck.
+        // Query pattern after snapshots exist:
+        //   balance = snapshot.closingBalance + SUM(ledger entries AFTER snapshot.snapshotDate)
+        this.jobs.push(
+            cron.schedule('0 0 * * *', async () => {
+                console.log('[CRON] Running nightly inventory snapshot generation');
+                try {
+                    const mongoose = (await import('mongoose')).default;
+                    const IM = mongoose.models.InventoryMaster;
+                    const Snapshot = mongoose.models.InventorySnapshot;
+                    if (!IM || !Snapshot) {
+                        console.warn('[SNAPSHOT CRON] Models not loaded — skipping');
+                        return;
+                    }
+
+                    const today = new Date();
+                    const periodKey = today.toISOString().slice(0, 10);  // YYYY-MM-DD
+                    const BATCH_SIZE = 500;
+                    let cursor = null;
+                    let total = 0;
+
+                    while (true) {
+                        const query = cursor
+                            ? { _id: { $gt: cursor }, isDeleted: false }
+                            : { isDeleted: false };
+
+                        const records = await IM
+                            .find(query)
+                            .sort({ _id: 1 })
+                            .limit(BATCH_SIZE)
+                            .select('variantId productId sku totalStock reservedStock availableStock')
+                            .lean();
+
+                        if (!records.length) break;
+
+                        await Promise.all(records.map(async (inv) => {
+                            try {
+                                await Snapshot.upsertSnapshot(
+                                    inv.variantId,
+                                    periodKey,
+                                    {
+                                        totalStock: inv.totalStock || 0,
+                                        reservedStock: inv.reservedStock || 0,
+                                        availableStock: inv.availableStock || 0
+                                    },
+                                    {
+                                        snapshotDate: today,
+                                        productId: inv.productId,
+                                        sku: inv.sku,
+                                        createdBy: 'SNAPSHOT_CRON'
+                                    }
+                                );
+                            } catch (e) {
+                                console.error(`[SNAPSHOT CRON] Failed for variant ${inv.variantId}: ${e.message}`);
+                            }
+                        }));
+
+                        total += records.length;
+                        cursor = records[records.length - 1]._id;
+                    }
+
+                    console.log(`[SNAPSHOT CRON] Done. ${total} snapshots upserted for ${periodKey}.`);
+                } catch (err) {
+                    console.error('[SNAPSHOT CRON] Fatal error:', err.message);
+                }
             })
         );
 
